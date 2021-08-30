@@ -315,6 +315,7 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	utils.RegisterNativeFuncs(vm, resolver)
 
 	return vm, nil

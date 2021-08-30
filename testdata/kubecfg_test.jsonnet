@@ -81,6 +81,13 @@ std.assertEqual(kubecfg.regexSubst("e", "tree", "oll"),
 
 std.assertEqual(std.clamp(42, 0, 10), 10) &&
 
+local chartData = import "kubernetes-dashboard-5.0.0.tgz.bin";
+local testChart = kubecfg.parseHelmChart(
+  chartData, "foo", "myns",
+  {ingress: {enabled: true}});
+local testValue = testChart["kubernetes-dashboard/templates/ingress.yaml"][0].spec.rules[0].http.paths[0].backend.service.name;
+std.assertEqual(testValue, "foo-kubernetes-dashboard") &&
+
 true;
 
 // Kubecfg wants to see something that looks like a k8s object
