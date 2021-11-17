@@ -89,7 +89,14 @@ func TestShowExport(t *testing.T) {
 				"myns/tests-v1alpha1.Dummy/bar.yaml:f0e39aa44d1e55fb8b06a05c97f6c2082e484c5a64bc9f766e26675346ca26ff",
 			},
 		},
-	}
+		{
+			testObjects,
+			`{{resourceIndex . | printf "%04d" }}-{{.apiVersion}}.{{.kind}}-{{default "default" .metadata.namespace}}.{{.metadata.name}}`,
+			[]string{
+				"0000-tests-v1alpha1.Dummy-default.foo.yaml:7fb7dfcbf33096d74bd582cb8d827c17372625b412f3a022c1f849dd1fc5a70a",
+				"0001-tests-v1alpha1.Dummy-myns.bar.yaml:f0e39aa44d1e55fb8b06a05c97f6c2082e484c5a64bc9f766e26675346ca26ff",
+			},
+		}}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {

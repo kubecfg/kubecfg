@@ -43,6 +43,15 @@ const (
 
 	// pathSepReplacement is used to replace "/" separators.
 	pathSepReplacement = "-"
+
+	// magicIdxKey is an extra key that is added at the root of every resource prior to running
+	// the fileNameFormat Go template.
+	magicIdxKey = "___idx___"
+)
+
+var (
+	// showTemplateFuncs is a map of functions that can be called from the fileNameFormat Go functions
+	showTemplateFuncs = template.FuncMap{"resourceIndex": resourceIndex}
 )
 
 // ShowCmd represents the show subcommand
@@ -62,7 +71,7 @@ type ShowCmd struct {
 // FileNameFormat will be parsed as a Go template and any template format error will be returned here.
 func NewShowCmd(outputFormat, exportDir, fileNameFormat string) (ShowCmd, error) {
 	replacedFileNameFormat := replaceTmplText(fileNameFormat, string(os.PathSeparator), belRune)
-	fileNameTemplate, err := template.New("").Funcs(sprig.TxtFuncMap()).Parse(replacedFileNameFormat)
+	fileNameTemplate, err := template.New("").Funcs(sprig.TxtFuncMap()).Funcs(showTemplateFuncs).Parse(replacedFileNameFormat)
 	if err != nil {
 		return ShowCmd{}, err
 	}
@@ -189,6 +198,7 @@ func (c ShowCmd) formatObjectName(idx int, obj *unstructured.Unstructured) (stri
 	if err != nil {
 		return "", err
 	}
+	o[magicIdxKey] = idx
 	if err := c.fileNameTemplate.Execute(&buf, o); err != nil {
 		return "", err
 	}
@@ -213,4 +223,12 @@ func isDirEmpty(name string) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+// resourceIndex is function meant to be called from the fileNameTemplate template
+// and it returns the index of the current resource in the stream emitted by kubecfg show.
+//
+// usage: {{ resourceIndex . }}
+func resourceIndex(obj map[string]interface{}) int {
+	return obj[magicIdxKey].(int)
 }
