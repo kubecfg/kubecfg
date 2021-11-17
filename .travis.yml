@@ -1,3 +1,6 @@
+# This is the legacy CI system that is no longer in use
+# It is being replaced by GH actions
+
 language: go
 
 go:

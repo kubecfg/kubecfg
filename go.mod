@@ -1,4 +1,4 @@
-module github.com/bitnami/kubecfg
+module github.com/kubecfg/kubecfg
 
 require (
 	github.com/Azure/go-autorest/autorest v0.10.0 // indirect

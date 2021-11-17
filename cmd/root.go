@@ -40,7 +40,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 
-	"github.com/bitnami/kubecfg/utils"
+	"github.com/kubecfg/kubecfg/utils"
 
 	// Register auth plugins
 	_ "k8s.io/client-go/plugin/pkg/client/auth"

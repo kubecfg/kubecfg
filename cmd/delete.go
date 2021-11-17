@@ -18,7 +18,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/bitnami/kubecfg/pkg/kubecfg"
+	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 )
 
 const (
