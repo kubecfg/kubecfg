@@ -17,7 +17,7 @@ import (
 	"k8s.io/kube-openapi/pkg/util/proto"
 	"k8s.io/kubectl/pkg/util/openapi"
 
-	"github.com/bitnami/kubecfg/utils"
+	"github.com/kubecfg/kubecfg/utils"
 )
 
 func TestStringListContains(t *testing.T) {

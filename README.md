@@ -1,7 +1,6 @@
 # kubecfg
 
-[![Build Status](https://app.travis-ci.com/bitnami/kubecfg.svg?branch=main)](https://app.travis-ci.com/github/bitnami/kubecfg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/bitnami/kubecfg)](https://goreportcard.com/report/github.com/bitnami/kubecfg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kubecfg/kubecfg)](https://goreportcard.com/report/github.com/kubecfg/kubecfg)
 
 A tool for managing Kubernetes resources as code.
 
@@ -17,7 +16,7 @@ similarly-named internal tool ;)
 ## Install
 
 Pre-compiled executables exist for some platforms on
-the [Github releases](https://github.com/bitnami/kubecfg/releases)
+the [Github releases](https://github.com/kubecfg/kubecfg/releases)
 page.
 
 On macOS, it can also be installed via [Homebrew](https://brew.sh/):
@@ -27,7 +26,7 @@ To build from source:
 
 ```console
 % PATH=$PATH:$GOPATH/bin
-% go get github.com/bitnami/kubecfg
+% go get github.com/kubecfg/kubecfg
 ```
 
 ## Quickstart

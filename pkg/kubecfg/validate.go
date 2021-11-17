@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/discovery"
 
-	"github.com/bitnami/kubecfg/utils"
+	"github.com/kubecfg/kubecfg/utils"
 )
 
 // ValidateCmd represents the validate subcommand

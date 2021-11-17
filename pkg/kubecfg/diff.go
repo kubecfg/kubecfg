@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/bitnami/kubecfg/utils"
+	"github.com/kubecfg/kubecfg/utils"
 )
 
 var ErrDiffFound = fmt.Errorf("Differences found.")
@@ -215,7 +215,7 @@ func removeMapFields(config, live map[string]interface{}) map[string]interface{}
 		v2, ok := live[k]
 		if !ok {
 			// Copy empty value from config, as API won't return them,
-			// see https://github.com/bitnami/kubecfg/issues/179
+			// see https://github.com/kubecfg/kubecfg/issues/179
 			if isEmptyValue(v1) {
 				result[k] = v1
 			}

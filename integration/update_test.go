@@ -20,8 +20,8 @@ import (
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	"github.com/bitnami/kubecfg/pkg/kubecfg"
-	"github.com/bitnami/kubecfg/utils"
+	"github.com/kubecfg/kubecfg/pkg/kubecfg"
+	"github.com/kubecfg/kubecfg/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -307,7 +307,7 @@ var _ = Describe("update", func() {
 		})
 
 		Context("Service type=NodePort", func() {
-			// https://github.com/bitnami/kubecfg/issues/226
+			// https://github.com/kubecfg/kubecfg/issues/226
 
 			const svcName = "example"
 			BeforeEach(func() {
