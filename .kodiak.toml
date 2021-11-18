@@ -1,1 +1,8 @@
 version = 1
+
+[merge.automerge_dependencies]
+usernames = ["renovate"]
+
+[update]
+# These users prefer to manage their own PR updates
+ignored_usernames = ["dependabot", "renovate"]
