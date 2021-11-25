@@ -5,7 +5,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/elazarl/go-bindata-assetfs v1.0.1-0.20180223160309-38087fe4dafb
+	github.com/elazarl/go-bindata-assetfs v1.0.1
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
