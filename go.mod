@@ -12,7 +12,7 @@ require (
 	github.com/go-bindata/go-bindata v1.0.0
 	github.com/go-openapi/spec v0.19.7 // indirect
 	github.com/go-openapi/swag v0.19.8 // indirect
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.2
 	github.com/google/go-jsonnet v0.17.0
 	github.com/googleapis/gnostic v0.5.3
 	github.com/huandu/xstrings v1.3.2 // indirect
@@ -36,7 +36,7 @@ require (
 	k8s.io/apimachinery v0.19.3
 	k8s.io/client-go v0.19.3
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20200923155610-8b5066479488
+	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
 	k8s.io/kubectl v0.19.3
 )
 
