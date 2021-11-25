@@ -18,7 +18,7 @@ require (
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.9 // indirect
 	github.com/mailru/easyjson v0.7.1 // indirect
-	github.com/mattn/go-isatty v0.0.11
+	github.com/mattn/go-isatty v0.0.14
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.7.0
