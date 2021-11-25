@@ -11,10 +11,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # renovate: tag=v2
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57 # renovate: tag=v2
       with:
         go-version: 1.17
 
