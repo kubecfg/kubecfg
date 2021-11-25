@@ -199,7 +199,7 @@ github.com/peterhellberg/link
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/sergi/go-diff v1.1.0
+# github.com/sergi/go-diff v1.2.0
 github.com/sergi/go-diff/diffmatchpatch
 # github.com/sirupsen/logrus v1.6.0
 github.com/sirupsen/logrus
