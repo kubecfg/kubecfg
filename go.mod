@@ -4,6 +4,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
 	github.com/elazarl/go-bindata-assetfs v1.0.1
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/genuinetools/reg v0.16.1
@@ -14,7 +15,6 @@ require (
 	github.com/google/go-jsonnet v0.17.0
 	github.com/googleapis/gnostic v0.5.5
 	github.com/huandu/xstrings v1.3.2 // indirect
-	github.com/imdario/mergo v0.3.9 // indirect
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/onsi/ginkgo v1.14.0
