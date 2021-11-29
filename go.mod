@@ -13,8 +13,8 @@ require (
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mitchellh/copystructure v1.2.0 // indirect
-	github.com/onsi/ginkgo v1.14.0
-	github.com/onsi/gomega v1.10.1
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.17.0
 	github.com/sergi/go-diff v1.2.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.2.1
