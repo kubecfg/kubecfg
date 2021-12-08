@@ -3,7 +3,7 @@ module github.com/kubecfg/kubecfg
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/elazarl/go-bindata-assetfs v1.0.1
-	github.com/evanphx/json-patch v4.11.0+incompatible
+	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-bindata/go-bindata v1.0.0
@@ -24,7 +24,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.22.4
 	k8s.io/apiextensions-apiserver v0.22.4
-	k8s.io/apimachinery v0.22.4
+	k8s.io/apimachinery v0.23.0
 	k8s.io/client-go v0.22.4
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
