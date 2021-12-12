@@ -16,6 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # renovate: tag=v2
       - name: Validate
-        uses: rinchsan/renovate-config-validator@a23252a58ffce3bb0a8e481422e16ca8e4730b84 # renovate: tag=v0.0.9
+        uses: rinchsan/renovate-config-validator@b87b6441b539cd7bcf6e684fb6cac65b81e84085 # renovate: tag=v0.0.10
         with:
           pattern: 'renovate.json'
