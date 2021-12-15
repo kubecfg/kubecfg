@@ -13,7 +13,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-VERSION ?= dev-$(shell date +%FT%T%z)
+VERSION ?= dev-$(shell date +%FT%T%z)-$(shell git rev-parse --short HEAD)
 
 GO ?= go
 GO_FLAGS ?=
