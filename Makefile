@@ -16,7 +16,7 @@
 VERSION ?= dev-$(shell date +%FT%T%z)
 
 GO ?= go
-GO_FLAGS ?= -mod=vendor
+GO_FLAGS ?=
 GO_LDFLAGS ?=
 GO_TESTFLAGS ?= -race
 GO_BUILDFLAGS ?= -tags netgo -installsuffix netgo -ldflags="-X main.version=$(VERSION) $(GO_LDFLAGS)"
