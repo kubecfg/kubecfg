@@ -126,4 +126,5 @@ jobs:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: kubecfg
           asset_name: kubecfg_${{ runner.os }}_${{ runner.arch }}
+          asset_content_type: application/octet-stream
 
