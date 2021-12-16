@@ -75,7 +75,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           go get github.com/onsi/ginkgo/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo)
-          #make integrationtest GINKGO="ginkgo $GINKGOFLAGS"
+          kubectl delete cm kube-root-ca.crt
+          make integrationtest GINKGO="ginkgo $GINKGOFLAGS"
 
       - name: Upload kubecfg artifact
         uses: actions/upload-artifact@v2
