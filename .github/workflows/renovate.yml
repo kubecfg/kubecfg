@@ -19,3 +19,6 @@ jobs:
         uses: rinchsan/renovate-config-validator@b87b6441b539cd7bcf6e684fb6cac65b81e84085 # renovate: tag=v0.0.10
         with:
           pattern: 'renovate.json'
+      - name: GO Mod Tidy
+        run: |
+          go mod tidy
