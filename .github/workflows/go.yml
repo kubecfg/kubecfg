@@ -23,6 +23,7 @@ jobs:
       GO_LDFLAGS: "-w -s"
       GO11MODULE: "on"
       GINKGO_FLAGS: "--randomizeAllSpecs --randomizeSuites --failOnPending --trace --race --progress --compilers=2 --nodes=2"
+      VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format("gh-action-{0}", github.sha) }}
 
     steps:
       - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # renovate: tag=v2
@@ -49,8 +50,6 @@ jobs:
           fi
           # Build kubecfg
           make all
-        env:
-          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.sha }}
 
       - name: Info Binary
         run: |
