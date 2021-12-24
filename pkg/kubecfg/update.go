@@ -81,6 +81,7 @@ type UpdateCmd struct {
 
 	Create bool
 	GcTag  string
+	GcNamespace string
 	SkipGc bool
 	DryRun bool
 }
@@ -375,7 +376,7 @@ func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructu
 		}
 
 		// [gctag-migration]: Add LabelGcTag==c.GcTag to ListOptions.LabelSelector in phase2
-		err = walkObjects(ctx, c.Client, c.Discovery, metav1.ListOptions{}, func(o runtime.Object) error {
+		err = walkObjects(ctx, c.Client, c.Discovery, c.GcNamespace, metav1.ListOptions{}, func(o runtime.Object) error {
 			meta, err := meta.Accessor(o)
 			if err != nil {
 				return err
@@ -451,7 +452,7 @@ func gcDelete(ctx context.Context, client dynamic.Interface, mapper meta.RESTMap
 	return nil
 }
 
-func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.DiscoveryInterface, listopts metav1.ListOptions, callback func(runtime.Object) error) error {
+func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.DiscoveryInterface, gcNamespace string, listopts metav1.ListOptions, callback func(runtime.Object) error) error {
 	rsrclists, err := disco.ServerResources()
 	if err != nil {
 		return err
@@ -478,7 +479,7 @@ func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.
 
 			var rc dynamic.ResourceInterface
 			if rsrc.Namespaced {
-				rc = client.Resource(gvr).Namespace(metav1.NamespaceAll)
+				rc = client.Resource(gvr).Namespace(gcNamespace)
 			} else {
 				rc = client.Resource(gvr)
 			}

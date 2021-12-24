@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 )
@@ -25,6 +26,7 @@ const (
 	flagCreate   = "create"
 	flagSkipGc   = "skip-gc"
 	flagGcTag    = "gc-tag"
+	flagGcAllNs  = "gc-all-namespaces"
 	flagDryRun   = "dry-run"
 	flagValidate = "validate"
 )
@@ -34,6 +36,7 @@ func init() {
 	updateCmd.PersistentFlags().Bool(flagCreate, true, "Create missing resources")
 	updateCmd.PersistentFlags().Bool(flagSkipGc, false, "Don't perform garbage collection, even with --"+flagGcTag)
 	updateCmd.PersistentFlags().String(flagGcTag, "", "Add this tag to updated objects, and garbage collect existing objects with this tag and not in config")
+	updateCmd.PersistentFlags().Bool(flagGcAllNs, true, "Ignore namespace scope for garbage collection")
 	updateCmd.PersistentFlags().Bool(flagDryRun, false, "Perform only read-only operations")
 	updateCmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
 	updateCmd.PersistentFlags().Bool(flagIgnoreUnknown, false, "Don't fail validation if the schema for a given resource type is not found")
@@ -81,6 +84,15 @@ var updateCmd = &cobra.Command{
 		c.DefaultNamespace, err = defaultNamespace(clientConfig)
 		if err != nil {
 			return err
+		}
+
+		gcAllNamespaces, err := flags.GetBool(flagGcAllNs)
+		if err != nil {
+			return err
+		} else if gcAllNamespaces {
+			c.GcNamespace = metav1.NamespaceAll
+		} else {
+			c.GcNamespace = c.DefaultNamespace
 		}
 
 		objs, err := readObjs(cmd, args)
