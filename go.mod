@@ -28,7 +28,7 @@ require (
 	k8s.io/apimachinery v0.23.1
 	k8s.io/client-go v0.23.1
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
+	k8s.io/kube-openapi v0.0.0-20220104150652-0d48a347b383
 	k8s.io/kubectl v0.23.1
 )
 
