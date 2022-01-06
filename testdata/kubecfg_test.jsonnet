@@ -18,76 +18,83 @@
 // NB: These tests are in a separate dir to kubecfg.libsonnet to verify
 // that kubecfg.libsonnet is found along the usual search path, and
 // not via a current-directory relative import.
-local kubecfg = import "kubecfg.libsonnet";
+local kubecfg = import 'kubecfg.libsonnet';
+
+local testChart = kubecfg.helmTemplate('foo', 'myns', 'testdata/kubernetes-dashboard-5.0.0.tgz', { ingress: { enabled: true } });
 
 local result =
 
-std.assertEqual(kubecfg.parseJson("[3, 4]"), [3, 4]) &&
+  std.assertEqual(kubecfg.parseJson('[3, 4]'), [3, 4]) &&
 
-std.assertEqual(kubecfg.parseYaml(|||
-                                    ---
-                                    - 3
-                                    - 4
-                                    ---
-                                    foo: bar
-                                    baz: xyzzy
-                                  ||| ),
-                [[3, 4], {foo: "bar", baz: "xyzzy"}]) &&
+  std.assertEqual(kubecfg.parseYaml(|||
+                    ---
+                    - 3
+                    - 4
+                    ---
+                    foo: bar
+                    baz: xyzzy
+                  |||),
+                  [[3, 4], { foo: 'bar', baz: 'xyzzy' }]) &&
 
-std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}),
-                |||
-                  {
-                      "baz": [
-                          3,
-                          4
-                      ],
-                      "foo": "bar"
-                  }
-               |||
-               ) &&
+  std.assertEqual(
+    kubecfg.manifestJson({ foo: 'bar', baz: [3, 4] }),
+    |||
+      {
+          "baz": [
+              3,
+              4
+          ],
+          "foo": "bar"
+      }
+    |||
+  ) &&
 
-std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}, indent=2),
-                |||
-                  {
-                    "baz": [
-                      3,
-                      4
-                    ],
-                    "foo": "bar"
-                  }
-                |||
-               ) &&
+  std.assertEqual(
+    kubecfg.manifestJson({ foo: 'bar', baz: [3, 4] }, indent=2),
+    |||
+      {
+        "baz": [
+          3,
+          4
+        ],
+        "foo": "bar"
+      }
+    |||
+  ) &&
 
-std.assertEqual(kubecfg.manifestJson("foo"), '"foo"\n') &&
+  std.assertEqual(kubecfg.manifestJson('foo'), '"foo"\n') &&
 
-std.assertEqual(kubecfg.manifestYaml({foo: "bar", baz: [3, 4]}),
-                |||
-                  baz:
-                  - 3
-                  - 4
-                  foo: bar
-                |||
-               ) &&
+  std.assertEqual(
+    kubecfg.manifestYaml({ foo: 'bar', baz: [3, 4] }),
+    |||
+      baz:
+      - 3
+      - 4
+      foo: bar
+    |||
+  ) &&
 
-std.assertEqual(kubecfg.resolveImage("busybox"),
-                "docker.io/library/busybox:latest") &&
+  std.assertEqual(kubecfg.resolveImage('busybox'),
+                  'docker.io/library/busybox:latest') &&
 
-std.assertEqual(kubecfg.regexMatch("o$", "foo"), true) &&
+  std.assertEqual(kubecfg.regexMatch('o$', 'foo'), true) &&
 
-std.assertEqual(kubecfg.escapeStringRegex("f[o"), "f\\[o") &&
+  std.assertEqual(kubecfg.escapeStringRegex('f[o'), 'f\\[o') &&
 
-std.assertEqual(kubecfg.regexSubst("e", "tree", "oll"),
-                "trolloll") &&
+  std.assertEqual(kubecfg.regexSubst('e', 'tree', 'oll'),
+                  'trolloll') &&
 
-std.assertEqual(std.clamp(42, 0, 10), 10) &&
+  std.assertEqual(std.clamp(42, 0, 10), 10) &&
 
-true;
+  std.assertEqual(testChart['kubernetes-dashboard/templates/ingress.yaml'].spec.rules[0].http.paths[0].backend.service.name, 'foo-kubernetes-dashboard') &&
+
+  true;
 
 // Kubecfg wants to see something that looks like a k8s object
 {
-  apiVersion: "test",
-  kind: "Result",
+  apiVersion: 'test',
+  kind: 'Result',
   // result==false assert-aborts above, but we should use the value
   // somewhere here to ensure the expression actually gets evaluated.
-  result: if result then "SUCCESS" else "FAILED",
+  result: if result then 'SUCCESS' else 'FAILED',
 }

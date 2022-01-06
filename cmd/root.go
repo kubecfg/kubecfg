@@ -60,6 +60,7 @@ const (
 	flagTLACodeFile = "tla-code-file"
 	flagResolver    = "resolve-images"
 	flagResolvFail  = "resolve-images-error"
+	flagRelHelmURL  = "allow-relative-helm-urls"
 )
 
 var clientConfig clientcmd.ClientConfig
@@ -84,6 +85,7 @@ func init() {
 	RootCmd.MarkPersistentFlagFilename(flagTLACodeFile)
 	RootCmd.PersistentFlags().String(flagResolver, "noop", "Change implementation of resolveImage native function. One of: noop, registry")
 	RootCmd.PersistentFlags().String(flagResolvFail, "warn", "Action when resolveImage fails. One of ignore,warn,error")
+	RootCmd.PersistentFlags().Bool(flagRelHelmURL, false, "Allow relative URLs for helm charts. Insecure with remote imports and will change semantics in future.")
 
 	// The "usual" clientcmd/kubectl flags
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -315,7 +317,13 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 	if err != nil {
 		return nil, err
 	}
-	utils.RegisterNativeFuncs(vm, resolver)
+
+	allowRelativeHelmURLs, err := flags.GetBool(flagRelHelmURL)
+	if err != nil {
+		return nil, err
+	}
+
+	utils.RegisterNativeFuncs(vm, resolver, allowRelativeHelmURLs)
 
 	return vm, nil
 }

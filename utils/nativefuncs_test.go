@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
+	log "github.com/sirupsen/logrus"
 )
 
 // check there is no err, and a == b.
@@ -32,7 +33,7 @@ func check(t *testing.T, err error, actual, expected string) {
 
 func TestParseJson(t *testing.T) {
 	vm := jsonnet.MakeVM()
-	RegisterNativeFuncs(vm, NewIdentityResolver())
+	RegisterNativeFuncs(vm, NewIdentityResolver(), false)
 
 	_, err := vm.EvaluateSnippet("failtest", `std.native("parseJson")("barf{")`)
 	if err == nil {
@@ -50,7 +51,7 @@ func TestParseJson(t *testing.T) {
 
 func TestParseYaml(t *testing.T) {
 	vm := jsonnet.MakeVM()
-	RegisterNativeFuncs(vm, NewIdentityResolver())
+	RegisterNativeFuncs(vm, NewIdentityResolver(), false)
 
 	_, err := vm.EvaluateSnippet("failtest", `std.native("parseYaml")("[barf")`)
 	if err == nil {
@@ -73,7 +74,7 @@ func TestParseYaml(t *testing.T) {
 
 func TestRegexMatch(t *testing.T) {
 	vm := jsonnet.MakeVM()
-	RegisterNativeFuncs(vm, NewIdentityResolver())
+	RegisterNativeFuncs(vm, NewIdentityResolver(), false)
 
 	_, err := vm.EvaluateSnippet("failtest", `std.native("regexMatch")("[f", "foo")`)
 	if err == nil {
@@ -89,7 +90,7 @@ func TestRegexMatch(t *testing.T) {
 
 func TestRegexSubst(t *testing.T) {
 	vm := jsonnet.MakeVM()
-	RegisterNativeFuncs(vm, NewIdentityResolver())
+	RegisterNativeFuncs(vm, NewIdentityResolver(), false)
 
 	_, err := vm.EvaluateSnippet("failtest", `std.native("regexSubst")("[f",s "foo", "bar")`)
 	if err == nil {
@@ -101,4 +102,42 @@ func TestRegexSubst(t *testing.T) {
 
 	x, err = vm.EvaluateSnippet("test", `std.native("regexSubst")("a(x*)b", "-ab-axxb-", "${1}W")`)
 	check(t, err, x, "\"-W-xxW-\"\n")
+}
+
+func TestHelmTemplate(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver(), false)
+
+	_, err := vm.EvaluateSnippet("failtest", `std.native("helmTemplate")("rls", "myns", "not_a_url", {})`)
+	if err == nil {
+		t.Errorf("helmTemplate succeeded with invalid URL")
+	}
+
+	_, err = vm.EvaluateSnippet("failtest", `std.native("helmTemplate")("myrls", "myns", "../testdata/kubernetes-dashboard-5.0.0.tgz", {})`)
+	if err == nil {
+		t.Errorf("helmTemplate succeeded with relative URL")
+	}
+
+	vm = jsonnet.MakeVM()
+	vm.Importer(MakeUniversalImporter(nil))
+	RegisterNativeFuncs(vm, NewIdentityResolver(), true /* allowRelativeURLs */)
+
+	x, err := vm.EvaluateSnippet("test", `
+    local chrt = std.native("helmTemplate")("myrls", "myns", "../testdata/kubernetes-dashboard-5.0.0.tgz", {replicaCount: 7});
+    local sa = chrt["kubernetes-dashboard/charts/metrics-server/templates/metrics-server-serviceaccount.yaml"];
+    local d = chrt["kubernetes-dashboard/templates/deployment.yaml"];
+    [
+      // Uses releaseName arg, from a nested chart
+      sa.metadata.name,
+      // namespace arg
+      sa.metadata.namespace,
+      // Provided value
+      d.spec.replicas,
+      // Default value
+      d.spec.template.spec.containers[0].image,
+    ]
+`)
+	check(t, err, x, "[\n   \"myrls-metrics-server\",\n   \"myns\",\n   7,\n   \"kubernetesui/dashboard:v2.3.1\"\n]\n")
 }

@@ -58,6 +58,56 @@ To build from source:
 - Additional jsonnet builtin functions. See `lib/kubecfg.libsonnet`.
 - Optional "garbage collection" of objects removed from config (see
   `--gc-tag`).
+- Download and Expands `Helm Charts` into jsonnet objects. 
+
+### Helm Chart
+
+Example usage:
+
+```
+local kubecfg = import "kubecfg.libsonnet";
+
+local url = "https://charts.jetstack.io/charts/cert-manager-v1.5.3.tgz";
+local cm = kubecfg.helmTemplate("cert-manager", namespace, url, {
+  // Example values.yaml
+  webhook: {replicaCount: 2},
+});
+
+// ... returns a jsonnet object with filename keys from the helm chart
+// and expanded/parsed Kubernetes objects as values.
+
+// The result can be manipulated and used just like any other jsonnet
+// value.
+cm + {
+  "cert-manager/templates/webhook-deployment.yaml": {
+    spec+: {
+      template+: {
+        spec+: {
+          nodeSelector+: {"kubernetes.io/arch": "amd64"},
+        },
+      },
+    },
+  },
+}
+```
+
+*Caveats:*
+
+- Helm 'hooks' are not supported and ignored.
+- Chart sort order is ignored, and the usual kubecfg sort mechanism is
+  used.
+- `chartURL` argument uses the kubecfg URL-based importer, but
+  will reject relative URLs by default[1].
+- HTTP_PROXY is obeyed, but there is no other cache.  The helm chart
+  is re-downloaded on every invocation (for now).
+- Probably some other things.
+
+[1]: Relative URLs can be enabled using a new
+`--allow-relative-helm-urls` flag.  URLs are interpreted relative to
+$PWD currently, even when used by jsonnet from remote URLs.  _This will
+change_.  TODO: Make this consistent with usual relative `import`
+semantics, and enable by default.
+
 
 ## Infrastructure-as-code Philosophy
 
