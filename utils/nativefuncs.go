@@ -227,7 +227,10 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver, allowRelativeHelmURL
 				if a, ok := objs.([]interface{}); ok && len(a) == 1 {
 					ret[key] = a[0]
 				} else {
-					ret[key] = objs
+					//  A list was returned by helm for this template, add each element to ret
+					for i := 0; i < len(a); i++ {
+						ret[fmt.Sprintf("%s_%d", key, i)] = a[i]
+					}
 				}
 			}
 
