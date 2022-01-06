@@ -25,7 +25,7 @@ GOFMT ?= gofmt
 GINKGO ?= ginkgo
 GO_BINDATA ?= go-bindata
 
-JSONNET_FILES = testdata/kubecfg_test.jsonnet examples/guestbook.jsonnet testdata/import_test.jsonnet
+JSONNET_FILES = testdata/kubecfg_test.jsonnet examples/guestbook.jsonnet testdata/import_test.jsonnet examples/helmchart.jsonnet
 GO_PACKAGES = ./...
 
 # forces go modules regardless of where the source code is checked out
