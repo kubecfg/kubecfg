@@ -28,14 +28,14 @@ jobs:
       - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # renovate: tag=v2
 
       - name: Setup Cache
-        uses: actions/cache@v2
+        uses: actions/cache@937d24475381cd9c75ae6db12cb4e79714b926ed # renovate: tag=v2
         with:
           path: |
             ~/go/pkg
           key: ${{ runner.os }}-build-${{ runner.arch }}
 
       - name: Set up Go
-        uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57 # renovate: tag=v2
+        uses: actions/setup-go@424fc82d43fa5a37540bae62709ddcc23d9520d4 # renovate: tag=v2
         with:
           go-version: 1.17
 
@@ -74,27 +74,27 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           go install github.com/onsi/ginkgo/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo)
-          make integrationtest GINKGO="ginkgo $GINKGOFLAGS"
+          make integrationtest GINKGO="ginkgo $GINKGO_FLAGS"
 
       - name: Upload kubecfg artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2 # renovate: tag=v2
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
           path: kubecfg
           retention-days: 5
 
-  create_release: 
+  create_release:
     name: Create Release
     runs-on: ubuntu-latest
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    outputs: 
-      upload_url: ${{ steps.create_release.outputs.upload_url }} 
-    
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
     steps:
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # renovate: tag=v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -113,12 +113,12 @@ jobs:
 
     steps:
       - name: Download kubecfg artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@f023be2c48cc18debc3bacd34cb396e0295e2869 # renovate: tag=v2
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
       - name: Upload assets
         id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # renovate: tag=v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
