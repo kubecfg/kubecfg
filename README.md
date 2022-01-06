@@ -60,8 +60,7 @@ To build from source:
   `--gc-tag`).
 - Download and Expands `Helm Charts` into jsonnet objects.  Check `examples/helmchart.jsonnet`
 
-*Caveats:*
-
+### Helm Charts caveats
 - Helm 'hooks' are not supported and ignored.
 - Chart sort order is ignored, and the usual kubecfg sort mechanism is
   used.
@@ -69,13 +68,11 @@ To build from source:
   will reject relative URLs by default[1].
 - HTTP_PROXY is obeyed, but there is no other cache.  The helm chart
   is re-downloaded on every invocation (for now).
-- Probably some other things.
 
 [1]: Relative URLs can be enabled using a new
 `--allow-relative-helm-urls` flag.  URLs are interpreted relative to
 $PWD currently, even when used by jsonnet from remote URLs.  _This will
-change_.  TODO: Make this consistent with usual relative `import`
-semantics, and enable by default.
+change_.
 
 
 ## Infrastructure-as-code Philosophy
