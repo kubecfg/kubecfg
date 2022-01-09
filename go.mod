@@ -34,4 +34,4 @@ require (
 
 go 1.13
 
-replace gopkg.in/yaml.v2 => github.com/mkmik/yaml v0.0.0-20210505221935-5a0cbc1c4094
+replace gopkg.in/yaml.v2 => github.com/mkmik/yaml/v2 v2.4.0
