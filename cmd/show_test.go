@@ -25,7 +25,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
+
+	// see pkg/show.go for the rationale of using a fork of go-yaml
+	"github.com/kubecfg/yaml/v2"
 )
 
 func resetFlagsOf(cmd *cobra.Command) {

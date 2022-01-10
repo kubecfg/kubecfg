@@ -163,3 +163,42 @@ func TestShowExportNonEmpty(t *testing.T) {
 	}
 
 }
+
+func TestShowOrder(t *testing.T) {
+	testObjects := []*unstructured.Unstructured{
+		{
+			Object: map[string]interface{}{
+				"apiVersion": "tests/v1alpha1",
+				"kind":       "Dummy",
+				"metadata": map[string]interface{}{
+					"name": "foo",
+					"labels": map[string]string{
+						"11": "",
+						"1z": "",
+						"2z": "",
+					},
+				},
+			},
+		},
+	}
+
+	c, err := NewShowCmd("yaml", "", DefaultFileNameFormat)
+	if err != nil {
+		t.Error(t)
+	}
+	var before strings.Builder
+	if err := c.Run(testObjects, &before); err != nil {
+		t.Error(err)
+	}
+
+	for i := 0; i < 100; i++ {
+		var after strings.Builder
+		if err := c.Run(testObjects, &after); err != nil {
+			t.Error(err)
+		}
+		if got, want := after.String(), before.String(); got != want {
+			t.Fatalf("got: %q, want: %q", got, want)
+		}
+	}
+
+}
