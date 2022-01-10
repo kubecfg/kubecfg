@@ -25,7 +25,14 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
-	yaml "gopkg.in/yaml.v2"
+
+	// yaml.v2 has a sort ordering bug that has been fixed in yaml.v3.
+	// However yaml.v3 hasn't been released yet. We tried to upgrade do yaml.v3 but it broke other tests.
+	// There is an open PR to backport the fix to v2 but it's stuck upstream for almost a year: https://github.com/go-yaml/yaml/pull/736
+	//
+	// Replace directives cause problems when installing with go install (see https://github.com/kubecfg/kubecfg/pull/26#issuecomment-1008269344)
+	// and also in other circumstances. We thus forked the go-yaml repo in:
+	"github.com/kubecfg/yaml/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
