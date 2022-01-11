@@ -94,15 +94,7 @@ func (c DiffCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructure
 		}
 		liveObjText, _ := json.MarshalIndent(liveObjMap, "", "  ")
 		objText, _ := json.MarshalIndent(obj.Object, "", "  ")
-
-		liveObjTextLines, objTextLines, lines := dmp.DiffLinesToChars(string(liveObjText), string(objText))
-
-		diff := dmp.DiffMain(
-			string(liveObjTextLines),
-			string(objTextLines),
-			false)
-
-		diff = dmp.DiffCharsToLines(diff, lines)
+		diff := dmp.DiffMain(string(liveObjText), string(objText), false)
 		if (len(diff) == 1) && (diff[0].Type == diffmatchpatch.DiffEqual) {
 			fmt.Fprintf(out, "%s unchanged\n", desc)
 		} else {
