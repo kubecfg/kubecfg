@@ -43,8 +43,7 @@ std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}),
                       ],
                       "foo": "bar"
                   }
-               |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}, indent=2),
                 |||
@@ -55,8 +54,7 @@ std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}, indent=2),
                     ],
                     "foo": "bar"
                   }
-                |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.manifestJson("foo"), '"foo"\n') &&
 
@@ -66,8 +64,7 @@ std.assertEqual(kubecfg.manifestYaml({foo: "bar", baz: [3, 4]}),
                   - 3
                   - 4
                   foo: bar
-                |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.resolveImage("busybox"),
                 "docker.io/library/busybox:latest") &&
