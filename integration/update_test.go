@@ -34,14 +34,17 @@ func cmData(cm *v1.ConfigMap) map[string]string {
 var _ = Describe("update", func() {
 	var c corev1.CoreV1Interface
 	var ns string
+	var ns2 string
 	const cmName = "testcm"
 
 	BeforeEach(func() {
 		c = corev1.NewForConfigOrDie(clusterConfigOrDie())
 		ns = createNsOrDie(c, "update")
+		ns2 = createNsOrDie(c, "update-second")
 	})
 	AfterEach(func() {
 		deleteNsOrDie(c, ns)
+		deleteNsOrDie(c, ns2)
 	})
 
 	Describe("An erroneous update", func() {
@@ -456,6 +459,7 @@ var _ = Describe("update", func() {
 		var gcTag string
 		var dryRun bool
 		var skipGc bool
+		var gcAllNs bool
 
 		BeforeEach(func() {
 			gcTag = "tag-" + ns
@@ -463,11 +467,16 @@ var _ = Describe("update", func() {
 			input = []*v1.ConfigMap{}
 			dryRun = false
 			skipGc = false
+			gcAllNs = true
 		})
 
 		JustBeforeEach(func() {
 			for _, obj := range preExist {
-				_, err := c.ConfigMaps(ns).Create(context.Background(), obj, metav1.CreateOptions{})
+				nsForObject := obj.ObjectMeta.Namespace
+				if nsForObject == nil {
+					nsForObject = ns
+				}
+				_, err := c.ConfigMaps(nsForObject).Create(context.Background(), obj, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
 
@@ -480,6 +489,9 @@ var _ = Describe("update", func() {
 			}
 			if dryRun {
 				args = append(args, "--dry-run")
+			}
+			if !gcAllNs {
+				args = append(args, "--gc-all-namespaces=false")
 			}
 
 			inputObjs := make([]runtime.Object, len(input))
@@ -557,6 +569,18 @@ var _ = Describe("update", func() {
 							Name: "existing-precious",
 						},
 					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								kubecfg.AnnotationGcTag: gcTag
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTag,
+							},
+							Name: "existing-stale-outside-namespace",
+							Namespace: ns2
+						},
+					},
 				}
 
 				input = []*v1.ConfigMap{
@@ -625,6 +649,11 @@ var _ = Describe("update", func() {
 			It("should not delete strategy=ignore object", func() {
 				Expect(c.ConfigMaps(ns).Get(context.Background(), "existing-precious", metav1.GetOptions{})).
 					NotTo(BeNil())
+			})
+
+			It("should delete outside specified namespace", func() {
+				_, err := c.ConfigMaps(ns2).Get(context.Background(), "existing-stale-outside-namespace", metav1.GetOptions{})
+				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
 		})
 
@@ -704,6 +733,49 @@ var _ = Describe("update", func() {
 					To(HaveKeyWithValue(kubecfg.AnnotationGcTag, gcTag))
 				Expect(o.ObjectMeta.Labels).
 					To(HaveKeyWithValue(kubecfg.LabelGcTag, gcTag))
+			})
+		})
+
+		Context("without gc-all-namespaces", func() {
+			BeforeEach(func() {
+				gcAllNs = false
+				preExist = []*v1.ConfigMap{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							// [gctag-migration]: Remove annotation in phase2
+							Annotations: map[string]string{
+								kubecfg.AnnotationGcTag: gcTag,
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTag,
+							},
+							Name: "existing-stale",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							// [gctag-migration]: Remove annotation in phase2
+							Annotations: map[string]string{
+								kubecfg.AnnotationGcTag: gcTag,
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTag,
+							},
+							Name: "existing-stale-outside-namespace",
+						},
+					}
+				}
+				input = []*v1.ConfigMap{ }
+			})
+
+			It("should delete existing object inside specified namespace", func() {
+				_, err := c.ConfigMaps(ns2).Get(context.Background(), "existing-stale", metav1.GetOptions{})
+				Expect(errors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should not delete existing object in other namespace", func() {
+				Expect(c.ConfigMaps(ns).Get(context.Background(), "existing-stale-outside-namespace", metav1.GetOptions{})).
+					NotTo(BeNil())
 			})
 		})
 	})
