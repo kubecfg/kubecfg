@@ -17,11 +17,109 @@ package kubecfg
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
+
+func TestDiff(t *testing.T) {
+	liveObj := unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "tests/v1alpha1",
+			"kind":       "Dummy",
+			"metadata": map[string]interface{}{
+				"name": "foo",
+				"labels": map[string]string{
+					"app": "foo",
+				},
+			},
+		},
+	}
+	obj := unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "tests/v1alpha1",
+			"kind":       "Dummy",
+			"metadata": map[string]interface{}{
+				"name": "foo",
+				"labels": map[string]string{
+					"bar": "baz",
+					"app": "foo",
+				},
+			},
+		},
+	}
+
+	c := DiffCmd{}
+
+	var buf strings.Builder
+	diffFound, err := c.diff(&buf, "resource", false, &liveObj, &obj)
+
+	require.NoError(t, err)
+	require.True(t, diffFound)
+
+	want := `--- live resource
++++ config resource
+@@ -3,7 +3,8 @@
+   "kind": "Dummy",
+   "metadata": {
+     "labels": {
+-      "app": "foo"
++      "app": "foo",
++      "bar": "baz"
+     },
+     "name": "foo"
+   }
+
+`
+	require.Equal(t, buf.String(), want)
+}
+
+func TestDiffSecret(t *testing.T) {
+	liveObj := unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name": "foo",
+			},
+			"data": map[string]string{
+				"foo": "YmFy",
+			},
+		},
+	}
+	obj := unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name": "foo",
+			},
+			"data": map[string]string{
+				"foo": "Zm9v",
+			},
+		},
+	}
+
+	c := DiffCmd{}
+	c.OmitSecrets = true
+
+	var buf strings.Builder
+	diffFound, err := c.diff(&buf, "resource", false, &liveObj, &obj)
+
+	require.NoError(t, err)
+	require.True(t, diffFound)
+
+	want := `--- live resource
++++ config resource
+@@ -1,7 +1,7 @@
+-    foo: <omitted>
++    foo: <omitted>
+
+`
+	require.Equal(t, buf.String(), want)
+}
 
 func TestLastAppliedStrategy(t *testing.T) {
 
