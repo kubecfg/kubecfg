@@ -762,6 +762,7 @@ var _ = Describe("update", func() {
 								kubecfg.LabelGcTag: gcTag,
 							},
 							Name: "existing-stale-outside-namespace",
+							Namespace: ns2,
 						},
 					},
 				}
