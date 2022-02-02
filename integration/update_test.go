@@ -473,7 +473,7 @@ var _ = Describe("update", func() {
 		JustBeforeEach(func() {
 			for _, obj := range preExist {
 				nsForObject := obj.ObjectMeta.Namespace
-				if nsForObject == nil {
+				if nsForObject == "" {
 					nsForObject = ns
 				}
 				_, err := c.ConfigMaps(nsForObject).Create(context.Background(), obj, metav1.CreateOptions{})
@@ -763,7 +763,7 @@ var _ = Describe("update", func() {
 							},
 							Name: "existing-stale-outside-namespace",
 						},
-					}
+					},
 				}
 				input = []*v1.ConfigMap{ }
 			})
