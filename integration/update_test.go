@@ -572,7 +572,7 @@ var _ = Describe("update", func() {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
-								kubecfg.AnnotationGcTag: gcTag
+								kubecfg.AnnotationGcTag: gcTag,
 							},
 							Labels: map[string]string{
 								kubecfg.LabelGcTag: gcTag,
