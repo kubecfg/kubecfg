@@ -16,7 +16,6 @@
 package kubecfg
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,7 +23,11 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	log "github.com/sirupsen/logrus"
@@ -57,7 +60,6 @@ type DiffCmd struct {
 func (c DiffCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructured, out io.Writer) error {
 	sort.Sort(utils.AlphabeticalOrder(apiObjects))
 
-	dmp := diffmatchpatch.New()
 	diffFound := false
 	for _, obj := range apiObjects {
 		desc := fmt.Sprintf("%s %s", utils.ResourceNameFor(c.Mapper, obj), utils.FqName(obj))
@@ -80,35 +82,10 @@ func (c DiffCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructure
 			return fmt.Errorf("Error fetching %s: %v", desc, err)
 		}
 
-		fmt.Fprintln(out, "---")
-		fmt.Fprintf(out, "- live %s\n+ config %s\n", desc, desc)
-		if liveObj == nil {
-			fmt.Fprintf(out, "%s doesn't exist on server\n", desc)
-			diffFound = true
-			continue
-		}
-
-		liveObjMap, err := c.getLiveObjObject(obj, liveObj)
-		if err != nil {
+		if d, err := c.diff(out, desc, isatty.IsTerminal(os.Stdout.Fd()), liveObj, obj); err != nil {
 			return err
-		}
-		liveObjText, _ := json.MarshalIndent(liveObjMap, "", "  ")
-		objText, _ := json.MarshalIndent(obj.Object, "", "  ")
-
-		liveObjTextLines, objTextLines, lines := dmp.DiffLinesToChars(string(liveObjText), string(objText))
-
-		diff := dmp.DiffMain(
-			string(liveObjTextLines),
-			string(objTextLines),
-			false)
-
-		diff = dmp.DiffCharsToLines(diff, lines)
-		if (len(diff) == 1) && (diff[0].Type == diffmatchpatch.DiffEqual) {
-			fmt.Fprintf(out, "%s unchanged\n", desc)
-		} else {
+		} else if d {
 			diffFound = true
-			text := c.formatDiff(diff, isatty.IsTerminal(os.Stdout.Fd()), c.OmitSecrets && obj.GetKind() == "Secret")
-			fmt.Fprintf(out, "%s\n", text)
 		}
 	}
 
@@ -116,6 +93,100 @@ func (c DiffCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructure
 		return ErrDiffFound
 	}
 	return nil
+}
+
+// compute and render a diff between two objects. It does not perform API calls.
+func (c DiffCmd) diff(out io.Writer, desc string, color bool, liveObj, obj *unstructured.Unstructured) (bool, error) {
+	dmp := diffmatchpatch.New()
+
+	fmt.Fprintf(out, "--- live %s\n+++ config %s\n", desc, desc)
+	if liveObj == nil {
+		fmt.Fprintf(out, "%s doesn't exist on server\n", desc)
+		return true, nil
+	}
+
+	liveObjMap, err := c.getLiveObjObject(obj, liveObj)
+	if err != nil {
+		return false, err
+	}
+	liveObjText, _ := json.MarshalIndent(liveObjMap, "", "  ")
+	objText, _ := json.MarshalIndent(obj.Object, "", "  ")
+	diff := dmp.DiffMain(string(liveObjText), string(objText), false)
+
+	if (len(diff) == 1) && (diff[0].Type == diffmatchpatch.DiffEqual) {
+		fmt.Fprintf(out, "%s unchanged\n", desc)
+	} else {
+		edits := myers.ComputeEdits(span.URIFromPath(""), string(liveObjText), string(objText))
+		diff := gotextdiff.ToUnified("", "", string(liveObjText), edits)
+		formatDiff(out, diff, color, c.OmitSecrets && obj.GetKind() == "Secret")
+
+		fmt.Fprintf(out, "\n")
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// Formats the supplied Diff as a unified-diff-like text with infinite context and optionally colorizes it.
+// If omitvalues is true, the value part of the `"key": "value"` lines is omitted (useful to not render secrets) in CI output.
+func formatDiff(f io.Writer, u gotextdiff.Unified, color bool, omitvalues bool) {
+	if len(u.Hunks) == 0 {
+		return
+	}
+	for _, hunk := range u.Hunks {
+		fromCount, toCount := 0, 0
+		for _, l := range hunk.Lines {
+			switch l.Kind {
+			case gotextdiff.Delete:
+				fromCount++
+			case gotextdiff.Insert:
+				toCount++
+			default:
+				fromCount++
+				toCount++
+			}
+		}
+		fmt.Fprint(f, "@@")
+		if fromCount > 1 {
+			fmt.Fprintf(f, " -%d,%d", hunk.FromLine, fromCount)
+		} else {
+			fmt.Fprintf(f, " -%d", hunk.FromLine)
+		}
+		if toCount > 1 {
+			fmt.Fprintf(f, " +%d,%d", hunk.ToLine, toCount)
+		} else {
+			fmt.Fprintf(f, " +%d", hunk.ToLine)
+		}
+		fmt.Fprint(f, " @@\n")
+		for _, l := range hunk.Lines {
+			text := l.Content
+			if omitvalues {
+				text = DiffKeyValue.ReplaceAllString(text, "$1: <omitted>")
+			}
+			switch l.Kind {
+			case gotextdiff.Delete:
+				if color {
+					_, _ = io.WriteString(f, "\x1b[31m")
+				}
+				fmt.Fprintf(f, "-%s", text)
+			case gotextdiff.Insert:
+				if color {
+					_, _ = io.WriteString(f, "\x1b[32m")
+				}
+				fmt.Fprintf(f, "+%s", text)
+			default:
+				if !omitvalues {
+					fmt.Fprintf(f, " %s", text)
+				}
+			}
+			if color {
+				_, _ = io.WriteString(f, "\x1b[0m")
+			}
+			if !strings.HasSuffix(l.Content, "\n") {
+				fmt.Fprintf(f, "\n\\ No newline at end of file\n")
+			}
+		}
+	}
 }
 
 func (c DiffCmd) getLiveObjObject(obj *unstructured.Unstructured, liveObj *unstructured.Unstructured) (map[string]interface{}, error) {
@@ -132,43 +203,6 @@ func (c DiffCmd) getLiveObjObject(obj *unstructured.Unstructured, liveObj *unstr
 		liveObjObject = liveObj.Object
 	}
 	return liveObjObject, nil
-}
-
-// Formats the supplied Diff as a unified-diff-like text with infinite context and optionally colorizes it.
-func (c DiffCmd) formatDiff(diffs []diffmatchpatch.Diff, color bool, omitchanges bool) string {
-	var buff bytes.Buffer
-
-	for _, diff := range diffs {
-		text := diff.Text
-
-		if omitchanges {
-			text = DiffKeyValue.ReplaceAllString(text, "$1: <omitted>")
-		}
-		switch diff.Type {
-		case diffmatchpatch.DiffInsert:
-			if color {
-				_, _ = buff.WriteString("\x1b[32m")
-			}
-			_, _ = buff.WriteString(DiffLineStart.ReplaceAllString(text, "$1+ $2"))
-			if color {
-				_, _ = buff.WriteString("\x1b[0m")
-			}
-		case diffmatchpatch.DiffDelete:
-			if color {
-				_, _ = buff.WriteString("\x1b[31m")
-			}
-			_, _ = buff.WriteString(DiffLineStart.ReplaceAllString(text, "$1- $2"))
-			if color {
-				_, _ = buff.WriteString("\x1b[0m")
-			}
-		case diffmatchpatch.DiffEqual:
-			if !omitchanges {
-				_, _ = buff.WriteString(DiffLineStart.ReplaceAllString(text, "$1  $2"))
-			}
-		}
-	}
-
-	return buff.String()
 }
 
 // See also feature request for golang reflect pkg at
