@@ -63,7 +63,8 @@ var (
 
 // ShowCmd represents the show subcommand
 type ShowCmd struct {
-	// OutputFormat is either "yaml" or "json"
+	// OutputFormat is "yaml", "yml", or "json".
+	// "yaml" and "yml" are equivalent other than writing out files with that respective suffix.
 	OutputFormat string
 	// ExportDir is an optional name of a directory. If not set, the show command
 	// will output all the resource concatenated to stdout. Otherwise, it will
@@ -150,7 +151,7 @@ func (c ShowCmd) renderObject(idx int, obj *unstructured.Unstructured, out io.Wr
 	}
 
 	switch c.OutputFormat {
-	case "yaml":
+	case "yaml", "yml":
 		fmt.Fprintln(out, "---")
 		o, err := k8sToJSONObject(obj)
 		if err != nil {
