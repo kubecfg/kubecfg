@@ -64,6 +64,10 @@ func TestShow(t *testing.T) {
 			err = yaml.Unmarshal([]byte(text), &ret)
 			return
 		},
+		"yml": func(text string) (ret interface{}, err error) {
+			err = yaml.Unmarshal([]byte(text), &ret)
+			return
+		},
 	}
 
 	// Use the fact that JSON is also valid YAML ..

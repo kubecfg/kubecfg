@@ -29,10 +29,9 @@ const (
 
 func init() {
 	RootCmd.AddCommand(showCmd)
-	showCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+	showCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format. Supported values are: json, yaml, yml. yaml and yml produce the same content but use the respective file suffix.")
 	showCmd.PersistentFlags().String(flagExportDir, "", "Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.")
 	showCmd.PersistentFlags().String(flagExportFileNameFormat, kubecfg.DefaultFileNameFormat, "Go template expression used to render path names for resources.")
-
 }
 
 var showCmd = &cobra.Command{
