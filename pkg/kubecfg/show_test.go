@@ -69,12 +69,14 @@ func TestShowExport(t *testing.T) {
 	}
 
 	testCases := []struct {
-		testObjects []*unstructured.Unstructured
-		format      string
-		want        []string
+		testObjects  []*unstructured.Unstructured
+		outputFormat string
+		nameFormat   string
+		want         []string
 	}{
 		{
 			testObjects,
+			"yaml",
 			DefaultFileNameFormat,
 			[]string{
 				"tests-v1alpha1.Dummy-default.foo.yaml:7fb7dfcbf33096d74bd582cb8d827c17372625b412f3a022c1f849dd1fc5a70a",
@@ -83,6 +85,16 @@ func TestShowExport(t *testing.T) {
 		},
 		{
 			testObjects,
+			"yml",
+			DefaultFileNameFormat,
+			[]string{
+				"tests-v1alpha1.Dummy-default.foo.yml:7fb7dfcbf33096d74bd582cb8d827c17372625b412f3a022c1f849dd1fc5a70a",
+				"tests-v1alpha1.Dummy-myns.bar.yml:f0e39aa44d1e55fb8b06a05c97f6c2082e484c5a64bc9f766e26675346ca26ff",
+			},
+		},
+		{
+			testObjects,
+			"yaml",
 			`{{default "default" .metadata.namespace}}/{{.apiVersion}}.{{.kind}}/{{.metadata.name}}`,
 			[]string{
 				"default/tests-v1alpha1.Dummy/foo.yaml:7fb7dfcbf33096d74bd582cb8d827c17372625b412f3a022c1f849dd1fc5a70a",
@@ -91,6 +103,7 @@ func TestShowExport(t *testing.T) {
 		},
 		{
 			testObjects,
+			"yaml",
 			`{{resourceIndex . | printf "%04d" }}-{{.apiVersion}}.{{.kind}}-{{default "default" .metadata.namespace}}.{{.metadata.name}}`,
 			[]string{
 				"0000-tests-v1alpha1.Dummy-default.foo.yaml:7fb7dfcbf33096d74bd582cb8d827c17372625b412f3a022c1f849dd1fc5a70a",
@@ -108,7 +121,7 @@ func TestShowExport(t *testing.T) {
 				os.RemoveAll(tmpdir)
 			})
 
-			c, err := NewShowCmd("yaml", tmpdir, tc.format)
+			c, err := NewShowCmd(tc.outputFormat, tmpdir, tc.nameFormat)
 			if err != nil {
 				t.Error(t)
 			}
