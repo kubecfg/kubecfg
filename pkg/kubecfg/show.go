@@ -63,8 +63,7 @@ var (
 
 // ShowCmd represents the show subcommand
 type ShowCmd struct {
-	// OutputFormat is "yaml", "yml", or "json".
-	// "yaml" and "yml" are equivalent other than writing out files with that respective suffix.
+	// OutputFormat is either "yaml" or "json".
 	OutputFormat string
 	// ExportDir is an optional name of a directory. If not set, the show command
 	// will output all the resource concatenated to stdout. Otherwise, it will
@@ -73,11 +72,12 @@ type ShowCmd struct {
 	ExportDir string
 
 	fileNameTemplate *template.Template
+	fileNameExt      string
 }
 
 // NewShowCmd builds a ShowCmd initialized with its parameters.
 // FileNameFormat will be parsed as a Go template and any template format error will be returned here.
-func NewShowCmd(outputFormat, exportDir, fileNameFormat string) (ShowCmd, error) {
+func NewShowCmd(outputFormat, exportDir, fileNameFormat, fileNameExt string) (ShowCmd, error) {
 	replacedFileNameFormat := replaceTmplText(fileNameFormat, string(os.PathSeparator), belRune)
 	fileNameTemplate, err := template.New("").Funcs(sprig.TxtFuncMap()).Funcs(showTemplateFuncs).Parse(replacedFileNameFormat)
 	if err != nil {
@@ -87,6 +87,7 @@ func NewShowCmd(outputFormat, exportDir, fileNameFormat string) (ShowCmd, error)
 		OutputFormat:     outputFormat,
 		ExportDir:        exportDir,
 		fileNameTemplate: fileNameTemplate,
+		fileNameExt:      fileNameExt,
 	}, nil
 }
 
@@ -137,7 +138,11 @@ func (c ShowCmd) renderObject(idx int, obj *unstructured.Unstructured, out io.Wr
 		if err != nil {
 			return err
 		}
-		filename := fmt.Sprintf("%s.%s", name, c.OutputFormat)
+		ext := c.OutputFormat
+		if c.fileNameExt != "" {
+			ext = c.fileNameExt
+		}
+		filename := fmt.Sprintf("%s.%s", name, ext)
 		path := filepath.Join(c.ExportDir, filename)
 		if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
 			return err
@@ -151,7 +156,7 @@ func (c ShowCmd) renderObject(idx int, obj *unstructured.Unstructured, out io.Wr
 	}
 
 	switch c.OutputFormat {
-	case "yaml", "yml":
+	case "yaml":
 		fmt.Fprintln(out, "---")
 		o, err := k8sToJSONObject(obj)
 		if err != nil {
