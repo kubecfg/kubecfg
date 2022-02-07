@@ -7,71 +7,14 @@ These generated files can be regenerated with `make generate`, and the
 updated generated files should also be included in the PR that
 modified the input files.
 
-## Managing vendor/
-
-TL;DR: run `make vendor` whenever you add/remove a dependency. run `GO111MODULE=on go get -u .....` to update deps.
-
-This project uses `go mod`, Go modules feature implemented since Go 1.11. This feature needs to be turned on explicitly via the `GO111MODULE` env variable, if you checkout the `kubecfg` repo in its canonical location in the GOPATH (i.e. $GOPATH/github.com/kubecfg/kubecfg).  This feature is turned on _automatically_ if you checkout the `kubecfg` repo anywhere else in the filesystem.
-
-
-This repository is configured to use Go modules as a source of truth for dependency information,
-but to rely on vendoring to resolve the dependencies during build.
-
-It's thus possible to build `kubecfg` directly with `go build` if the repo is checked out in the GOPATH (which makes it `go get`table too), or when it's checked out outside the GOPATH.
-
-In order to make sure that the `vendor/` directory is kept up to date, the `Makefile`
-instructs `go build` to consume the modules from the vendored directory (via `-mod=vendor` flag) as opposed to fetching the modules in the user's cache. That flag is available only if GO111MODULE is turned on, but effectvely turns the build into a legacy pre-Go-modules build.
-
-If you're familiar with Go modules, feel free to build `kubecfg` with go build or test directly, but please check in vendored repository (the CI build will likely catch you if you forget):
-
-```
-$ make vendor
-```
-
-To make things easier for reviewers, put updates to `vendor/` in a separate commit within the same PR if possible.
-
 ### Clean up removed/unnecessary dependencies
 
 This is a good one to run before sending a non-trivial change for
 review.
 
 ```
-# See unused
-govendor list +unused
-
-# Remove unused
-govendor remove +unused
+make tidy
 ```
-
-### Add a new dependency
-
-Make code change that imports new library, then:
-
-```
-# See missing
-govendor list +missing
-
-% govendor fetch -v +missing
-```
-
-Note pinning a library to a specific version requires extra work.  In
-particular, we do this for `client-go` and `apimachinery` - to find
-the current version used for these libraries, look in
-`vendor/vendor.json` for the `version` field (not `versionExact`) of
-an existing package.  Use that same version in the commands below:
-
-```
-# For example: To pin all imported client-go packages to release v3.0
-% govendor fetch -v k8s.io/client-go/...@v3.0
-
-# *Note* the above may pull in new packages from client-go, which will
-# be imported at HEAD.  You need to re-run the above command until
-# all imports are at the desired version.
-# TODO: There is probably a better way to do this.
-```
-
-It is safe (and appropriate) to re-run `govendor fetch` with a
-different version, if you made a mistake or missed some libraries.
 
 ## Making a Release
 
