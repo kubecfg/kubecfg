@@ -7,13 +7,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
-	assetfs "github.com/elazarl/go-bindata-assetfs"
 	jsonnet "github.com/google/go-jsonnet"
+	libsonnet "github.com/kubecfg/kubecfg/lib"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,28 +20,8 @@ var errNotFound = errors.New("Not found")
 
 var extVarKindRE = regexp.MustCompile("^<(?:extvar|top-level-arg):.+>$")
 
-//go:generate go run github.com/go-bindata/go-bindata/go-bindata -nometadata -ignore .*_test\.|~$DOLLAR -pkg $GOPACKAGE -o bindata.go -prefix ../ ../lib/...
-func newInternalFS(prefix string) http.FileSystem {
-	// Asset/AssetDir returns `fmt.Errorf("Asset %s not found")`,
-	// which does _not_ get mapped to 404 by `http.FileSystem`.
-	// Need to convert to `os.ErrNotExist` explicitly ourselves.
-	mapNotFound := func(err error) error {
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			err = os.ErrNotExist
-		}
-		return err
-	}
-	return &assetfs.AssetFS{
-		Asset: func(path string) ([]byte, error) {
-			ret, err := Asset(path)
-			return ret, mapNotFound(err)
-		},
-		AssetDir: func(path string) ([]string, error) {
-			ret, err := AssetDir(path)
-			return ret, mapNotFound(err)
-		},
-		Prefix: prefix,
-	}
+func newInternalFS() http.FileSystem {
+	return http.FS(libsonnet.Assets)
 }
 
 /*
@@ -79,7 +58,7 @@ func MakeUniversalImporter(searchURLs []*url.URL) jsonnet.Importer {
 	}
 
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
-	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS("lib")))
+	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
 
 	return &universalImporter{
 		BaseSearchURLs: searchURLs,

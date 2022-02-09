@@ -40,15 +40,7 @@ jobs:
           go-version: 1.17
 
       - name: Build Binary
-        run: |
-          make generate
-          if ! git diff --exit-code --name-only; then
-            git diff
-            echo 'Run "make generate" and add generated changes to this PR'
-            exit 1
-          fi
-          # Build kubecfg
-          make all
+        run: make all
 
       - name: Info Binary
         run: |
