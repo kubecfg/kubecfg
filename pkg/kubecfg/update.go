@@ -452,7 +452,7 @@ func gcDelete(ctx context.Context, client dynamic.Interface, mapper meta.RESTMap
 }
 
 func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.DiscoveryInterface, listopts metav1.ListOptions, callback func(runtime.Object) error) error {
-	rsrclists, err := disco.ServerResources()
+	rsrclists, err := disco.ServerPreferredResources()
 	if err != nil {
 		return err
 	}
