@@ -8,7 +8,7 @@ import (
 )
 
 func TestInternalFS(t *testing.T) {
-	fs := newInternalFS("lib")
+	fs := newInternalFS()
 	if _, err := fs.Open("kubecfg.libsonnet"); err != nil {
 		t.Errorf("opening kubecfg.libsonnet failed! %v", err)
 	}
