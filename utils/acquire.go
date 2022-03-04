@@ -41,6 +41,7 @@ const (
 type readOptions struct {
 	showProvenance bool
 	readTwice      bool
+	expr           string
 }
 
 type ReadOption func(*readOptions)
@@ -54,6 +55,12 @@ func WithProvenance(show bool) ReadOption {
 func WithReadTwice(twice bool) ReadOption {
 	return func(opts *readOptions) {
 		opts.readTwice = twice
+	}
+}
+
+func WithExpr(expr string) ReadOption {
+	return func(opts *readOptions) {
+		opts.expr = expr
 	}
 }
 
@@ -85,7 +92,7 @@ func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, er
 		return jsonnetReader(vm, path, opt)
 	}
 
-	return nil, fmt.Errorf("Unknown file extension: %s", path)
+	return nil, fmt.Errorf("unknown file extension: %s", path)
 }
 
 func jsonReader(r io.Reader) ([]runtime.Object, error) {
@@ -196,21 +203,30 @@ func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkConte
 	}
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
+func PathToFileURL(path string) (string, error) {
 	// TODO: Read via Importer, so we support HTTP, etc for first
 	// file too.
 	abs, err := filepath.Abs(path)
 	if err != nil {
+		return "", err
+	}
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String(), nil
+}
+
+func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
+	// TODO(mkm): evaluate expressions in opts.expr
+
+	pathURL, err := PathToFileURL(path)
+	if err != nil {
 		return nil, err
 	}
-	pathUrl := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
 
 	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonstr, err := vm.EvaluateSnippet(pathUrl.String(), string(bytes))
+	jsonstr, err := vm.EvaluateSnippet(pathURL, string(bytes))
 	if err != nil {
 		return nil, err
 	}
@@ -218,13 +234,13 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Obj
 	log.Debugf("jsonnet result is: %s", jsonstr)
 
 	if opts.readTwice {
-		str2, err := vm.EvaluateSnippet(pathUrl.String(), string(bytes))
+		str2, err := vm.EvaluateSnippet(pathURL, string(bytes))
 		if err != nil {
-			return nil, fmt.Errorf("error re-reading %s: %w", pathUrl, err)
+			return nil, fmt.Errorf("error re-reading %s: %w", pathURL, err)
 		}
 
 		if jsonstr != str2 {
-			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", pathUrl)
+			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", pathURL)
 		}
 	}
 
