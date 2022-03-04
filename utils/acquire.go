@@ -149,21 +149,28 @@ func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
 	}
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
+func PathToFileURL(path string) (string, error) {
 	// TODO: Read via Importer, so we support HTTP, etc for first
 	// file too.
 	abs, err := filepath.Abs(path)
 	if err != nil {
+		return "", err
+	}
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String(), nil
+}
+
+func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
+	pathURL, err := PathToFileURL(path)
+	if err != nil {
 		return nil, err
 	}
-	pathUrl := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
 
 	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonstr, err := vm.EvaluateSnippet(pathUrl.String(), string(bytes))
+	jsonstr, err := vm.EvaluateSnippet(pathURL, string(bytes))
 	if err != nil {
 		return nil, err
 	}
