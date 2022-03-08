@@ -17,6 +17,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -33,9 +34,10 @@ func TestJsonWalk(t *testing.T) {
 	}
 
 	tests := []struct {
-		input  string
-		result []interface{}
-		error  string
+		input      string
+		provenance bool
+		result     []interface{}
+		error      string
 	}{
 		{
 			// nil input
@@ -63,6 +65,12 @@ func TestJsonWalk(t *testing.T) {
 			result: []interface{}{barObj, fooObj},
 		},
 		{
+			// Deeply nested with provenance
+			input:      `{"foo": [[{"apiVersion": "test", "kind": "Foo", "metadata": {"annotations":{}}}], {"apiVersion": "test", "kind": "Bar"}]}`,
+			provenance: true,
+			result:     []interface{}{barObj, fooObj},
+		},
+		{
 			// Error: nested misplaced value
 			input: `{"foo": {"bar": [null, 42]}}`,
 			error: "Looking for kubernetes object at \"$.foo.bar[1]\", but instead found float64",
@@ -70,38 +78,39 @@ func TestJsonWalk(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		t.Logf("%d: %s", i, test.input)
-		var top interface{}
-		if err := json.Unmarshal([]byte(test.input), &top); err != nil {
-			t.Errorf("Failed to unmarshal %q: %v", test.input, err)
-			continue
-		}
-		objs, err := jsonWalk(&walkContext{label: "$"}, top)
-		if test.error != "" {
-			// expect error
-			if err == nil {
-				t.Errorf("Test %d failed to fail", i)
-			} else if err.Error() != test.error {
-				t.Errorf("Test %d failed with %q but expected %q", i, err, test.error)
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Logf("%d: %s, %v", i, test.input, test.provenance)
+			var top interface{}
+			if err := json.Unmarshal([]byte(test.input), &top); err != nil {
+				t.Fatalf("Failed to unmarshal %q: %v", test.input, err)
+			}
+			opts := readOptions{showProvenance: test.provenance}
+			objs, err := jsonWalk(&walkContext{label: "$", opts: &opts}, top)
+			if test.error != "" {
+				// expect error
+				if err == nil {
+					t.Fatalf("Test %d failed to fail", i)
+				}
+				if err.Error() != test.error {
+					t.Fatalf("Test %d failed with %q but expected %q", i, err, test.error)
+				}
+				return
 			}
 
-			continue
-		}
-
-		// expect success
-		if err != nil {
-			t.Errorf("Test %d failed: %v", i, err)
-			continue
-		}
-		keyFunc := func(i int) string {
-			v := objs[i].(map[string]interface{})
-			return v["kind"].(string)
-		}
-		sort.Slice(objs, func(i, j int) bool {
-			return keyFunc(i) < keyFunc(j)
+			// expect success
+			if err != nil {
+				t.Fatalf("Test %d failed: %v", i, err)
+			}
+			keyFunc := func(i int) string {
+				v := objs[i].(map[string]interface{})
+				return v["kind"].(string)
+			}
+			sort.Slice(objs, func(i, j int) bool {
+				return keyFunc(i) < keyFunc(j)
+			})
+			if !reflect.DeepEqual(objs, test.result) {
+				t.Errorf("Expected %v, got %v", test.result, objs)
+			}
 		})
-		if !reflect.DeepEqual(objs, test.result) {
-			t.Errorf("Expected %v, got %v", test.result, objs)
-		}
 	}
 }
