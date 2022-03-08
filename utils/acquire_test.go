@@ -33,6 +33,25 @@ func TestJsonWalk(t *testing.T) {
 		"kind":       "Bar",
 	}
 
+	fooObjP := map[string]interface{}{
+		"apiVersion": "test",
+		"kind":       "Foo",
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				AnnotationProvenancePath: "$.foo[0].quz",
+			},
+		},
+	}
+	barObjP := map[string]interface{}{
+		"apiVersion": "test",
+		"kind":       "Bar",
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				AnnotationProvenancePath: "$.foo[1]",
+			},
+		},
+	}
+
 	tests := []struct {
 		input      string
 		provenance bool
@@ -66,9 +85,21 @@ func TestJsonWalk(t *testing.T) {
 		},
 		{
 			// Deeply nested with provenance
-			input:      `{"foo": [[{"apiVersion": "test", "kind": "Foo", "metadata": {"annotations":{}}}], {"apiVersion": "test", "kind": "Bar"}]}`,
+			input:      `{"foo": [{"quz": {"apiVersion": "test", "kind": "Foo"}}, {"apiVersion": "test", "kind": "Bar"}]}`,
 			provenance: true,
-			result:     []interface{}{barObj, fooObj},
+			result:     []interface{}{barObjP, fooObjP},
+		},
+		{
+			// Deeply nested with provenance
+			input:      `{"foo": [{"quz": {"apiVersion": "test", "kind": "Foo", "metadata": {}}}, {"apiVersion": "test", "kind": "Bar"}]}`,
+			provenance: true,
+			result:     []interface{}{barObjP, fooObjP},
+		},
+		{
+			// Deeply nested with provenance
+			input:      `{"foo": [{"quz": {"apiVersion": "test", "kind": "Foo", "metadata": {"annotations":{}}}}, {"apiVersion": "test", "kind": "Bar"}]}`,
+			provenance: true,
+			result:     []interface{}{barObjP, fooObjP},
 		},
 		{
 			// Error: nested misplaced value

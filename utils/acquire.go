@@ -32,6 +32,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+const (
+	AnnotationProvenanceFile = "kubecfg.dev/provenance-file"
+	AnnotationProvenancePath = "kubecfg.dev/provenance-path"
+)
+
 type readOptions struct {
 	showProvenance bool
 }
@@ -128,10 +133,10 @@ func (c *walkContext) path() string {
 	return parent + c.label
 }
 
-func (c *walkContext) child(k string) *walkContext {
+func (c *walkContext) child(label string) *walkContext {
 	return &walkContext{
 		parent: c,
-		label:  "." + k,
+		label:  label,
 		file:   c.file,
 		opts:   c.opts,
 	}
@@ -147,9 +152,9 @@ func annotateProvenance(ctx *walkContext, o map[string]interface{}) {
 		}
 		if a, ok := m["annotations"].(map[string]interface{}); ok {
 			if file := ctx.file; file != "" {
-				a["kubecfg.dev/provenance-file"] = file
+				a[AnnotationProvenanceFile] = file
 			}
-			a["kubecfg.dev/provenance-path"] = ctx.path()
+			a[AnnotationProvenancePath] = ctx.path()
 		}
 	}
 }
@@ -167,7 +172,7 @@ func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
 		}
 		ret := []interface{}{}
 		for k, v := range o {
-			children, err := jsonWalk(parentCtx.child(k), v)
+			children, err := jsonWalk(parentCtx.child(fmt.Sprintf(".%s", k)), v)
 			if err != nil {
 				return nil, err
 			}
@@ -177,11 +182,7 @@ func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
 	case []interface{}:
 		ret := make([]interface{}, 0, len(o))
 		for i, v := range o {
-			ctx := walkContext{
-				parent: parentCtx,
-				label:  fmt.Sprintf("[%d]", i),
-			}
-			children, err := jsonWalk(&ctx, v)
+			children, err := jsonWalk(parentCtx.child(fmt.Sprintf("[%d]", i)), v)
 			if err != nil {
 				return nil, err
 			}
