@@ -65,7 +65,7 @@ func TestJsonWalk(t *testing.T) {
 		{
 			// Error: nested misplaced value
 			input: `{"foo": {"bar": [null, 42]}}`,
-			error: "Looking for kubernetes object at <top>.foo.bar[1], but instead found float64",
+			error: "Looking for kubernetes object at \"$.foo.bar[1]\", but instead found float64",
 		},
 	}
 
@@ -76,7 +76,7 @@ func TestJsonWalk(t *testing.T) {
 			t.Errorf("Failed to unmarshal %q: %v", test.input, err)
 			continue
 		}
-		objs, err := jsonWalk(&walkContext{label: "<top>"}, top)
+		objs, err := jsonWalk(&walkContext{label: "$"}, top)
 		if test.error != "" {
 			// expect error
 			if err == nil {

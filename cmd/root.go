@@ -372,7 +372,7 @@ func (r *resolverErrorWrapper) Resolve(image *utils.ImageName) error {
 	return err
 }
 
-func readObjs(cmd *cobra.Command, paths []string) ([]*unstructured.Unstructured, error) {
+func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
 	vm, err := JsonnetVM(cmd)
 	if err != nil {
 		return nil, err
@@ -380,7 +380,7 @@ func readObjs(cmd *cobra.Command, paths []string) ([]*unstructured.Unstructured,
 
 	res := []*unstructured.Unstructured{}
 	for _, path := range paths {
-		objs, err := utils.Read(vm, path)
+		objs, err := utils.Read(vm, path, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("Error reading %s: %v", path, err)
 		}

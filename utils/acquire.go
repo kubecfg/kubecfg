@@ -32,10 +32,27 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+type readOptions struct {
+	showProvenance bool
+}
+
+type ReadOption func(*readOptions)
+
+func WithProvenance(show bool) ReadOption {
+	return func(opts *readOptions) {
+		opts.showProvenance = show
+	}
+}
+
 // Read fetches and decodes K8s objects by path.
 // TODO: Replace this with something supporting more sophisticated
 // content negotiation.
-func Read(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
+func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, error) {
+	var opt readOptions
+	for _, o := range opts {
+		o(&opt)
+	}
+
 	ext := filepath.Ext(path)
 	if ext == ".json" {
 		f, err := os.Open(path)
@@ -52,7 +69,7 @@ func Read(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
 		defer f.Close()
 		return yamlReader(f)
 	} else if ext == ".jsonnet" {
-		return jsonnetReader(vm, path)
+		return jsonnetReader(vm, path, opt)
 	}
 
 	return nil, fmt.Errorf("Unknown file extension: %s", path)
@@ -99,14 +116,42 @@ func yamlReader(r io.ReadCloser) ([]runtime.Object, error) {
 type walkContext struct {
 	parent *walkContext
 	label  string
+	file   string
+	opts   *readOptions
 }
 
-func (c *walkContext) String() string {
+func (c *walkContext) path() string {
 	parent := ""
 	if c.parent != nil {
-		parent = c.parent.String()
+		parent = c.parent.path()
 	}
 	return parent + c.label
+}
+
+func (c *walkContext) child(k string) *walkContext {
+	return &walkContext{
+		parent: c,
+		label:  "." + k,
+		file:   c.file,
+		opts:   c.opts,
+	}
+}
+
+func annotateProvenance(ctx *walkContext, o map[string]interface{}) {
+	if _, found := o["metadata"]; !found {
+		o["metadata"] = map[string]interface{}{}
+	}
+	if m, ok := o["metadata"].(map[string]interface{}); ok {
+		if _, found := m["annotations"]; !found {
+			m["annotations"] = map[string]interface{}{}
+		}
+		if a, ok := m["annotations"].(map[string]interface{}); ok {
+			if file := ctx.file; file != "" {
+				a["kubecfg.dev/provenance-file"] = file
+			}
+			a["kubecfg.dev/provenance-path"] = ctx.path()
+		}
+	}
 }
 
 func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
@@ -115,15 +160,14 @@ func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
 		return []interface{}{}, nil
 	case map[string]interface{}:
 		if o["kind"] != nil && o["apiVersion"] != nil {
+			if parentCtx.opts != nil && parentCtx.opts.showProvenance {
+				annotateProvenance(parentCtx, o)
+			}
 			return []interface{}{o}, nil
 		}
 		ret := []interface{}{}
 		for k, v := range o {
-			ctx := walkContext{
-				parent: parentCtx,
-				label:  "." + k,
-			}
-			children, err := jsonWalk(&ctx, v)
+			children, err := jsonWalk(parentCtx.child(k), v)
 			if err != nil {
 				return nil, err
 			}
@@ -145,11 +189,11 @@ func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
 		}
 		return ret, nil
 	default:
-		return nil, fmt.Errorf("Looking for kubernetes object at %s, but instead found %T", parentCtx, o)
+		return nil, fmt.Errorf("Looking for kubernetes object at %q, but instead found %T", parentCtx.path(), o)
 	}
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
+func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
 	// TODO: Read via Importer, so we support HTTP, etc for first
 	// file too.
 	abs, err := filepath.Abs(path)
@@ -175,7 +219,7 @@ func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
 		return nil, err
 	}
 
-	objs, err := jsonWalk(&walkContext{label: "<top>"}, top)
+	objs, err := jsonWalk(&walkContext{file: path, label: "$", opts: &opts}, top)
 	if err != nil {
 		return nil, err
 	}

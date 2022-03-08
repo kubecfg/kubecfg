@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
+	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -27,6 +28,7 @@ const (
 	flagExportDir            = "export-dir"
 	flagExportFileNameFormat = "export-filename-format"
 	flagExportFileNameExt    = "export-filename-extension"
+	flagShowProvenance       = "show-provenance"
 )
 
 func init() {
@@ -35,6 +37,7 @@ func init() {
 	showCmd.PersistentFlags().String(flagExportDir, "", "Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.")
 	showCmd.PersistentFlags().String(flagExportFileNameFormat, kubecfg.DefaultFileNameFormat, "Go template expression used to render path names for resources.")
 	showCmd.PersistentFlags().String(flagExportFileNameExt, "", fmt.Sprintf("Override the file extension used when creating filenames when using %s", flagExportFileNameFormat))
+	showCmd.PersistentFlags().Bool(flagShowProvenance, false, "Add provenance annotations showing the file and the field path to each rendered k8s object")
 }
 
 var showCmd = &cobra.Command{
@@ -66,7 +69,12 @@ var showCmd = &cobra.Command{
 			return err
 		}
 
-		objs, err := readObjs(cmd, args)
+		showProvenance, err := flags.GetBool(flagShowProvenance)
+		if err != nil {
+			return err
+		}
+
+		objs, err := readObjs(cmd, args, utils.WithProvenance(showProvenance))
 		if err != nil {
 			return err
 		}
