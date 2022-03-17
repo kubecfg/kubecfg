@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/kubecfg/yaml/v2"
+	"github.com/kubecfg/ursonnet"
 )
 
 // EvalCmd represents the eval subcommand
@@ -16,6 +18,7 @@ type EvalCmd struct {
 	Expr     string
 	ShowKeys bool
 	Format   string
+	Trace    bool
 }
 
 func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []string) error {
@@ -23,6 +26,7 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	if expr == "" {
 		expr = "$"
 	}
+
 	pathURL, err := utils.PathToURL(path)
 	if err != nil {
 		return err
@@ -69,6 +73,19 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 		fmt.Println(string(b))
 	default:
 		return fmt.Errorf("unsupported format %q", c.Format)
+	}
+
+	if c.Trace {
+		roots, err := ursonnet.Roots(vm, pathURL, expr)
+		if err != nil {
+			return err
+		}
+		for _, r := range roots {
+			if strings.HasPrefix(r, "internal://") {
+				continue
+			}
+			fmt.Fprintln(os.Stderr, strings.TrimPrefix(r, "file://"))
+		}
 	}
 
 	return nil
