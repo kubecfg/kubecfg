@@ -19,10 +19,10 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70
-	k8s.io/api v0.23.4
+	k8s.io/api v0.23.5
 	k8s.io/apiextensions-apiserver v0.23.4
-	k8s.io/apimachinery v0.23.4
-	k8s.io/client-go v0.23.4
+	k8s.io/apimachinery v0.23.5
+	k8s.io/client-go v0.23.5
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
 	k8s.io/kubectl v0.23.4
