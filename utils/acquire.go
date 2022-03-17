@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	AnnotationProvenanceFile = "kubecfg.dev/provenance-file"
-	AnnotationProvenancePath = "kubecfg.dev/provenance-path"
+	AnnotationProvenanceFile = "kubecfg.github.com/provenance-file"
+	AnnotationProvenancePath = "kubecfg.github.com/provenance-path"
 )
 
 type readOptions struct {
