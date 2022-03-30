@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/genuinetools/reg/registry"
-
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -383,8 +382,9 @@ func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*
 	for _, path := range paths {
 		objs, err := utils.Read(vm, path, opts...)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading %s: %v", path, err)
+			return nil, fmt.Errorf("error reading %s: %v", path, err)
 		}
+
 		res = append(res, utils.FlattenToV1(objs)...)
 	}
 	if err := utils.CheckDuplicates(res); err != nil {

@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,7 @@ const (
 
 type readOptions struct {
 	showProvenance bool
+	readTwice      bool
 }
 
 type ReadOption func(*readOptions)
@@ -46,6 +48,12 @@ type ReadOption func(*readOptions)
 func WithProvenance(show bool) ReadOption {
 	return func(opts *readOptions) {
 		opts.showProvenance = show
+	}
+}
+
+func WithReadTwice(twice bool) ReadOption {
+	return func(opts *readOptions) {
+		opts.readTwice = twice
 	}
 }
 
@@ -161,9 +169,16 @@ func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkConte
 			}
 			return visitor(parentCtx, &obj)
 		}
-		for k, v := range o {
-			err := jsonWalk(parentCtx.child(fmt.Sprintf(".%s", k)), v, visitor)
-			if err != nil {
+		// Use consistent traversal order
+		keys := make([]string, 0, len(o))
+		for k := range o {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			v := o[k]
+			if err := jsonWalk(parentCtx.child(fmt.Sprintf(".%s", k)), v, visitor); err != nil {
 				return err
 			}
 		}
@@ -201,6 +216,17 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Obj
 	}
 
 	log.Debugf("jsonnet result is: %s", jsonstr)
+
+	if opts.readTwice {
+		str2, err := vm.EvaluateSnippet(pathUrl.String(), string(bytes))
+		if err != nil {
+			return nil, fmt.Errorf("error re-reading %s: %w", pathUrl, err)
+		}
+
+		if jsonstr != str2 {
+			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", pathUrl)
+		}
+	}
 
 	var top interface{}
 	if err = json.Unmarshal([]byte(jsonstr), &top); err != nil {

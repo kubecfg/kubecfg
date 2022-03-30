@@ -127,21 +127,26 @@ func TestParseHelmChart(t *testing.T) {
 	RegisterNativeFuncs(vm, NewIdentityResolver())
 
 	x, err := vm.EvaluateSnippet("test", `
-    local chrt = std.native("parseHelmChart")(import "../testdata/kubernetes-dashboard-5.0.0.tgz.bin", "myrls", "myns", {replicaCount: 7});
-    local sa = chrt["kubernetes-dashboard/charts/metrics-server/templates/metrics-server-serviceaccount.yaml"][0];
-    local d = chrt["kubernetes-dashboard/templates/deployment.yaml"][0];
+    local chrt = std.native("parseHelmChart")(import "../testdata/mysql-8.8.26.tgz.bin", "myrls", "myns", {primary: {resources: {limits: {cpu: "2"}}}});
+    local ss = chrt["mysql/templates/primary/statefulset.yaml"][0];
     [
-      // Uses releaseName arg, from a nested chart
-      sa.metadata.name,
+      // from nested chart
+      ss.apiVersion,
       // namespace arg
-      sa.metadata.namespace,
+      ss.metadata.namespace,
       // Provided value
-      d.spec.replicas,
+      ss.spec.template.spec.containers[0].resources.limits.cpu,
       // Default value
-      d.spec.template.spec.containers[0].image,
+      ss.spec.template.spec.containers[0].image,
     ]
 `)
-	check(t, err, x, "[\n   \"myrls-metrics-server\",\n   \"myns\",\n   7,\n   \"kubernetesui/dashboard:v2.3.1\"\n]\n")
+	check(t, err, x, `[
+   "apps/v1",
+   "myns",
+   "2",
+   "docker.io/bitnami/mysql:8.0.28-debian-10-r23"
+]
+`)
 }
 
 func TestArrayReader(t *testing.T) {

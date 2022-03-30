@@ -1,4 +1,4 @@
-// +build integration
+//go:build integration
 
 package integration
 
@@ -155,6 +155,18 @@ var _ = Describe("validate", func() {
 				Expect(output).
 					To(ContainSubstring("Validation failed"))
 			})
+		})
+	})
+
+	Context("With non-idempotent helm chart", func() {
+		BeforeEach(func() {
+			args = append(args, "../testdata/helm_test.jsonnet")
+		})
+
+		It("should fail with a useful error", func() {
+			Expect(kubecfgErr).To(HaveOccurred())
+			Expect(output).
+				To(ContainSubstring("returned non-idempotent result"))
 		})
 	})
 })

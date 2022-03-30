@@ -78,12 +78,16 @@ std.assertEqual(kubecfg.regexSubst("e", "tree", "oll"),
 
 std.assertEqual(std.clamp(42, 0, 10), 10) &&
 
-local chartData = import "kubernetes-dashboard-5.0.0.tgz.bin";
+local chartData = import "mysql-8.8.26.tgz.bin";
 local testChart = kubecfg.parseHelmChart(
-  chartData, "foo", "myns",
-  {ingress: {enabled: true}});
-local testValue = testChart["kubernetes-dashboard/templates/ingress.yaml"][0].spec.rules[0].http.paths[0].backend.service.name;
-std.assertEqual(testValue, "foo-kubernetes-dashboard") &&
+  chartData, "foo", "myns", {
+    auth: {password: "foo"},
+  });
+local testValue = [
+  testChart["mysql/templates/primary/statefulset.yaml"][0].spec.serviceName,
+  testChart["mysql/templates/secrets.yaml"][0].metadata.namespace,
+];
+std.assertEqual(testValue, ["foo-mysql", "myns"]) &&
 
 true;
 
