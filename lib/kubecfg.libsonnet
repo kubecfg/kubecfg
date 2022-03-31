@@ -56,4 +56,10 @@
   // to refer to submatches.  Regex is as implemented in golang regexp
   // package (python-ish).
   regexSubst:: std.native("regexSubst"),
+
+  // parseHelmChart(chartData, releaseName, namespace, values): Expand
+  // helm chart into jsonnet objects.  `chartData` should be valid
+  // chart .tgz as an array of numbers (bytes).  `values` is a jsonnet
+  // object that conforms to a schema defined by the chart.
+  parseHelmChart:: std.native("parseHelmChart"),
 }

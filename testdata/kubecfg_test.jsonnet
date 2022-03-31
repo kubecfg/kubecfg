@@ -43,8 +43,7 @@ std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}),
                       ],
                       "foo": "bar"
                   }
-               |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}, indent=2),
                 |||
@@ -55,8 +54,7 @@ std.assertEqual(kubecfg.manifestJson({foo: "bar", baz: [3, 4]}, indent=2),
                     ],
                     "foo": "bar"
                   }
-                |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.manifestJson("foo"), '"foo"\n') &&
 
@@ -66,8 +64,7 @@ std.assertEqual(kubecfg.manifestYaml({foo: "bar", baz: [3, 4]}),
                   - 3
                   - 4
                   foo: bar
-                |||
-               ) &&
+                ||| ) &&
 
 std.assertEqual(kubecfg.resolveImage("busybox"),
                 "docker.io/library/busybox:latest") &&
@@ -80,6 +77,17 @@ std.assertEqual(kubecfg.regexSubst("e", "tree", "oll"),
                 "trolloll") &&
 
 std.assertEqual(std.clamp(42, 0, 10), 10) &&
+
+local chartData = import "mysql-8.8.26.tgz.bin";
+local testChart = kubecfg.parseHelmChart(
+  chartData, "foo", "myns", {
+    auth: {password: "foo"},
+  });
+local testValue = [
+  testChart["mysql/templates/primary/statefulset.yaml"][0].spec.serviceName,
+  testChart["mysql/templates/secrets.yaml"][0].metadata.namespace,
+];
+std.assertEqual(testValue, ["foo-mysql", "myns"]) &&
 
 true;
 

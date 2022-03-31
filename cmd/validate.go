@@ -19,15 +19,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
+	"github.com/kubecfg/kubecfg/utils"
 )
 
 const (
 	flagIgnoreUnknown = "ignore-unknown"
+	flagRepeatEval    = "repeat-eval"
 )
 
 func init() {
 	RootCmd.AddCommand(validateCmd)
 	validateCmd.PersistentFlags().Bool(flagIgnoreUnknown, true, "Don't fail if the schema for a given resource type is not found")
+	validateCmd.PersistentFlags().Bool(flagRepeatEval, true, "Repeat evaluation twice to verify idempotency")
 }
 
 var validateCmd = &cobra.Command{
@@ -50,7 +53,12 @@ var validateCmd = &cobra.Command{
 			return err
 		}
 
-		objs, err := readObjs(cmd, args)
+		repeatEval, err := flags.GetBool(flagRepeatEval)
+		if err != nil {
+			return err
+		}
+
+		objs, err := readObjs(cmd, args, utils.WithReadTwice(repeatEval))
 		if err != nil {
 			return err
 		}

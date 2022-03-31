@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestJsonWalk(t *testing.T) {
@@ -115,8 +117,14 @@ func TestJsonWalk(t *testing.T) {
 			if err := json.Unmarshal([]byte(test.input), &top); err != nil {
 				t.Fatalf("Failed to unmarshal %q: %v", test.input, err)
 			}
-			opts := readOptions{showProvenance: test.provenance}
-			objs, err := jsonWalk(&walkContext{label: "$", opts: &opts}, top)
+			objs := []interface{}{}
+			err := jsonWalk(&walkContext{label: "$"}, top, func(c *walkContext, obj *unstructured.Unstructured) error {
+				if test.provenance {
+					annotateProvenance(c, obj)
+				}
+				objs = append(objs, obj.Object)
+				return nil
+			})
 			if test.error != "" {
 				// expect error
 				if err == nil {
