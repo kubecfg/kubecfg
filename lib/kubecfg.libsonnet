@@ -62,4 +62,75 @@
   // chart .tgz as an array of numbers (bytes).  `values` is a jsonnet
   // object that conforms to a schema defined by the chart.
   parseHelmChart:: std.native("parseHelmChart"),
+
+  // isK8sObject(o): Return true iff o is a Kubernetes object.
+  isK8sObject(o):: (
+    std.isObject(o) &&
+    std.objectHas(o, "apiVersion") &&
+    std.objectHas(o, "kind")
+  ),
+
+  // Private helper function for map/fold.
+  local isK8sList(o) = $.isK8sObject(o) && o.apiVersion == "v1" && o.kind == "List",
+
+  // deepMap(func, o): Apply the given function to each Kubernetes
+  // object in nested collection o, preserving the structure of o.
+  deepMap(func, o):: (
+    if isK8sList(o) then
+      o + {items: [func(item) for item in super.items]}
+    else if $.isK8sObject(o) then
+      func(o)
+    else if std.isObject(o) then
+      {[k]: $.deepMap(func, o[k]) for k in std.objectFields(o)}
+    else if std.isArray(o) then
+      [$.deepMap(func, elem) for elem in o]
+    else if o == null then
+      null
+    else
+      error ("o must be an object or array of k8s objects, found " + std.type(o))
+  ),
+
+  // fold(func, o, init): Apply the given function to each Kubernetes
+  // object in nested collection o, accumulating a result as we go.
+  // Function arg is invoked with arguments (accumulator, object).
+  fold(func, o, init):: (
+    if isK8sList(o) then
+      $.fold(func, o.items, init)
+    else if $.isK8sObject(o) then
+      func(init, o)
+    else if std.isObject(o) then
+      $.fold(func, [o[k] for k in std.objectFields(o)], init)
+    else if std.isArray(o) then
+      std.foldl(function (running, elem) $.fold(func, elem, running), o, init)
+    else if o == null then
+      init
+    else
+      error ("o must be an object or array of k8s objects, found " + std.type(o))
+  ),
+
+  layouts:: {
+    // gvkName(accum, o): Helper for 'fold'.  This accumulates a
+    // two-level collection of objects by 'apiVersion.kind'
+    // (GroupVersionKind) and then object 'name'.  NB: use gvkNsName
+    // if namespace is required for uniqueness.
+    gvkName(accum, o):: accum + {
+      [o.apiVersion + "." + o.kind]+: {
+        assert !(o.metadata.name in super),
+        [o.metadata.name]: o,
+      },
+    },
+
+    // gvkNsName(accum, o): Helper for 'fold'.  This accumulates a
+    // three-level collection of objects by 'apiVersion.kind'
+    // (GroupVersionKind), object 'namespace', and then object 'name'.
+    // Namespace is '_' for non-namespaced objects.
+    gvkNsName(accum, o):: accum + {
+      [o.apiVersion + "." + o.kind]+: {
+        [std.get(o.metadata, "namespace", default="_")]+: {
+          assert !(o.metadata.name in super),
+          [o.metadata.name]: o,
+        },
+      },
+    },
+  },
 }

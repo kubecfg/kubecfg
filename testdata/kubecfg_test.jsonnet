@@ -89,6 +89,71 @@ local testValue = [
 ];
 std.assertEqual(testValue, ["foo-mysql", "myns"]) &&
 
+std.assertEqual(kubecfg.isK8sObject("bogus"), false) &&
+
+std.assertEqual(kubecfg.isK8sObject({apiVersion: "v1", kind: "Pod"}), true) &&
+
+local obj(n) = {apiVersion: "example.com/v1alpha1", kind: "Test", name: n};
+local f(o) = o + {name+: "2"};
+local input = {
+  a: obj("a"),
+  b: [
+    {b1: obj("b1")},
+    obj("b2"),
+  ],
+  c: null,
+  d: {
+    apiVersion: "v1",
+    kind: "List",
+    extrakey: "foo",
+    items: [obj("d")],
+  },
+};
+local expected = {
+  a: obj("a2"),
+  b: [
+    {b1: obj("b12")},
+    obj("b22"),
+  ],
+  c: null,
+  d: {
+    apiVersion: "v1",
+    kind: "List",
+    extrakey: "foo",
+    items: [obj("d2")],
+  },
+};
+std.assertEqual(kubecfg.deepMap(f, input), expected) &&
+
+local obj(n) = {apiVersion: "example.com/v1alpha1", kind: "Test", name: n};
+local names(accum, o) = accum + [o.name];
+local input = {
+  a: obj("a"),
+  b: [
+    {b1: obj("b1")},
+    obj("b2"),
+  ],
+  c: null,
+  d: {
+    apiVersion: "v1",
+    kind: "List",
+    extrakey: "foo",
+    items: [obj("d")],
+  },
+};
+local expected = ["a", "b1", "b2", "d"];
+std.assertEqual(kubecfg.fold(names, input, []), expected) &&
+
+local obj(n) = {apiVersion: "example.com/v1alpha1", kind: "Test", metadata: {name: n}};
+local one = kubecfg.layouts.gvkName({}, obj("a"));
+local two = kubecfg.layouts.gvkName(one, obj("b"));
+std.assertEqual(two, {"example.com/v1alpha1.Test": {a: obj("a"), b: obj("b")}}) &&
+
+local obj(n) = {apiVersion: "example.com/v1alpha1", kind: "Test", metadata: {name: n}};
+local one = kubecfg.layouts.gvkNsName({}, obj("a"));
+local two = kubecfg.layouts.gvkNsName(one, obj("b"));
+std.assertEqual(two, {"example.com/v1alpha1.Test": {_: {a: obj("a"), b: obj("b")}}}) &&
+
 true;
 
 // Kubecfg wants to see something that looks like a k8s object
