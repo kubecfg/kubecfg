@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
@@ -32,27 +33,56 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+const (
+	AnnotationProvenanceFile = "kubecfg.github.com/provenance-file"
+	AnnotationProvenancePath = "kubecfg.github.com/provenance-path"
+)
+
+type readOptions struct {
+	showProvenance bool
+	readTwice      bool
+}
+
+type ReadOption func(*readOptions)
+
+func WithProvenance(show bool) ReadOption {
+	return func(opts *readOptions) {
+		opts.showProvenance = show
+	}
+}
+
+func WithReadTwice(twice bool) ReadOption {
+	return func(opts *readOptions) {
+		opts.readTwice = twice
+	}
+}
+
 // Read fetches and decodes K8s objects by path.
 // TODO: Replace this with something supporting more sophisticated
 // content negotiation.
-func Read(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
-	ext := filepath.Ext(path)
-	if ext == ".json" {
+func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, error) {
+	var opt readOptions
+	for _, o := range opts {
+		o(&opt)
+	}
+
+	switch filepath.Ext(path) {
+	case ".json":
 		f, err := os.Open(path)
 		if err != nil {
 			return nil, err
 		}
 		defer f.Close()
 		return jsonReader(f)
-	} else if ext == ".yaml" {
+	case ".yaml":
 		f, err := os.Open(path)
 		if err != nil {
 			return nil, err
 		}
 		defer f.Close()
 		return yamlReader(f)
-	} else if ext == ".jsonnet" {
-		return jsonnetReader(vm, path)
+	case ".jsonnet":
+		return jsonnetReader(vm, path, opt)
 	}
 
 	return nil, fmt.Errorf("Unknown file extension: %s", path)
@@ -99,57 +129,74 @@ func yamlReader(r io.ReadCloser) ([]runtime.Object, error) {
 type walkContext struct {
 	parent *walkContext
 	label  string
+	file   string
 }
 
-func (c *walkContext) String() string {
+func (c *walkContext) path() string {
 	parent := ""
 	if c.parent != nil {
-		parent = c.parent.String()
+		parent = c.parent.path()
 	}
 	return parent + c.label
 }
 
-func jsonWalk(parentCtx *walkContext, obj interface{}) ([]interface{}, error) {
-	switch o := obj.(type) {
-	case nil:
-		return []interface{}{}, nil
-	case map[string]interface{}:
-		if o["kind"] != nil && o["apiVersion"] != nil {
-			return []interface{}{o}, nil
-		}
-		ret := []interface{}{}
-		for k, v := range o {
-			ctx := walkContext{
-				parent: parentCtx,
-				label:  "." + k,
-			}
-			children, err := jsonWalk(&ctx, v)
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, children...)
-		}
-		return ret, nil
-	case []interface{}:
-		ret := make([]interface{}, 0, len(o))
-		for i, v := range o {
-			ctx := walkContext{
-				parent: parentCtx,
-				label:  fmt.Sprintf("[%d]", i),
-			}
-			children, err := jsonWalk(&ctx, v)
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, children...)
-		}
-		return ret, nil
-	default:
-		return nil, fmt.Errorf("Looking for kubernetes object at %s, but instead found %T", parentCtx, o)
+func (c *walkContext) child(label string) *walkContext {
+	return &walkContext{
+		parent: c,
+		label:  label,
+		file:   c.file,
 	}
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
+func annotateProvenance(ctx *walkContext, o *unstructured.Unstructured) {
+	if file := ctx.file; file != "" {
+		SetMetaDataAnnotation(o, AnnotationProvenanceFile, file)
+	}
+	SetMetaDataAnnotation(o, AnnotationProvenancePath, ctx.path())
+}
+
+func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkContext, obj *unstructured.Unstructured) error) error {
+	switch o := obj.(type) {
+	case nil:
+		return nil
+	case map[string]interface{}:
+		if o["kind"] != nil && o["apiVersion"] != nil {
+			obj := unstructured.Unstructured{Object: o}
+			if obj.IsList() {
+				return obj.EachListItem(func(item runtime.Object) error {
+					return visitor(parentCtx.child(".item"), item.(*unstructured.Unstructured))
+				})
+			}
+			return visitor(parentCtx, &obj)
+		}
+		// Use consistent traversal order
+		keys := make([]string, 0, len(o))
+		for k := range o {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			v := o[k]
+			if err := jsonWalk(parentCtx.child(fmt.Sprintf(".%s", k)), v, visitor); err != nil {
+				return err
+			}
+		}
+		return nil
+	case []interface{}:
+		for i, v := range o {
+			err := jsonWalk(parentCtx.child(fmt.Sprintf("[%d]", i)), v, visitor)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("Looking for kubernetes object at %q, but instead found %T", parentCtx.path(), o)
+	}
+}
+
+func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
 	// TODO: Read via Importer, so we support HTTP, etc for first
 	// file too.
 	abs, err := filepath.Abs(path)
@@ -170,36 +217,33 @@ func jsonnetReader(vm *jsonnet.VM, path string) ([]runtime.Object, error) {
 
 	log.Debugf("jsonnet result is: %s", jsonstr)
 
+	if opts.readTwice {
+		str2, err := vm.EvaluateSnippet(pathUrl.String(), string(bytes))
+		if err != nil {
+			return nil, fmt.Errorf("error re-reading %s: %w", pathUrl, err)
+		}
+
+		if jsonstr != str2 {
+			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", pathUrl)
+		}
+	}
+
 	var top interface{}
 	if err = json.Unmarshal([]byte(jsonstr), &top); err != nil {
 		return nil, err
 	}
 
-	objs, err := jsonWalk(&walkContext{label: "<top>"}, top)
-	if err != nil {
-		return nil, err
+	var ret []runtime.Object
+	visitor := func(c *walkContext, obj *unstructured.Unstructured) error {
+		if opts.showProvenance {
+			annotateProvenance(c, obj)
+		}
+		ret = append(ret, obj)
+		return nil
 	}
 
-	ret := make([]runtime.Object, 0, len(objs))
-	for _, v := range objs {
-		obj := &unstructured.Unstructured{Object: v.(map[string]interface{})}
-		if obj.IsList() {
-			// TODO: Use obj.ToList with newer apimachinery
-			list := &unstructured.UnstructuredList{
-				Object: obj.Object,
-			}
-			err := obj.EachListItem(func(item runtime.Object) error {
-				castItem := item.(*unstructured.Unstructured)
-				list.Items = append(list.Items, *castItem)
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, list)
-		} else {
-			ret = append(ret, obj)
-		}
+	if err := jsonWalk(&walkContext{file: path, label: "$"}, top, visitor); err != nil {
+		return nil, err
 	}
 
 	return ret, nil

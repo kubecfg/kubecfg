@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/genuinetools/reg/registry"
-
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -315,6 +314,7 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	utils.RegisterNativeFuncs(vm, resolver)
 
 	return vm, nil
@@ -372,7 +372,7 @@ func (r *resolverErrorWrapper) Resolve(image *utils.ImageName) error {
 	return err
 }
 
-func readObjs(cmd *cobra.Command, paths []string) ([]*unstructured.Unstructured, error) {
+func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
 	vm, err := JsonnetVM(cmd)
 	if err != nil {
 		return nil, err
@@ -380,10 +380,11 @@ func readObjs(cmd *cobra.Command, paths []string) ([]*unstructured.Unstructured,
 
 	res := []*unstructured.Unstructured{}
 	for _, path := range paths {
-		objs, err := utils.Read(vm, path)
+		objs, err := utils.Read(vm, path, opts...)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading %s: %v", path, err)
+			return nil, fmt.Errorf("error reading %s: %v", path, err)
 		}
+
 		res = append(res, utils.FlattenToV1(objs)...)
 	}
 	if err := utils.CheckDuplicates(res); err != nil {

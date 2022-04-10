@@ -16,13 +16,17 @@
 package utils
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
+	log "github.com/sirupsen/logrus"
 )
 
 // check there is no err, and a == b.
 func check(t *testing.T, err error, actual, expected string) {
+	t.Helper()
 	if err != nil {
 		t.Errorf("Expected %q, got error: %q", expected, err.Error())
 	} else if actual != expected {
@@ -101,4 +105,82 @@ func TestRegexSubst(t *testing.T) {
 
 	x, err = vm.EvaluateSnippet("test", `std.native("regexSubst")("a(x*)b", "-ab-axxb-", "${1}W")`)
 	check(t, err, x, "\"-W-xxW-\"\n")
+}
+
+func TestParseHelmChart(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+
+	_, err := vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")("not_data", "rls", "myns", {})`)
+	if err == nil {
+		t.Errorf("helmTemplate succeeded with invalid data")
+	}
+
+	_, err = vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")([1, 2, 3, 256], "myrls", "myns", {})`)
+	if err == nil {
+		t.Errorf("helmTemplate succeeded with invalid bytes")
+	}
+
+	vm = jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+
+	x, err := vm.EvaluateSnippet("test", `
+    local chrt = std.native("parseHelmChart")(import "../testdata/mysql-8.8.26.tgz.bin", "myrls", "myns", {primary: {resources: {limits: {cpu: "2"}}}});
+    local ss = chrt["mysql/templates/primary/statefulset.yaml"][0];
+    [
+      // from nested chart
+      ss.apiVersion,
+      // namespace arg
+      ss.metadata.namespace,
+      // Provided value
+      ss.spec.template.spec.containers[0].resources.limits.cpu,
+      // Default value
+      ss.spec.template.spec.containers[0].image,
+    ]
+`)
+	check(t, err, x, `[
+   "apps/v1",
+   "myns",
+   "2",
+   "docker.io/bitnami/mysql:8.0.28-debian-10-r23"
+]
+`)
+}
+
+func TestArrayReader(t *testing.T) {
+	buf := make([]byte, 2)
+	var r io.Reader
+
+	assertRead := func(expected_n int, expected_err error, expected []byte) {
+		n, err := r.Read(buf)
+		if n != expected_n || err != expected_err {
+			t.Errorf("(%d, %v) != (%d, %v)", n, err, expected_n, expected_err)
+			return
+		}
+		if !bytes.Equal(expected, buf[:n]) {
+			t.Errorf("%v != %v", buf, expected)
+		}
+	}
+
+	// Shorter than buf
+	r = &ArrayReader{[]interface{}{42.0}}
+	assertRead(1, nil, []byte{42})
+	assertRead(0, io.EOF, nil)
+
+	// Longer than buf
+	r = &ArrayReader{[]interface{}{0.0, 1.0, 2.0, 3.0, 255.0}}
+	assertRead(2, nil, []byte{0, 1})
+	assertRead(2, nil, []byte{2, 3})
+	assertRead(1, nil, []byte{255})
+	assertRead(0, io.EOF, nil)
+
+	// Bad numbers
+	r = &ArrayReader{[]interface{}{256.0}}
+	assertRead(0, errBadByte, nil)
+
+	// Not numbers
+	r = &ArrayReader{[]interface{}{"bogus"}}
+	assertRead(0, errBadByte, nil)
 }

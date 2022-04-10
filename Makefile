@@ -39,9 +39,6 @@ all: kubecfg
 kubecfg:
 	CGO_ENABLED=0 $(GO) build $(GO_FLAGS) $(GO_BUILDFLAGS) .
 
-generate:
-	$(GO) generate -x $(GO_FLAGS) $(GO_PACKAGES)
-
 test: gotest jsonnettest
 
 gotest:
@@ -60,12 +57,14 @@ vet:
 fmt:
 	$(GOFMT) -s -w $(shell $(GO) list -f '{{.Dir}}' $(GO_PACKAGES))
 
-vendor:
+tidy:
 	$(GO) mod tidy -v
-	$(GO) mod vendor
+
+vendor: tidy
+	@echo We no longer vendor Go dependencies
 
 clean:
 	$(RM) ./kubecfg
 
-.PHONY: all test clean vet fmt vendor
+.PHONY: all test clean vet fmt tidy vendor
 .PHONY: kubecfg

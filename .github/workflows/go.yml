@@ -25,30 +25,22 @@ jobs:
       VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('gh-action-{0}', github.sha) }}
 
     steps:
-      - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # renovate: tag=v2
+      - uses: actions/checkout@a12a3943b4bdde767164f792f33f40b04645d846 # tag=v3
 
       - name: Setup Cache
-        uses: actions/cache@937d24475381cd9c75ae6db12cb4e79714b926ed # renovate: tag=v2
+        uses: actions/cache@136d96b4aee02b1f0de3ba493b1d47135042d9c0 # tag=v3
         with:
           path: |
             ~/go/pkg
           key: ${{ runner.os }}-build-${{ runner.arch }}
 
       - name: Set up Go
-        uses: actions/setup-go@424fc82d43fa5a37540bae62709ddcc23d9520d4 # renovate: tag=v2
+        uses: actions/setup-go@f6164bd8c8acb4a71fb2791a8b6c4024ff038dab # tag=v3
         with:
           go-version: 1.17
 
       - name: Build Binary
-        run: |
-          make generate
-          if ! git diff --exit-code --name-only; then
-            git diff
-            echo 'Run "make generate" and add generated changes to this PR'
-            exit 1
-          fi
-          # Build kubecfg
-          make all
+        run: make all
 
       - name: Info Binary
         run: |
@@ -77,7 +69,7 @@ jobs:
           make integrationtest GINKGO="ginkgo $GINKGO_FLAGS"
 
       - name: Upload kubecfg artifact
-        uses: actions/upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2 # renovate: tag=v2
+        uses: actions/upload-artifact@6673cd052c4cd6fcf4b4e6e60ea986c889389535 # tag=v3
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
           path: kubecfg
@@ -113,7 +105,7 @@ jobs:
 
     steps:
       - name: Download kubecfg artifact
-        uses: actions/download-artifact@f023be2c48cc18debc3bacd34cb396e0295e2869 # renovate: tag=v2
+        uses: actions/download-artifact@fb598a63ae348fa914e94cd0ff38f362e927b741 # tag=v3
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
       - name: Upload assets
