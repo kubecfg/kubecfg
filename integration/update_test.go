@@ -488,7 +488,7 @@ var _ = Describe("update", func() {
 				args = append(args, "--dry-run")
 			}
 			if !gcAllNs {
-				args = append(args, "--gc-all-namespaces", "false")
+				args = append(args, "--gc-all-namespaces=false")
 			}
 
 			inputObjs := make([]runtime.Object, len(input))
