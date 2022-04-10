@@ -34,17 +34,14 @@ func cmData(cm *v1.ConfigMap) map[string]string {
 var _ = Describe("update", func() {
 	var c corev1.CoreV1Interface
 	var ns string
-	var ns2 string
 	const cmName = "testcm"
 
 	BeforeEach(func() {
 		c = corev1.NewForConfigOrDie(clusterConfigOrDie())
 		ns = createNsOrDie(c, "update")
-		ns2 = createNsOrDie(c, "update-second")
 	})
 	AfterEach(func() {
 		deleteNsOrDie(c, ns)
-		deleteNsOrDie(c, ns2)
 	})
 
 	Describe("An erroneous update", func() {
