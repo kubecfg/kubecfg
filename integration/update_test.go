@@ -503,7 +503,9 @@ var _ = Describe("update", func() {
 		})
 
 		Context("With existing objects", func() {
+			var ns2 string
 			BeforeEach(func() {
+				ns2 = createNsOrDie(c, "update-second")
 				preExist = []*v1.ConfigMap{
 					{
 						ObjectMeta: metav1.ObjectMeta{
@@ -601,6 +603,10 @@ var _ = Describe("update", func() {
 						},
 					},
 				}
+			})
+
+			AfterEach(func() {
+				deleteNsOrDie(c, ns2)
 			})
 
 			It("should add gctag to new object", func() {
@@ -737,7 +743,9 @@ var _ = Describe("update", func() {
 		})
 
 		Context("without gc-all-namespaces", func() {
+			var ns2 string
 			BeforeEach(func() {
+				ns2 = createNsOrDie(c, "update-second")
 				gcAllNs = false
 				preExist = []*v1.ConfigMap{
 					{
@@ -769,13 +777,17 @@ var _ = Describe("update", func() {
 				input = []*v1.ConfigMap{ }
 			})
 
+			AfterEach(func() {
+				deleteNsOrDie(c, ns2)
+			})
+
 			It("should delete existing object inside specified namespace", func() {
-				_, err := c.ConfigMaps(ns2).Get(context.Background(), "existing-stale", metav1.GetOptions{})
+				_, err := c.ConfigMaps(ns).Get(context.Background(), "existing-stale", metav1.GetOptions{})
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
 
 			It("should not delete existing object in other namespace", func() {
-				Expect(c.ConfigMaps(ns).Get(context.Background(), "existing-stale-outside-namespace", metav1.GetOptions{})).
+				Expect(c.ConfigMaps(ns2).Get(context.Background(), "existing-stale-outside-namespace", metav1.GetOptions{})).
 					NotTo(BeNil())
 			})
 		})
