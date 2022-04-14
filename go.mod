@@ -19,14 +19,14 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921
-	helm.sh/helm/v3 v3.8.1
+	helm.sh/helm/v3 v3.8.2
 	k8s.io/api v0.23.5
-	k8s.io/apiextensions-apiserver v0.23.4
+	k8s.io/apiextensions-apiserver v0.23.5
 	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.23.5
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
-	k8s.io/kubectl v0.23.4
+	k8s.io/kubectl v0.23.5
 )
 
 require (
@@ -52,7 +52,7 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-logr/logr v1.2.0 // indirect
+	github.com/go-logr/logr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
@@ -60,7 +60,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
-	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
