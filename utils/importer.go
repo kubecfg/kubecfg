@@ -30,6 +30,7 @@ MakeUniversalImporter creates an importer that handles resolving imports from th
 In addition to the standard importer, supports:
   - URLs in import statements
   - URLs in library search paths
+  - importing binary files (for local files and URLs)
 
 A real-world example:
   - You have https://raw.githubusercontent.com/ksonnet/ksonnet-lib/master in your search URLs.
@@ -76,6 +77,12 @@ type universalImporter struct {
 func (importer *universalImporter) Import(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
 	log.Debugf("Importing %q from %q", importedPath, importedFrom)
 
+	binary := false
+	if strings.HasPrefix(importedPath, "binary://") {
+		binary = true
+		importedPath = strings.TrimPrefix(importedPath, "binary://")
+	}
+
 	candidateURLs, err := importer.expandImportToCandidateURLs(importedFrom, importedPath)
 	if err != nil {
 		return jsonnet.Contents{}, "", fmt.Errorf("Could not get candidate URLs for when importing %s (imported from %s): %v", importedPath, importedFrom, err)
@@ -89,7 +96,7 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		}
 
 		tried = append(tried, foundAt)
-		importedData, err := importer.tryImport(foundAt)
+		importedData, err := importer.tryImport(foundAt, binary)
 		if err == nil {
 			importer.cache[foundAt] = importedData
 			return importedData, foundAt, nil
@@ -104,7 +111,7 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 	)
 }
 
-func (importer *universalImporter) tryImport(url string) (jsonnet.Contents, error) {
+func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.Contents, error) {
 	res, err := importer.HTTPClient.Get(url)
 	if err != nil {
 		return jsonnet.Contents{}, err
@@ -121,7 +128,24 @@ func (importer *universalImporter) tryImport(url string) (jsonnet.Contents, erro
 	if err != nil {
 		return jsonnet.Contents{}, err
 	}
+	if binary {
+		return toIntArray(bodyBytes), nil
+	}
 	return jsonnet.MakeContents(string(bodyBytes)), nil
+}
+
+func toIntArray(bytes []byte) jsonnet.Contents {
+	var sb strings.Builder
+	sb.WriteRune('[')
+	for i, ch := range bytes {
+		if i > 0 {
+			sb.WriteRune(',')
+		}
+		fmt.Fprintf(&sb, "%d", ch)
+	}
+	sb.WriteRune(']')
+
+	return jsonnet.MakeContents(sb.String())
 }
 
 func (importer *universalImporter) expandImportToCandidateURLs(importedFrom, importedPath string) ([]*url.URL, error) {
