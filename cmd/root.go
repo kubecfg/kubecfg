@@ -46,6 +46,7 @@ import (
 )
 
 const (
+	flagAlpha       = "alpha"
 	flagVerbose     = "verbose"
 	flagJpath       = "jpath"
 	flagJUrl        = "jurl"
@@ -65,6 +66,7 @@ var clientConfig clientcmd.ClientConfig
 var overrides clientcmd.ConfigOverrides
 
 func init() {
+	RootCmd.PersistentFlags().Bool(flagAlpha, false, "Enable alpha features")
 	RootCmd.PersistentFlags().CountP(flagVerbose, "v", "Increase verbosity. May be given multiple times.")
 	RootCmd.PersistentFlags().StringArrayP(flagJpath, "J", nil, "Additional Jsonnet library search path, appended to the ones in the KUBECFG_JPATH env var. May be repeated.")
 	RootCmd.MarkPersistentFlagFilename(flagJpath)
@@ -251,7 +253,11 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 		return nil, fmt.Errorf("Unable to determine current working directory: %v", err)
 	}
 
-	vm.Importer(utils.MakeUniversalImporter(searchUrls))
+	alpha, err := flags.GetBool(flagAlpha)
+	if err != nil {
+		return nil, err
+	}
+	vm.Importer(utils.MakeUniversalImporter(searchUrls, alpha))
 
 	for _, spec := range []struct {
 		flagName string

@@ -46,7 +46,7 @@ gotest:
 
 jsonnettest: kubecfg $(JSONNET_FILES)
 #	TODO: use `kubecfg validate` once it works offline
-	./kubecfg show $(JSONNET_FILES) >/dev/null
+	./kubecfg show --alpha $(JSONNET_FILES) >/dev/null
 
 integrationtest: kubecfg
 	$(GINKGO) -tags 'integration' integration -- -kubeconfig $(KUBECONFIG) -kubecfg-bin $(abspath $<)

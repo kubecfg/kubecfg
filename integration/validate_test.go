@@ -22,7 +22,7 @@ var _ = Describe("validate", func() {
 
 	BeforeEach(func() {
 		input = make([]runtime.Object, 0, 2)
-		args = []string{"validate", "-vv"}
+		args = []string{"validate", "-vv", "--alpha"}
 	})
 
 	JustBeforeEach(func() {
