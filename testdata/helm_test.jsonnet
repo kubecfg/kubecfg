@@ -13,7 +13,7 @@ kubecfg.parseHelmChart(data, "rls", "myns", {
 // Test using the binary import
 local binaryData = import "binary://mysql-8.8.26.tgz";
 
-kubecfg.parseHelmChart(data, "rls", "myns", {
+kubecfg.parseHelmChart(binaryData, "rls", "myns", {
   auth: {
     forcePassword: false,
     password: "foo",
