@@ -26,7 +26,7 @@ import (
 func CheckDuplicates(objs []*unstructured.Unstructured) error {
 	seen := map[string]struct{}{}
 	for _, o := range objs {
-		k := fmt.Sprintf("%s, %q, %q", o.GroupVersionKind(), o.GetNamespace(), o.GetName())
+		k := fmt.Sprintf("%s, %q, %q", o.GroupVersionKind().GroupKind(), o.GetNamespace(), o.GetName())
 		if _, found := seen[k]; found {
 			return fmt.Errorf("duplicate resource %s", k)
 		}
