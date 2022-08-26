@@ -12,6 +12,7 @@
   ],
   "includeForks": false,
   "labels": ["dependencies"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
       "description": "Automerge trivial updates",
