@@ -44,7 +44,6 @@ jobs:
 
       - name: Info Binary
         run: |
-          #ldd ./kubecfg || otool -L ./kubecfg # What's the purpose of this ? it currently fail since we don't produce a dynamic executable
           ./kubecfg help
           ./kubecfg version
 
