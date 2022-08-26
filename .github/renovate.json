@@ -26,7 +26,7 @@
   ],
   "regexManagers": [
     {
-      "fileMatch": ["^\.github/workflows/.*\.yaml"],
+      "fileMatch": ["^\\.github/workflows/.*\\.yaml$"],
       "matchStrings": ["go-version: *(?<currentValue>.*?)\\n"],
       "depNameTemplate": "go",
       "depTypeTemplate": "golang",
