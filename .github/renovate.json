@@ -23,5 +23,14 @@
       "matchPackagePatterns": ["^kubernetes/", "^k8s\\.gcr\\.io/"],
       "groupName": "Kubernetes packages"
     }
+  ],
+  "regexManagers": [
+    {
+      "fileMatch": ["^\.github/workflows/.*\.yaml"],
+      "matchStrings": ["go-version: *(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "go",
+      "depTypeTemplate": "golang",
+      "datasourceTemplate": "golang-version"
+    }
   ]
 }
