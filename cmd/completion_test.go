@@ -11,6 +11,8 @@ func TestGuessShell(t *testing.T) {
 		{"/bin/bash", "bash"},
 		{"/usr/bin/zsh", "zsh"},
 		{"/usr/bin/zsh5", "zsh"},
+		{"/bin/fish", "fish"},
+		{"/usr/bin/fish", "fish"},
 	} {
 		if result := guessShell(test[0]); result != test[1] {
 			t.Errorf("Guessed %q instead of %q from %q", result, test[1], test[0])

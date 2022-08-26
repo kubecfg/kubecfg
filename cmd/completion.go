@@ -66,6 +66,10 @@ var completionCmd = &cobra.Command{
 			if err := RootCmd.GenZshCompletion(out); err != nil {
 				return err
 			}
+		case "fish":
+			if err := RootCmd.GenFishCompletion(out, true); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("Unknown shell %q, try --%s", shell, flagShell)
 		}
