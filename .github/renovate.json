@@ -31,7 +31,8 @@
       "matchStrings": ["go-version: *(?<currentValue>.*?)\\n"],
       "depNameTemplate": "go",
       "depTypeTemplate": "golang",
-      "datasourceTemplate": "golang-version"
+      "datasourceTemplate": "golang-version",
+      "versioningTemplate": "npm"
     }
   ]
 }
