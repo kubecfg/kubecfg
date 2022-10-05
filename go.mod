@@ -19,7 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/crypto v0.0.0-20220919173607-35f4265a4bc0
+	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b
 	helm.sh/helm/v3 v3.8.2
 	k8s.io/api v0.23.6
 	k8s.io/apiextensions-apiserver v0.23.6
