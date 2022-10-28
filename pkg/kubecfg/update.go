@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiext_v1b1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -79,11 +79,11 @@ type UpdateCmd struct {
 	Discovery        discovery.DiscoveryInterface
 	DefaultNamespace string
 
-	Create bool
-	GcTag  string
+	Create      bool
+	GcTag       string
 	GcNamespace string
-	SkipGc bool
-	DryRun bool
+	SkipGc      bool
+	DryRun      bool
 }
 
 func isValidKindSchema(schema proto.Schema) bool {
