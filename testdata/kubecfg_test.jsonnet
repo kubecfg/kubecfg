@@ -90,6 +90,10 @@ local result =
   ];
   std.assertEqual(testValue, ['foo-mysql', 'myns']) &&
 
+  local importBin = importbin './mysql-8.8.26.tgz';
+  std.assertEqual('7f94f699bd5353f1ba023bcd391b5068', std.md5(std.base64(importBin))) &&
+  std.assertEqual(std.base64(chartData), std.base64(importBin)) &&
+
   local importBinary = import 'binary://mysql-8.8.26.tgz';
   std.assertEqual('7f94f699bd5353f1ba023bcd391b5068', std.md5(std.base64(importBinary))) &&
   std.assertEqual(std.base64(chartData), std.base64(importBinary)) &&
