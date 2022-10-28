@@ -35,12 +35,12 @@ In addition to the standard importer, supports:
 A real-world example:
   - You have https://raw.githubusercontent.com/ksonnet/ksonnet-lib/master in your search URLs.
   - You evaluate a local file which calls `import "ksonnet.beta.2/k.libsonnet"`.
-  - If the `ksonnet.beta.2/k.libsonnet`` is not located in the current working directory, an attempt
+  - If the `ksonnet.beta.2/k.libsonnet“ is not located in the current working directory, an attempt
     will be made to follow the search path, i.e. to download
     https://raw.githubusercontent.com/ksonnet/ksonnet-lib/master/ksonnet.beta.2/k.libsonnet.
-  - Since the downloaded `k.libsonnet`` file turn in contains `import "k8s.libsonnet"`, the import
+  - Since the downloaded `k.libsonnet“ file turn in contains `import "k8s.libsonnet"`, the import
     will be resolved as https://raw.githubusercontent.com/ksonnet/ksonnet-lib/master/ksonnet.beta.2/k8s.libsonnet
-	and downloaded from that location.
+    and downloaded from that location.
 */
 func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 	// Reconstructed copy of http.DefaultTransport (to avoid
@@ -82,8 +82,10 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 	binary := false
 	if strings.HasPrefix(importedPath, "binary://") {
 		if !importer.alpha {
+			log.Debugf("WARNING: `import 'binary://file.tgz'` form is now deprecated. please use `importbin './file.tgz' instead")
 			return jsonnet.Contents{}, "", fmt.Errorf(`"binary://" url prefix requires the --alpha flag`)
 		}
+		log.Debugf("WARNING: `import 'binary://file.tgz'` form is now deprecated. please use `importbin './file.tgz' instead")
 		binary = true
 		importedPath = strings.TrimPrefix(importedPath, "binary://")
 	}
@@ -96,6 +98,10 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 	var tried []string
 	for _, u := range candidateURLs {
 		foundAt := u.String()
+		// Avoid collision bug when importing same chart in the same jsonnet file using `import binary://` and `importbin`
+		if binary {
+			foundAt = u.String() + "##binaryImport"
+		}
 		if c, ok := importer.cache[foundAt]; ok {
 			return c, foundAt, nil
 		}
@@ -117,6 +123,7 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 }
 
 func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.Contents, error) {
+	url = strings.TrimSuffix(url, "##binaryImport")
 	res, err := importer.HTTPClient.Get(url)
 	if err != nil {
 		return jsonnet.Contents{}, err
