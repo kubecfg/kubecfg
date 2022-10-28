@@ -100,7 +100,7 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		foundAt := u.String()
 		// Avoid collision bug when importing same chart in the same jsonnet file using `import binary://` and `importbin`
 		if binary {
-			foundAt = "binary-" + u.String()
+			foundAt = u.String() + "##binaryImport"
 		}
 		if c, ok := importer.cache[foundAt]; ok {
 			return c, foundAt, nil
@@ -123,7 +123,7 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 }
 
 func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.Contents, error) {
-	url = strings.TrimPrefix(url, "binary-")
+	url = strings.TrimSuffix(url, "##binaryImport")
 	res, err := importer.HTTPClient.Get(url)
 	if err != nil {
 		return jsonnet.Contents{}, err
