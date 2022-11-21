@@ -65,8 +65,8 @@ func TestIsValidKindSchema(t *testing.T) {
 
 func TestEligibleForGc(t *testing.T) {
 	t.Parallel()
-	const myTags = []string{"my-gctag"}
-	myTag := myTags[0]
+	myTags := map[string]bool{"my-gctag": true}
+	const myTag = "my-gctag"
 	boolTrue := true
 	o := &unstructured.Unstructured{
 		Object: map[string]interface{}{
