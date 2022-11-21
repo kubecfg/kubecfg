@@ -301,6 +301,9 @@ func waitForSchemaChange(ctx context.Context, disco discovery.DiscoveryInterface
 // Run executes the update command
 func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructured) error {
 	gcTags := make(map[string]bool)
+	if c.GcTag != "" {
+		gcTags[c.GcTag] = true
+	}
 
 	dryRunText := ""
 	if c.DryRun {
@@ -332,7 +335,6 @@ func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructu
 			// [gctag-migration]: Remove annotation in phase2
 			utils.SetMetaDataAnnotation(obj, AnnotationGcTag, c.GcTag)
 			utils.SetMetaDataLabel(obj, LabelGcTag, c.GcTag)
-			gcTags[c.GcTag] = true
 		}
 
 		if c.GcTagsFromInput {
