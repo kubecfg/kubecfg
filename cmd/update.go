@@ -23,12 +23,13 @@ import (
 )
 
 const (
-	flagCreate   = "create"
-	flagSkipGc   = "skip-gc"
-	flagGcTag    = "gc-tag"
-	flagGcAllNs  = "gc-all-namespaces"
-	flagDryRun   = "dry-run"
-	flagValidate = "validate"
+	flagCreate          = "create"
+	flagSkipGc          = "skip-gc"
+	flagGcTag           = "gc-tag"
+	flagGcTagsFromInput = "gc-tags-from-input"
+	flagGcAllNs         = "gc-all-namespaces"
+	flagDryRun          = "dry-run"
+	flagValidate        = "validate"
 )
 
 func init() {
@@ -36,6 +37,7 @@ func init() {
 	updateCmd.PersistentFlags().Bool(flagCreate, true, "Create missing resources")
 	updateCmd.PersistentFlags().Bool(flagSkipGc, false, "Don't perform garbage collection, even with --"+flagGcTag)
 	updateCmd.PersistentFlags().String(flagGcTag, "", "Add this tag to updated objects, and garbage collect existing objects with this tag and not in config")
+	updateCmd.PersistentFlags().Bool(flagGcTagsFromInput, false, "Garbage collect existing objects not in input and with any of the gc-tags present in input")
 	updateCmd.PersistentFlags().Bool(flagGcAllNs, true, "Ignore namespace scope for garbage collection")
 	updateCmd.PersistentFlags().Bool(flagDryRun, false, "Perform only read-only operations")
 	updateCmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
@@ -62,6 +64,11 @@ var updateCmd = &cobra.Command{
 		}
 
 		c.GcTag, err = flags.GetString(flagGcTag)
+		if err != nil {
+			return err
+		}
+
+		c.GcTagsFromInput, err = flags.GetBool(flagGcTagsFromInput)
 		if err != nil {
 			return err
 		}

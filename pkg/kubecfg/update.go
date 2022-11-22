@@ -79,11 +79,12 @@ type UpdateCmd struct {
 	Discovery        discovery.DiscoveryInterface
 	DefaultNamespace string
 
-	Create      bool
-	GcTag       string
-	GcNamespace string
-	SkipGc      bool
-	DryRun      bool
+	Create          bool
+	GcTag           string
+	GcTagsFromInput bool
+	GcNamespace     string
+	SkipGc          bool
+	DryRun          bool
 }
 
 func isValidKindSchema(schema proto.Schema) bool {
@@ -299,6 +300,11 @@ func waitForSchemaChange(ctx context.Context, disco discovery.DiscoveryInterface
 
 // Run executes the update command
 func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructured) error {
+	gcTags := make(map[string]bool)
+	if c.GcTag != "" {
+		gcTags[c.GcTag] = true
+	}
+
 	dryRunText := ""
 	if c.DryRun {
 		dryRunText = " (dry-run)"
@@ -329,6 +335,13 @@ func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructu
 			// [gctag-migration]: Remove annotation in phase2
 			utils.SetMetaDataAnnotation(obj, AnnotationGcTag, c.GcTag)
 			utils.SetMetaDataLabel(obj, LabelGcTag, c.GcTag)
+		}
+
+		if c.GcTagsFromInput {
+			ok, gcTagFromObject := getGcTagFromObj(obj)
+			if ok {
+				gcTags[gcTagFromObject] = true
+			}
 		}
 
 		desc := fmt.Sprintf("%s %s", utils.ResourceNameFor(c.Mapper, obj), utils.FqName(obj))
@@ -368,7 +381,7 @@ func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructu
 		}
 	}
 
-	if c.GcTag != "" && !c.SkipGc {
+	if len(gcTags) > 0 && !c.SkipGc {
 		version, err := utils.FetchVersion(c.Discovery)
 		if err != nil {
 			version = utils.GetDefaultVersion()
@@ -384,7 +397,7 @@ func (c UpdateCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructu
 			gvk := o.GetObjectKind().GroupVersionKind()
 			desc := fmt.Sprintf("%s %s (%s)", utils.ResourceNameFor(c.Mapper, o), utils.FqName(meta), gvk.GroupVersion())
 			log.Debugf("Considering %v for gc", desc)
-			if eligibleForGc(meta, c.GcTag) && !seenUids.Has(string(meta.GetUID())) {
+			if eligibleForGc(meta, gcTags) && !seenUids.Has(string(meta.GetUID())) {
 				log.Info("Garbage collecting ", desc, dryRunText)
 				if !c.DryRun {
 					err := gcDelete(ctx, c.Client, c.Mapper, &version, o)
@@ -497,11 +510,11 @@ func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.
 	return nil
 }
 
-func eligibleForGc(obj metav1.Object, gcTag string) bool {
+func getGcTagFromObj(obj metav1.Object) (bool, string) {
 	for _, ref := range obj.GetOwnerReferences() {
 		if ref.Controller != nil && *ref.Controller {
 			// Has a controller ref
-			return false
+			return false, ""
 		}
 	}
 
@@ -512,7 +525,23 @@ func eligibleForGc(obj metav1.Object, gcTag string) bool {
 		strategy = GcStrategyAuto
 	}
 
-	// [gctag-migration]: Check *label* == tag instead in phase2
-	return a[AnnotationGcTag] == gcTag &&
-		strategy == GcStrategyAuto
+	if strategy == GcStrategyAuto && a[AnnotationGcTag] != "" {
+		return true, a[AnnotationGcTag]
+	} else {
+		return false, ""
+	}
+}
+
+// gcTags: map is used as a set to lookup keys. The values are ignored. 
+func eligibleForGc(obj metav1.Object, gcTags map[string]bool) bool {
+	objectHasGcTag, objectGcTag := getGcTagFromObj(obj)
+
+	if objectHasGcTag {
+		_, objectGcTagInEligibleGcTags := gcTags[objectGcTag]	
+		
+		// [gctag-migration]: Check *label* == tag instead in phase2
+		return objectGcTagInEligibleGcTags
+	} else {
+		return false
+	}
 }
