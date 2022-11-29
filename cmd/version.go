@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	jsonnet "github.com/google/go-jsonnet"
 	"github.com/spf13/cobra"
@@ -27,8 +28,11 @@ func init() {
 	RootCmd.AddCommand(versionCmd)
 }
 
+// Default version if not overriden by build parameters.
+const DevVersion = "(dev build)"
+
 // Version is overridden by main
-var Version = "(dev build)"
+var Version = DevVersion
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -36,7 +40,13 @@ var versionCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		out := cmd.OutOrStdout()
-		fmt.Fprintln(out, "kubecfg version:", Version)
+		kubecfgVersion := Version
+		if bi, ok := debug.ReadBuildInfo(); ok {
+			if v := bi.Main.Version; v != "" && v != "(devel)" {
+				kubecfgVersion = v
+			}
+		}
+		fmt.Fprintln(out, "kubecfg version:", kubecfgVersion)
 		fmt.Fprintln(out, "jsonnet version:", jsonnet.Version())
 		fmt.Fprintln(out, "client-go version:", version.Get())
 	},
