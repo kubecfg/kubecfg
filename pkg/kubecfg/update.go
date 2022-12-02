@@ -525,8 +525,14 @@ func getGcTagFromObj(obj metav1.Object) (bool, string) {
 		strategy = GcStrategyAuto
 	}
 
-	if strategy == GcStrategyAuto && a[AnnotationGcTag] != "" {
-		return true, a[AnnotationGcTag]
+	var tag string
+	tag = obj.GetLabels()[LabelGcTag]
+	if tag == "" {
+		tag = a[AnnotationGcTag]
+	}
+
+	if strategy == GcStrategyAuto && tag != "" {
+		return true, tag
 	} else {
 		return false, ""
 	}
@@ -539,7 +545,6 @@ func eligibleForGc(obj metav1.Object, gcTags map[string]bool) bool {
 	if objectHasGcTag {
 		_, objectGcTagInEligibleGcTags := gcTags[objectGcTag]	
 		
-		// [gctag-migration]: Check *label* == tag instead in phase2
 		return objectGcTagInEligibleGcTags
 	} else {
 		return false
