@@ -25,7 +25,7 @@ import (
 )
 
 // Version is overridden using `-X main.version` during release builds
-var version = "(dev build)"
+var version = cmd.DevVersion
 
 func main() {
 	cmd.Version = version

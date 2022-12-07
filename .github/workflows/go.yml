@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
 
       - name: Setup Cache
-        uses: actions/cache@1c73980b09e7aea7201f325a7aa3ad00beddcdda # tag=v3
+        uses: actions/cache@9b0c1fce7a93df8e3bb8926b0d6e9d89e92f20a7 # v3
         with:
           path: |
             ~/go/pkg
@@ -68,7 +68,7 @@ jobs:
           make integrationtest GINKGO="ginkgo $GINKGO_FLAGS"
 
       - name: Upload kubecfg artifact
-        uses: actions/upload-artifact@3cea5372237819ed00197afe530f5a7ea3e805c8 # tag=v3
+        uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb # v3
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
           path: kubecfg
@@ -104,7 +104,7 @@ jobs:
 
     steps:
       - name: Download kubecfg artifact
-        uses: actions/download-artifact@fb598a63ae348fa914e94cd0ff38f362e927b741 # tag=v3
+        uses: actions/download-artifact@9782bd6a9848b53b110e712e20e42d89988822b7 # v3
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
       - name: Upload assets
