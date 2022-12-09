@@ -457,6 +457,7 @@ var _ = Describe("update", func() {
 		var dryRun bool
 		var skipGc bool
 		var gcAllNs bool
+		var gcTagsFromInput bool
 
 		BeforeEach(func() {
 			gcTag = "tag-" + ns
@@ -465,6 +466,7 @@ var _ = Describe("update", func() {
 			dryRun = false
 			skipGc = false
 			gcAllNs = true
+			gcTagsFromInput = false
 		})
 
 		JustBeforeEach(func() {
@@ -489,6 +491,9 @@ var _ = Describe("update", func() {
 			}
 			if !gcAllNs {
 				args = append(args, "--gc-all-namespaces=false")
+			}
+			if gcTagsFromInput {
+				args = append(args, "--gc-tags-from-input")
 			}
 
 			inputObjs := make([]runtime.Object, len(input))
@@ -597,6 +602,18 @@ var _ = Describe("update", func() {
 						// [gctag-migration]: Pre-migration test. Remove in phase2
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "existing-premigration",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								// [gctag-migration]: Change to label-only in phase2
+								kubecfg.AnnotationGcTag: gcTag + "-not",
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTag + "-not",
+							},
+							Name: "input-othertag",
 						},
 					},
 				}
@@ -786,6 +803,48 @@ var _ = Describe("update", func() {
 			It("should not delete existing object in other namespace", func() {
 				Expect(c.ConfigMaps(ns2).Get(context.Background(), "existing-stale-outside-namespace", metav1.GetOptions{})).
 					NotTo(BeNil())
+			})
+		})
+		
+		Context("with gc-tags-from-input", func() {
+			BeforeEach(func() {
+				gcTag = ""
+				gcTagsFromInput = true
+				gcTagInInput := "tag-" + ns + "-detected"
+				preExist = []*v1.ConfigMap{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							// [gctag-migration]: Remove annotation in phase2
+							Annotations: map[string]string{
+								kubecfg.AnnotationGcTag: gcTagInInput,
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTagInInput,
+							},
+							Name: "existing-stale",
+						},
+					},
+				}
+
+				input = []*v1.ConfigMap{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							// [gctag-migration]: Remove annotation in phase2
+							Annotations: map[string]string{
+								kubecfg.AnnotationGcTag: gcTagInInput,
+							},
+							Labels: map[string]string{
+								kubecfg.LabelGcTag: gcTagInInput,
+							},
+							Name: "new",
+						},
+					},
+				}
+			})
+
+			It("should delete object with gc-tag detected in input", func() {
+				_, err := c.ConfigMaps(ns).Get(context.Background(), "existing-stale", metav1.GetOptions{})
+				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
 		})
 	})
