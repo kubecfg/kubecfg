@@ -74,6 +74,9 @@ jobs:
           path: kubecfg
           retention-days: 5
 
+      - uses: imjasonh/setup-ko@v0.6
+      - run: ko build
+
   create_release:
     name: Create Release
     runs-on: ubuntu-latest
