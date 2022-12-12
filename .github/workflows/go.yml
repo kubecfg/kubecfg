@@ -74,8 +74,12 @@ jobs:
           path: kubecfg
           retention-days: 5
 
-      - uses: imjasonh/setup-ko@v0.6
-      - run: ko build
+      - if: matrix.os == 'ubuntu-latest'
+        uses: imjasonh/setup-ko@v0.6
+      
+      - name: Build OCI image using ko and push it to ghcr
+        if: matrix.os == 'ubuntu-latest'
+        run: ko build
 
   create_release:
     name: Create Release
