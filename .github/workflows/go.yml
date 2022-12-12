@@ -11,7 +11,6 @@ on:
       - main
 
 jobs:
-
   build:
     strategy:
       matrix:
@@ -54,7 +53,7 @@ jobs:
 
       # Only run integration on linux matrix job
       - name: Create k8s Kind Cluster
-        uses:  engineerd/setup-kind@v0.5.0
+        uses: engineerd/setup-kind@v0.5.0
         if: matrix.os == 'ubuntu-latest'
         with:
           version: "v0.11.1"
@@ -76,10 +75,12 @@ jobs:
 
       - if: matrix.os == 'ubuntu-latest'
         uses: imjasonh/setup-ko@v0.6
-      
+
       - name: Build OCI image using ko and push it to ghcr
         if: matrix.os == 'ubuntu-latest'
-        run: ko build
+        run: |
+          echo remove this line
+          ko build
 
   create_release:
     name: Create Release
@@ -124,4 +125,3 @@ jobs:
           asset_path: kubecfg
           asset_name: kubecfg_${{ runner.os }}_${{ runner.arch }}
           asset_content_type: application/octet-stream
-
