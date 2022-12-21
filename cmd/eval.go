@@ -17,9 +17,11 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -33,6 +35,21 @@ func init() {
 	evalCmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
 	evalCmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
 	evalCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+}
+
+func tlaNames(flags *pflag.FlagSet) ([]string, error) {
+	var names []string
+	for _, flagName := range []string{flagTLAVar, flagTLAVarFile, flagTLACode, flagTLACodeFile} {
+		entries, err := flags.GetStringArray(flagName)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			key, _, _ := strings.Cut(entry, "=")
+			names = append(names, key)
+		}
+	}
+	return names, nil
 }
 
 var evalCmd = &cobra.Command{
@@ -73,6 +90,11 @@ var evalCmd = &cobra.Command{
 			return fmt.Errorf("jsonent filename required")
 		}
 
-		return c.Run(cmd.Context(), vm, args[0])
+		tla, err := tlaNames(flags)
+		if err != nil {
+			return err
+		}
+
+		return c.Run(cmd.Context(), vm, args[0], tla)
 	},
 }
