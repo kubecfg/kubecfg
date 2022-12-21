@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
@@ -17,7 +18,7 @@ type EvalCmd struct {
 	Format   string
 }
 
-func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string) error {
+func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []string) error {
 	expr := c.Expr
 	if expr == "" {
 		expr = "$"
@@ -26,7 +27,23 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string) error {
 	if err != nil {
 		return err
 	}
-	eval := fmt.Sprintf("((import %q) { Z____expr__Z_:: %s}).Z____expr__Z_", pathURL, expr)
+	var eval string
+	if err != nil {
+		return err
+	}
+	if len(tla) > 0 {
+		formals := strings.Join(tla, ",")
+		pairs := make([]string, len(tla))
+		for i := range tla {
+			pairs[i] = fmt.Sprintf("%s=%s", tla[i], tla[i])
+		}
+		actuals := strings.Join(pairs, ",")
+		// e.g. `function(foo,bar) (import %q)(foo=foo,bar=bar)`
+		// the actuals are keyworded so that the order of TLA flags doesn't matter.
+		eval = fmt.Sprintf("function(%s) ((import %q)(%s) { Z____expr__Z_:: %s}).Z____expr__Z_", formals, pathURL, actuals, expr)
+	} else {
+		eval = fmt.Sprintf("((import %q) { Z____expr__Z_:: %s}).Z____expr__Z_", pathURL, expr)
+	}
 
 	if c.ShowKeys {
 		eval = fmt.Sprintf("std.objectFields(%s)", eval)
