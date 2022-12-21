@@ -51,7 +51,6 @@ func (c HttpdCmd) Run(ctx context.Context, vm *jsonnet.VM, paths []string) error
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Printf("Printing results: %q\n", result)
 			fmt.Fprint(w, result)
 		})
 	}
