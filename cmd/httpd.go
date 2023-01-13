@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 
+	jsonnet "github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -51,15 +52,14 @@ var httpdCmd = &cobra.Command{
 			return err
 		}
 
-		vm, err := JsonnetVM(cmd)
-		if err != nil {
-			return err
+		mkVM := func() (*jsonnet.VM, error) {
+			return JsonnetVM(cmd)
 		}
 
 		if len(args) < 1 {
 			return fmt.Errorf("jsonnet filename required")
 		}
 
-		return c.Run(cmd.Context(), vm, args)
+		return c.Run(cmd.Context(), mkVM, args)
 	},
 }

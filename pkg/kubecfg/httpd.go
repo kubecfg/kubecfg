@@ -30,7 +30,7 @@ func evaluateFile(vm *jsonnet.VM, path string) (string, error) {
 	return jsonstr, nil
 }
 
-func (c HttpdCmd) Run(ctx context.Context, vm *jsonnet.VM, paths []string) error {
+func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), paths []string) error {
 	for _, path := range paths {
 		base := strings.TrimSuffix(path, ".jsonnet")
 		http.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +43,12 @@ func (c HttpdCmd) Run(ctx context.Context, vm *jsonnet.VM, paths []string) error
 				http.Error(w, "Can't read body", http.StatusInternalServerError)
 				return
 			}
+
+			vm, err := mkVM()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
+				return
+			}
 			vm.TLACode("request", string(body))
 			result, err := evaluateFile(vm, path)
 
@@ -51,7 +57,6 @@ func (c HttpdCmd) Run(ctx context.Context, vm *jsonnet.VM, paths []string) error
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Printf("Printing results: %q\n", result)
 			fmt.Fprint(w, result)
 		})
 	}
