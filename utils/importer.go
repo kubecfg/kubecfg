@@ -60,6 +60,7 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
 	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
+	t.RegisterProtocol("oci", newOCIImporter())
 
 	return &universalImporter{
 		BaseSearchURLs: searchURLs,
@@ -97,6 +98,10 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 
 	var tried []string
 	for _, u := range candidateURLs {
+		if u.Scheme == "oci" {
+			u = normalizeOCIURL(u)
+		}
+
 		foundAt := u.String()
 		// Avoid collision bug when importing same chart in the same jsonnet file using `import binary://` and `importbin`
 		if binary {
