@@ -78,7 +78,7 @@ jobs:
 
       - name: Build OCI image using ko and push it to ghcr
         if: matrix.os == 'ubuntu-latest'
-        run: ko build -B --platform all
+        run: ko build -B --platform linux/amd64,linux/arm/v7,linux/arm64
 
   create_release:
     name: Create Release
