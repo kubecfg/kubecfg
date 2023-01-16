@@ -63,6 +63,10 @@ var completionCmd = &cobra.Command{
 				return err
 			}
 		case "zsh":
+			// See https://github.com/spf13/cobra/issues/1529
+			// using the same workaround as kubectl https://github.com/kubernetes/kubernetes/blob/bf8c918e0be340637e63520eb3b58df493a230f9/staging/src/k8s.io/kubectl/pkg/cmd/completion/completion.go#L174-L175
+			zshHead := "#compdef kubecfg\n#compdef _kubecfg kubecfg\n"
+			out.Write([]byte(zshHead))
 			if err := RootCmd.GenZshCompletion(out); err != nil {
 				return err
 			}
