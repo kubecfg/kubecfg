@@ -10,7 +10,7 @@ require (
 	github.com/googleapis/gnostic v0.5.5
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/kubecfg/yaml/v2 v2.4.2
-	github.com/mattn/go-isatty v0.0.16
+	github.com/mattn/go-isatty v0.0.17
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.24.2
 	github.com/sergi/go-diff v1.2.0
