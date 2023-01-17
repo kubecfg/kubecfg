@@ -12,7 +12,7 @@ require (
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.17
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.24.2
+	github.com/onsi/gomega v1.25.0
 	github.com/sergi/go-diff v1.3.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
@@ -79,7 +79,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/onsi/ginkgo/v2 v2.7.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
