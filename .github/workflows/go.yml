@@ -53,7 +53,7 @@ jobs:
 
       # Only run integration on linux matrix job
       - name: Create k8s Kind Cluster
-        uses: engineerd/setup-kind@v0.5.0
+        uses: engineerd/setup-kind@aa272fe2a7309878ffc2a81c56cfe3ef108ae7d0 # v0.5.0
         if: matrix.os == 'ubuntu-latest'
         with:
           version: "v0.11.1"
@@ -74,7 +74,7 @@ jobs:
           retention-days: 5
 
       - if: matrix.os == 'ubuntu-latest'
-        uses: imjasonh/setup-ko@v0.6
+        uses: imjasonh/setup-ko@ace48d793556083a76f1e3e6068850c1f4a369aa # v0.6
 
       - name: Build OCI image using ko and push it to ghcr
         if: matrix.os == 'ubuntu-latest'
