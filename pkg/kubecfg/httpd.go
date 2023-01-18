@@ -17,7 +17,7 @@ type HttpdCmd struct {
 }
 
 func evaluateFile(vm *jsonnet.VM, path string) (string, error) {
-	pathURL, err := utils.PathToFileURL(path)
+	pathURL, err := utils.PathToURL(path)
 	if err != nil {
 		return "", err
 	}

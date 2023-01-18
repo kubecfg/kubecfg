@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
@@ -73,6 +74,10 @@ func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, er
 		o(&opt)
 	}
 
+	if isURL(path) {
+		return jsonnetReader(vm, path, opt)
+	}
+
 	switch filepath.Ext(path) {
 	case ".json":
 		f, err := os.Open(path)
@@ -91,7 +96,6 @@ func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, er
 	case ".jsonnet":
 		return jsonnetReader(vm, path, opt)
 	}
-
 	return nil, fmt.Errorf("unknown file extension: %s", path)
 }
 
@@ -203,9 +207,11 @@ func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkConte
 	}
 }
 
-func PathToFileURL(path string) (string, error) {
-	// TODO: Read via Importer, so we support HTTP, etc for first
-	// file too.
+func PathToURL(path string) (string, error) {
+	if isURL(path) {
+		return path, nil
+	}
+	// if it's not an URL already, turn it into a file URL.
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -213,20 +219,24 @@ func PathToFileURL(path string) (string, error) {
 	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String(), nil
 }
 
+func isURL(path string) bool {
+	// TODO: figure a better way to tell filepaths and URLs apart (it also must work on windows...)
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "oci://") || strings.HasPrefix(path, "file://")
+}
+
 func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
 	// TODO(mkm): evaluate expressions in opts.expr
 
-	pathURL, err := PathToFileURL(path)
+	pathURL, err := PathToURL(path)
+	if err != nil {
+		return nil, err
+	}
+	content, foundAt, err := vm.ImportData(pathURL, pathURL)
 	if err != nil {
 		return nil, err
 	}
 
-	bytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	jsonstr, err := vm.EvaluateSnippet(pathURL, string(bytes))
+	jsonstr, err := vm.EvaluateSnippet(foundAt, content)
 	if err != nil {
 		return nil, err
 	}
@@ -234,13 +244,13 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Obj
 	log.Debugf("jsonnet result is: %s", jsonstr)
 
 	if opts.readTwice {
-		str2, err := vm.EvaluateSnippet(pathURL, string(bytes))
+		str2, err := vm.EvaluateSnippet(foundAt, content)
 		if err != nil {
-			return nil, fmt.Errorf("error re-reading %s: %w", pathURL, err)
+			return nil, fmt.Errorf("error re-reading %s: %w", foundAt, err)
 		}
 
 		if jsonstr != str2 {
-			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", pathURL)
+			return nil, fmt.Errorf("repeat read of %s returned non-idempotent result", foundAt)
 		}
 	}
 

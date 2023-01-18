@@ -18,6 +18,9 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -162,5 +165,35 @@ func TestShowUsingExtVarFiles(t *testing.T) {
 		t.Errorf("error parsing output: %v", err)
 	} else if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("expected != actual: %s != %s", expected, actual)
+	}
+}
+
+func TestShowUsingURLs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			apiVersion: "v1",
+			kind: "ConfigMap",
+			metadata: { name: "foo"},
+			data: { "foo": "bar" }
+}`)
+	}))
+	t.Cleanup(server.Close)
+
+	got := cmdOutput(t, []string{"show", server.URL})
+	defer resetFlagsOf(RootCmd)
+
+	want := `{
+  "apiVersion": "v1",
+  "data": {
+    "foo": "bar"
+  },
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "foo"
+  }
+}
+`
+	if got != want {
+		t.Fatalf("got: %q, want: %q", got, want)
 	}
 }

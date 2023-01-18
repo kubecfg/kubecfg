@@ -23,7 +23,7 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	if expr == "" {
 		expr = "$"
 	}
-	pathURL, err := utils.PathToFileURL(path)
+	pathURL, err := utils.PathToURL(path)
 	if err != nil {
 		return err
 	}
