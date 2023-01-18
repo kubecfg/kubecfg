@@ -29,6 +29,7 @@ const (
 func init() {
 	diffCmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all, subset or last-applied")
 	diffCmd.PersistentFlags().Bool(flagOmitSecrets, false, "hide secret details when showing diff")
+	diffCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
 	RootCmd.AddCommand(diffCmd)
 }
 
@@ -60,6 +61,14 @@ var diffCmd = &cobra.Command{
 		c.DefaultNamespace, err = defaultNamespace(clientConfig)
 		if err != nil {
 			return err
+		}
+
+		exec, err := flags.GetString(flagExec)
+		if err != nil {
+			return err
+		}
+		if exec != "" {
+			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)

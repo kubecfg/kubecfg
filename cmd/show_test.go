@@ -197,3 +197,34 @@ func TestShowUsingURLs(t *testing.T) {
 		t.Fatalf("got: %q, want: %q", got, want)
 	}
 }
+
+func TestShowExec(t *testing.T) {
+	const (
+		input = `{
+	apiVersion: "v1",
+	kind: "ConfigMap",
+	metadata: { name: "foo"},
+	data: { "foo": "bar" }
+}`
+
+		want = `{
+  "apiVersion": "v1",
+  "data": {
+    "foo": "bar"
+  },
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "foo"
+  }
+}
+`
+	)
+
+	got := cmdOutput(t, []string{"show", "-e", input})
+	defer resetFlagsOf(RootCmd)
+
+	if got != want {
+		t.Fatalf("got: %q, want: %q", got, want)
+	}
+
+}

@@ -31,6 +31,7 @@ func init() {
 	RootCmd.AddCommand(validateCmd)
 	validateCmd.PersistentFlags().Bool(flagIgnoreUnknown, true, "Don't fail if the schema for a given resource type is not found")
 	validateCmd.PersistentFlags().Bool(flagRepeatEval, true, "Repeat evaluation twice to verify idempotency")
+	validateCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
 }
 
 var validateCmd = &cobra.Command{
@@ -56,6 +57,14 @@ var validateCmd = &cobra.Command{
 		repeatEval, err := flags.GetBool(flagRepeatEval)
 		if err != nil {
 			return err
+		}
+
+		exec, err := flags.GetString(flagExec)
+		if err != nil {
+			return err
+		}
+		if exec != "" {
+			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args, utils.WithReadTwice(repeatEval))

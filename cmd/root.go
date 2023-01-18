@@ -412,6 +412,10 @@ func dumpJSON(v interface{}) string {
 	return string(buf.Bytes())
 }
 
+func toDataURL(code string) string {
+	return fmt.Sprintf("data:,%s", url.PathEscape(code))
+}
+
 func getDynamicClients(cmd *cobra.Command) (dynamic.Interface, meta.RESTMapper, discovery.DiscoveryInterface, error) {
 	conf, err := clientConfig.ClientConfig()
 	if err != nil {
