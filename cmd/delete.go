@@ -28,6 +28,7 @@ const (
 func init() {
 	RootCmd.AddCommand(deleteCmd)
 	deleteCmd.PersistentFlags().Int64(flagGracePeriod, -1, "Number of seconds given to resources to terminate gracefully. A negative value is ignored")
+	deleteCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
 }
 
 var deleteCmd = &cobra.Command{
@@ -53,6 +54,14 @@ var deleteCmd = &cobra.Command{
 		c.DefaultNamespace, err = defaultNamespace(clientConfig)
 		if err != nil {
 			return err
+		}
+
+		exec, err := flags.GetString(flagExec)
+		if err != nil {
+			return err
+		}
+		if exec != "" {
+			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)

@@ -35,6 +35,7 @@ func init() {
 	evalCmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
 	evalCmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
 	evalCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+	evalCmd.PersistentFlags().String(flagExec, "", "Inline code") // like `jsonnet -e`
 }
 
 func tlaNames(flags *pflag.FlagSet) ([]string, error) {

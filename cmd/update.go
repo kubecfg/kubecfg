@@ -42,6 +42,7 @@ func init() {
 	updateCmd.PersistentFlags().Bool(flagDryRun, false, "Perform only read-only operations")
 	updateCmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
 	updateCmd.PersistentFlags().Bool(flagIgnoreUnknown, false, "Don't fail validation if the schema for a given resource type is not found")
+	updateCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
 }
 
 var updateCmd = &cobra.Command{
@@ -100,6 +101,14 @@ var updateCmd = &cobra.Command{
 			c.GcNamespace = metav1.NamespaceAll
 		} else {
 			c.GcNamespace = c.DefaultNamespace
+		}
+
+		exec, err := flags.GetString(flagExec)
+		if err != nil {
+			return err
+		}
+		if exec != "" {
+			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)
