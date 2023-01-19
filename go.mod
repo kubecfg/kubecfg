@@ -31,7 +31,7 @@ require (
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
 	k8s.io/kubectl v0.23.6
-	oras.land/oras-go v1.2.2
+	oras.land/oras-go/v2 v2.0.0
 )
 
 require (
