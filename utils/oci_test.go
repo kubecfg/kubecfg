@@ -67,6 +67,7 @@ func TestOCITransport(t *testing.T) {
 
 	tr := &http.Transport{}
 	oci := newOCIImporter()
+	oci.httpClient = &http.Client{}
 	oci.httpClient.Transport = &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if addr != "gcr.io:443" {
@@ -80,30 +81,38 @@ func TestOCITransport(t *testing.T) {
 
 	cl := http.Client{Transport: tr}
 
-	res, err := cl.Get("oci://gcr.io/mkm-cloud/hello:v1")
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		url  string
+		want string
+	}{
+		{
+			url:  "oci://gcr.io/mkm-cloud/hello:v1",
+			want: fmt.Sprintf("import %q", testFile1),
+		},
+		{
+			url:  "oci://gcr.io/mkm-cloud/hello:v1/" + testFile1,
+			want: testBody1,
+		},
+		{
+			url:  "oci://gcr.io/mkm-cloud/hello:v1/" + testFile2,
+			want: testBody2,
+		},
 	}
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for i, tc := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			res, err := cl.Get(tc.url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if got, want := string(b), testBody1; got != want {
-		t.Fatalf("got %q, want: %q", got, want)
-	}
-
-	res, err = cl.Get("oci://gcr.io/mkm-cloud/hello:v1/" + testFile2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err = io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got, want := string(b), testBody2; got != want {
-		t.Fatalf("got %q, want: %q", got, want)
+			if got, want := string(b), tc.want; got != want {
+				t.Fatalf("got %q, want: %q", got, want)
+			}
+		})
 	}
 }
 

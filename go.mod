@@ -2,7 +2,6 @@ module github.com/kubecfg/kubecfg
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/StalkR/httpcache v1.0.0
 	github.com/containerd/containerd v1.6.17
 	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/genuinetools/reg v0.16.1
@@ -70,7 +69,6 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
