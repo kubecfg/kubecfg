@@ -3,7 +3,7 @@ module github.com/kubecfg/kubecfg
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/StalkR/httpcache v1.0.0
-	github.com/containerd/containerd v1.6.15
+	github.com/containerd/containerd v1.6.17
 	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
