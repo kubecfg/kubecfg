@@ -117,7 +117,8 @@ func TestPush(t *testing.T) {
 	// The OCI spec is strict enough so that this shouldn't be a problem.
 
 	var session atomic.Int32
-	var blobs sync.Map
+	blobs := map[string][]byte{}
+	var blobLock sync.Mutex
 
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("new request: method=%q, path=%q", r.Method, r.URL.Path)
@@ -135,7 +136,9 @@ func TestPush(t *testing.T) {
 				t.Fatal(err)
 			}
 			r.Body.Close()
-			blobs.Store(digest, b)
+			blobLock.Lock()
+			defer blobLock.Unlock()
+			blobs[digest] = b
 
 			w.Header().Add("Location", fmt.Sprintf("/dummy/blobs/%s", digest))
 			w.WriteHeader(http.StatusCreated)
@@ -145,7 +148,9 @@ func TestPush(t *testing.T) {
 				t.Fatal(err)
 			}
 			r.Body.Close()
-			blobs.Store("manifest", b)
+			blobLock.Lock()
+			defer blobLock.Unlock()
+			blobs["manifest"] = b
 
 			w.Header().Add("Location", "/dummy/blobs/manifest")
 			w.WriteHeader(http.StatusCreated)
@@ -159,7 +164,19 @@ func TestPush(t *testing.T) {
 
 	testRef := fmt.Sprintf("%s/demo:1234", strings.TrimPrefix(testServer.URL, "http://"))
 	t.Logf("testRef=%q", testRef)
-	cmdOutput(t, []string{"--alpha", "pack", testRef, testRootFile, "--insecure-registry"})
+
+	// The `--output ""` is necessary because our command testing harness is broken and preserves flag values from previous runs.
+	// We cannot easily test this from pkg/kubecfg because the helper that creates jsonnet VMs is intertwined with cobra commands/
+	// O-le-yak...
+	cmdOutput(t, []string{"--alpha", "pack", testRef, testRootFile, "--output", "", "--insecure-registry"})
+
+	blobLock.Lock()
+	defer blobLock.Unlock()
+
+	t.Logf("recorded blob keys:")
+	for key := range blobs {
+		t.Logf("blob: %q", key)
+	}
 
 	// these digests have been observed by running the test failing and obverving the logs
 	const (
@@ -167,11 +184,11 @@ func TestPush(t *testing.T) {
 		confDigest = "sha256:918b7abf35db6a5e309be8760cca0e2c747cb186e03d7b32ed9f5da1d637f09f"
 	)
 	getBlob := func(key string) []byte {
-		got, ok := blobs.Load(key)
+		got, ok := blobs[key]
 		if !ok {
 			t.Fatalf("can't find blob for key %q", key)
 		}
-		return got.([]byte)
+		return got
 	}
 
 	verifyBodyTarball(t, bytes.NewReader(getBlob(blobDigest)))
