@@ -33,16 +33,18 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(updateCmd)
-	updateCmd.PersistentFlags().Bool(flagCreate, true, "Create missing resources")
-	updateCmd.PersistentFlags().Bool(flagSkipGc, false, "Don't perform garbage collection, even with --"+flagGcTag)
-	updateCmd.PersistentFlags().String(flagGcTag, "", "Add this tag to updated objects, and garbage collect existing objects with this tag and not in config")
-	updateCmd.PersistentFlags().Bool(flagGcTagsFromInput, false, "Garbage collect existing objects not in input and with any of the gc-tags present in input")
-	updateCmd.PersistentFlags().Bool(flagGcAllNs, true, "Ignore namespace scope for garbage collection")
-	updateCmd.PersistentFlags().Bool(flagDryRun, false, "Perform only read-only operations")
-	updateCmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
-	updateCmd.PersistentFlags().Bool(flagIgnoreUnknown, false, "Don't fail validation if the schema for a given resource type is not found")
-	updateCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
+	cmd := updateCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().Bool(flagCreate, true, "Create missing resources")
+	cmd.PersistentFlags().Bool(flagSkipGc, false, "Don't perform garbage collection, even with --"+flagGcTag)
+	cmd.PersistentFlags().String(flagGcTag, "", "Add this tag to updated objects, and garbage collect existing objects with this tag and not in config")
+	cmd.PersistentFlags().Bool(flagGcTagsFromInput, false, "Garbage collect existing objects not in input and with any of the gc-tags present in input")
+	cmd.PersistentFlags().Bool(flagGcAllNs, true, "Ignore namespace scope for garbage collection")
+	cmd.PersistentFlags().Bool(flagDryRun, false, "Perform only read-only operations")
+	cmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
+	cmd.PersistentFlags().Bool(flagIgnoreUnknown, false, "Don't fail validation if the schema for a given resource type is not found")
+
+	addCommonEvalFlags(cmd.PersistentFlags())
 }
 
 var updateCmd = &cobra.Command{
@@ -53,6 +55,10 @@ var updateCmd = &cobra.Command{
 		flags := cmd.Flags()
 		var err error
 		c := kubecfg.UpdateCmd{}
+
+		if err := processCommonEvalFlags(flags, &args); err != nil {
+			return err
+		}
 
 		validate, err := flags.GetBool(flagValidate)
 		if err != nil {
@@ -101,14 +107,6 @@ var updateCmd = &cobra.Command{
 			c.GcNamespace = metav1.NamespaceAll
 		} else {
 			c.GcNamespace = c.DefaultNamespace
-		}
-
-		exec, err := flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		if exec != "" {
-			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)

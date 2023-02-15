@@ -29,9 +29,10 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(packCmd)
-	packCmd.PersistentFlags().String(flagOutput, "", "Output archive file. Don't push to OCI but just dump into a file")
-	packCmd.PersistentFlags().Bool(flagInsecureRegistry, false, "Use HTTP instead of HTTPS to access the OCI registry")
+	cmd := packCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().String(flagOutput, "", "Output archive file. Don't push to OCI but just dump into a file")
+	cmd.PersistentFlags().Bool(flagInsecureRegistry, false, "Use HTTP instead of HTTPS to access the OCI registry")
 }
 
 var packCmd = &cobra.Command{
