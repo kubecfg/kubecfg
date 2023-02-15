@@ -179,7 +179,7 @@ func TestShowUsingURLs(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	got := cmdOutput(t, []string{"show", server.URL})
+	got := cmdOutput(t, []string{"show", server.URL, "-o", "json"})
 	defer resetFlagsOf(RootCmd)
 
 	want := `{
@@ -220,7 +220,7 @@ func TestShowExec(t *testing.T) {
 `
 	)
 
-	got := cmdOutput(t, []string{"show", "-e", input})
+	got := cmdOutput(t, []string{"show", "-e", input, "-o", "json"})
 	defer resetFlagsOf(RootCmd)
 
 	if got != want {
