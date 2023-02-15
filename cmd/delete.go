@@ -26,9 +26,11 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(deleteCmd)
-	deleteCmd.PersistentFlags().Int64(flagGracePeriod, -1, "Number of seconds given to resources to terminate gracefully. A negative value is ignored")
-	deleteCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
+	cmd := deleteCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().Int64(flagGracePeriod, -1, "Number of seconds given to resources to terminate gracefully. A negative value is ignored")
+
+	addCommonEvalFlags(cmd.PersistentFlags())
 }
 
 var deleteCmd = &cobra.Command{
@@ -40,6 +42,10 @@ var deleteCmd = &cobra.Command{
 		var err error
 
 		c := kubecfg.DeleteCmd{}
+
+		if err := processCommonEvalFlags(flags, &args); err != nil {
+			return err
+		}
 
 		c.GracePeriod, err = flags.GetInt64(flagGracePeriod)
 		if err != nil {
@@ -54,14 +60,6 @@ var deleteCmd = &cobra.Command{
 		c.DefaultNamespace, err = defaultNamespace(clientConfig)
 		if err != nil {
 			return err
-		}
-
-		exec, err := flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		if exec != "" {
-			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)

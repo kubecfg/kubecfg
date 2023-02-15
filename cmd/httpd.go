@@ -29,8 +29,9 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(httpdCmd)
-	httpdCmd.PersistentFlags().StringP(flagListenAddr, "l", ":8080", "address:port to listen")
+	cmd := httpdCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().StringP(flagListenAddr, "l", ":8080", "address:port to listen")
 }
 
 var httpdCmd = &cobra.Command{

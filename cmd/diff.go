@@ -27,10 +27,12 @@ const (
 )
 
 func init() {
-	diffCmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all, subset or last-applied")
-	diffCmd.PersistentFlags().Bool(flagOmitSecrets, false, "hide secret details when showing diff")
-	diffCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
-	RootCmd.AddCommand(diffCmd)
+	cmd := diffCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all, subset or last-applied")
+	cmd.PersistentFlags().Bool(flagOmitSecrets, false, "hide secret details when showing diff")
+
+	addCommonEvalFlags(cmd.PersistentFlags())
 }
 
 var diffCmd = &cobra.Command{
@@ -42,6 +44,10 @@ var diffCmd = &cobra.Command{
 		var err error
 
 		c := kubecfg.DiffCmd{}
+
+		if err := processCommonEvalFlags(flags, &args); err != nil {
+			return err
+		}
 
 		c.DiffStrategy, err = flags.GetString(flagDiffStrategy)
 		if err != nil {
@@ -61,14 +67,6 @@ var diffCmd = &cobra.Command{
 		c.DefaultNamespace, err = defaultNamespace(clientConfig)
 		if err != nil {
 			return err
-		}
-
-		exec, err := flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		if exec != "" {
-			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args)

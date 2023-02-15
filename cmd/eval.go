@@ -31,11 +31,13 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(evalCmd)
-	evalCmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
-	evalCmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
-	evalCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
-	evalCmd.PersistentFlags().String(flagExec, "", "Inline code") // like `jsonnet -e`
+	cmd := evalCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
+	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
+	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+
+	addCommonEvalFlags(cmd.PersistentFlags(), withoutShortEvalFlag())
 }
 
 func tlaNames(flags *pflag.FlagSet) ([]string, error) {
@@ -88,7 +90,7 @@ var evalCmd = &cobra.Command{
 		}
 
 		if len(args) < 1 {
-			return fmt.Errorf("jsonent filename required")
+			return fmt.Errorf("jsonnet filename required")
 		}
 
 		tla, err := tlaNames(flags)

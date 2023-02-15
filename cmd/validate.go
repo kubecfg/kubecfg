@@ -28,10 +28,12 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(validateCmd)
-	validateCmd.PersistentFlags().Bool(flagIgnoreUnknown, true, "Don't fail if the schema for a given resource type is not found")
-	validateCmd.PersistentFlags().Bool(flagRepeatEval, true, "Repeat evaluation twice to verify idempotency")
-	validateCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
+	cmd := validateCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().Bool(flagIgnoreUnknown, true, "Don't fail if the schema for a given resource type is not found")
+	cmd.PersistentFlags().Bool(flagRepeatEval, true, "Repeat evaluation twice to verify idempotency")
+
+	addCommonEvalFlags(cmd.PersistentFlags())
 }
 
 var validateCmd = &cobra.Command{
@@ -43,6 +45,10 @@ var validateCmd = &cobra.Command{
 		var err error
 
 		c := kubecfg.ValidateCmd{}
+
+		if err := processCommonEvalFlags(flags, &args); err != nil {
+			return err
+		}
 
 		_, c.Mapper, c.Discovery, err = getDynamicClients(cmd)
 		if err != nil {
@@ -57,14 +63,6 @@ var validateCmd = &cobra.Command{
 		repeatEval, err := flags.GetBool(flagRepeatEval)
 		if err != nil {
 			return err
-		}
-
-		exec, err := flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		if exec != "" {
-			args = append(args, toDataURL(exec))
 		}
 
 		objs, err := readObjs(cmd, args, utils.WithReadTwice(repeatEval))

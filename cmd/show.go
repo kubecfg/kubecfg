@@ -25,7 +25,6 @@ import (
 
 const (
 	flagFormat               = "format"
-	flagExec                 = "exec"
 	flagExportDir            = "export-dir"
 	flagExportFileNameFormat = "export-filename-format"
 	flagExportFileNameExt    = "export-filename-extension"
@@ -33,13 +32,15 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(showCmd)
-	showCmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
-	showCmd.PersistentFlags().StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
-	showCmd.PersistentFlags().String(flagExportDir, "", "Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.")
-	showCmd.PersistentFlags().String(flagExportFileNameFormat, kubecfg.DefaultFileNameFormat, "Go template expression used to render path names for resources.")
-	showCmd.PersistentFlags().String(flagExportFileNameExt, "", fmt.Sprintf("Override the file extension used when creating filenames when using %s", flagExportFileNameFormat))
-	showCmd.PersistentFlags().Bool(flagShowProvenance, false, "Add provenance annotations showing the file and the field path to each rendered k8s object")
+	cmd := showCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+	cmd.PersistentFlags().String(flagExportDir, "", "Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.")
+	cmd.PersistentFlags().String(flagExportFileNameFormat, kubecfg.DefaultFileNameFormat, "Go template expression used to render path names for resources.")
+	cmd.PersistentFlags().String(flagExportFileNameExt, "", fmt.Sprintf("Override the file extension used when creating filenames when using %s", flagExportFileNameFormat))
+	cmd.PersistentFlags().Bool(flagShowProvenance, false, "Add provenance annotations showing the file and the field path to each rendered k8s object")
+
+	addCommonEvalFlags(cmd.PersistentFlags())
 }
 
 var showCmd = &cobra.Command{
@@ -49,16 +50,13 @@ var showCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 
+		if err := processCommonEvalFlags(flags, &args); err != nil {
+			return err
+		}
+
 		outputFormat, err := flags.GetString(flagFormat)
 		if err != nil {
 			return err
-		}
-		exec, err := flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		if exec != "" {
-			args = append(args, toDataURL(exec))
 		}
 		exportDir, err := flags.GetString(flagExportDir)
 		if err != nil {

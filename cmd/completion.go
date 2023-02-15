@@ -36,8 +36,9 @@ func guessShell(path string) string {
 }
 
 func init() {
-	RootCmd.AddCommand(completionCmd)
-	completionCmd.PersistentFlags().String(flagShell, "", "Shell variant for which to generate completions.  Supported values are bash,zsh")
+	cmd := completionCmd
+	RootCmd.AddCommand(cmd)
+	cmd.PersistentFlags().String(flagShell, "", "Shell variant for which to generate completions.  Supported values are bash,zsh")
 }
 
 var completionCmd = &cobra.Command{
