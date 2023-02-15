@@ -165,10 +165,7 @@ func TestPush(t *testing.T) {
 	testRef := fmt.Sprintf("%s/demo:1234", strings.TrimPrefix(testServer.URL, "http://"))
 	t.Logf("testRef=%q", testRef)
 
-	// The `--output ""` is necessary because our command testing harness is broken and preserves flag values from previous runs.
-	// We cannot easily test this from pkg/kubecfg because the helper that creates jsonnet VMs is intertwined with cobra commands/
-	// O-le-yak...
-	cmdOutput(t, []string{"--alpha", "pack", testRef, testRootFile, "--output", "", "--insecure-registry"})
+	cmdOutput(t, []string{"--alpha", "pack", testRef, testRootFile, "--insecure-registry"})
 
 	blobLock.Lock()
 	defer blobLock.Unlock()
