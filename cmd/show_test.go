@@ -33,6 +33,10 @@ import (
 	"github.com/kubecfg/yaml/v2"
 )
 
+func resetFlags() {
+	resetFlagsOf(RootCmd)
+}
+
 func resetFlagsOf(cmd *cobra.Command) {
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		if sv, ok := f.Value.(pflag.SliceValue); ok {
@@ -41,15 +45,21 @@ func resetFlagsOf(cmd *cobra.Command) {
 			f.Value.Set(f.DefValue)
 		}
 	})
+	for _, c := range cmd.Commands() {
+		resetFlagsOf(c)
+	}
 }
 
 func cmdOutput(t *testing.T, args []string) string {
+	defer resetFlags()
+
 	var buf bytes.Buffer
 	RootCmd.SetOutput(&buf)
 	defer RootCmd.SetOutput(nil)
 
 	t.Log("Running args", args)
 	RootCmd.SetArgs(args)
+
 	if err := RootCmd.Execute(); err != nil {
 		t.Fatal("command failed:", err)
 	}
@@ -105,7 +115,6 @@ func TestShow(t *testing.T) {
 			"--ext-str-file", "filevar=" + filepath.FromSlash("../testdata/extvar.file"),
 			"--ext-code", `extcode={foo: 1, bar: "test"}`,
 		})
-		defer resetFlagsOf(RootCmd)
 
 		t.Log("output is", output)
 		actual, err := parser(output)
@@ -156,7 +165,6 @@ func TestShowUsingExtVarFiles(t *testing.T) {
 		"--tla-code-file", "sink=sink.jsonnet",
 		"--ext-str-file", "filevar=var.txt",
 	})
-	defer resetFlagsOf(RootCmd)
 
 	t.Log("output is", output)
 	var actual interface{}
@@ -180,7 +188,6 @@ func TestShowUsingURLs(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	got := cmdOutput(t, []string{"show", server.URL, "-o", "json"})
-	defer resetFlagsOf(RootCmd)
 
 	want := `{
   "apiVersion": "v1",
@@ -221,7 +228,6 @@ func TestShowExec(t *testing.T) {
 	)
 
 	got := cmdOutput(t, []string{"show", "-e", input, "-o", "json"})
-	defer resetFlagsOf(RootCmd)
 
 	if got != want {
 		t.Fatalf("got: %q, want: %q", got, want)
