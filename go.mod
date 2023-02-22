@@ -2,7 +2,8 @@ module github.com/kubecfg/kubecfg
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/containerd/containerd v1.6.17
+	github.com/containerd/containerd v1.6.18
+	github.com/docker/cli v20.10.21+incompatible
 	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
@@ -10,6 +11,7 @@ require (
 	github.com/google/go-jsonnet v0.19.1
 	github.com/googleapis/gnostic v0.5.5
 	github.com/hexops/gotextdiff v1.0.3
+	github.com/klauspost/compress v1.13.6
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.17
 	github.com/onsi/ginkgo v1.16.4
@@ -31,6 +33,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
 	k8s.io/kubectl v0.23.6
 	oras.land/oras-go v1.2.2
+	oras.land/oras-go/v2 v2.0.0
 )
 
 require (
@@ -52,7 +55,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/cli v20.10.21+incompatible // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/docker v20.10.21+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
@@ -79,7 +81,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
@@ -126,7 +127,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
-	oras.land/oras-go/v2 v2.0.0 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
