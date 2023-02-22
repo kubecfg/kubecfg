@@ -27,6 +27,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type jsonnetVMOpts struct {
@@ -227,4 +228,22 @@ func dirURL(path string) *url.URL {
 		path = path + "/"
 	}
 	return &url.URL{Scheme: "file", Path: path}
+}
+
+// ReadObjects evaluates all jsonnet files in paths and return all the k8s objects found in it.
+// Unlike utils.Read this checks for duplicates and flattens the v1 Lists.
+func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
+	res := []*unstructured.Unstructured{}
+	for _, path := range paths {
+		objs, err := utils.Read(vm, path, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("error reading %s: %v", path, err)
+		}
+
+		res = append(res, utils.FlattenToV1(objs)...)
+	}
+	if err := utils.CheckDuplicates(res); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
