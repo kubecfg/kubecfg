@@ -27,7 +27,7 @@ import (
 	"sync"
 	"syscall"
 
-	openapi_v2 "github.com/googleapis/gnostic/openapiv2"
+	openapi_v2 "github.com/google/gnostic/openapiv2"
 
 	log "github.com/sirupsen/logrus"
 	errorsutil "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +38,8 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	openapi_v3 "k8s.io/client-go/openapi"
+	cachedopenapi_v3 "k8s.io/client-go/openapi/cached"
 	restclient "k8s.io/client-go/rest"
 )
 
@@ -59,6 +61,7 @@ type memcachedDiscoveryClient struct {
 	groupList              *metav1.APIGroupList
 	openAPISchema          *openapi_v2.Document
 	cacheValid             bool
+	openapiV3Client        openapi_v3.Client
 }
 
 // Error Constants
@@ -123,12 +126,6 @@ func (d *memcachedDiscoveryClient) ServerResourcesForGroupVersion(groupVersion s
 	}
 
 	return cachedVal.resourceList, cachedVal.err
-}
-
-// ServerResources returns the supported resources for all groups and versions.
-// Deprecated: use ServerGroupsAndResources instead.
-func (d *memcachedDiscoveryClient) ServerResources() ([]*metav1.APIResourceList, error) {
-	return discovery.ServerResources(d)
 }
 
 // ServerGroupsAndResources returns the groups and supported resources for all groups and versions.
@@ -196,6 +193,20 @@ func (d *memcachedDiscoveryClient) Invalidate() {
 	d.groupToServerResources = nil
 	d.groupList = nil
 	d.openAPISchema = nil
+}
+
+// OpenAPIV3 retrieves and parses the OpenAPIV3 specs exposed by the server
+func (d *memcachedDiscoveryClient) OpenAPIV3() openapi_v3.Client {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	if d.openapiV3Client == nil {
+		// Delegate is discovery client created with special HTTP client which
+		// respects E-Tag cache responses to serve cache from disk.
+		d.openapiV3Client = cachedopenapi_v3.NewClient(d.delegate.OpenAPIV3())
+	}
+
+	return d.openapiV3Client
 }
 
 // refreshLocked refreshes the state of cache. The caller must hold d.lock for

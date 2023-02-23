@@ -8,8 +8,8 @@ require (
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gnostic v0.5.7-v3refs
 	github.com/google/go-jsonnet v0.19.1
-	github.com/googleapis/gnostic v0.5.5
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/klauspost/compress v1.13.6
 	github.com/kubecfg/yaml/v2 v2.4.2
@@ -25,13 +25,13 @@ require (
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/crypto v0.6.0
 	helm.sh/helm/v3 v3.8.2
-	k8s.io/api v0.23.6
+	k8s.io/api v0.24.10
 	k8s.io/apiextensions-apiserver v0.23.6
-	k8s.io/apimachinery v0.23.6
-	k8s.io/client-go v0.23.6
+	k8s.io/apimachinery v0.24.10
+	k8s.io/client-go v0.24.10
 	k8s.io/klog/v2 v2.90.0
-	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
-	k8s.io/kubectl v0.23.6
+	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42
+	k8s.io/kubectl v0.24.10
 	oras.land/oras-go v1.2.2
 	oras.land/oras-go/v2 v2.0.0
 )
@@ -62,6 +62,7 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
+	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
@@ -92,6 +93,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
@@ -126,9 +128,9 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
-	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
+	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
