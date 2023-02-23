@@ -209,6 +209,13 @@ func (d *memcachedDiscoveryClient) OpenAPIV3() openapi_v3.Client {
 	return d.openapiV3Client
 }
 
+// taken from: https://github.com/kubernetes/client-go/commit/3ac73ea2c834b1268732024766f1e55a5d0327d2#diff-46edd694bf30a54d9f6e202e010134bedfce438de77f57830155b0762eda7bf6R280-R285
+// WithLegacy returns current cached discovery client;
+// current client does not support legacy-only discovery.
+func (d *memcachedDiscoveryClient) WithLegacy() discovery.DiscoveryInterface {
+	return d
+}
+
 // refreshLocked refreshes the state of cache. The caller must hold d.lock for
 // writing.
 func (d *memcachedDiscoveryClient) refreshLocked() error {
