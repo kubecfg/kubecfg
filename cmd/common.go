@@ -16,10 +16,7 @@
 package cmd
 
 import (
-	"fmt"
-
 	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -54,32 +51,4 @@ func addCommonEvalFlags(flags *flag.FlagSet, opt ...commonEvalFlagOpt) {
 	}
 	flags.StringP(flagExec, shortEval, "", "Inline code") // like `jsonnet -e`
 	flags.String(flagOverlay, "", "Jsonnet file to compose to each of the input files")
-}
-
-func processCommonEvalFlags(flags *flag.FlagSet, args *[]string) error {
-	exec, err := flags.GetString(flagExec)
-	if err != nil {
-		return err
-	}
-	if exec != "" {
-		*args = append(*args, toDataURL(exec))
-	}
-
-	overlay, err := flags.GetString(flagOverlay)
-	if err != nil {
-		return err
-	}
-	if overlay != "" {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlay, flagAlpha)
-		}
-		overlayExpression := func(src string) string {
-			return toDataURL(fmt.Sprintf(`(import %q) + (import %q)`, src, overlay))
-		}
-		for i := range *args {
-			(*args)[i] = overlayExpression((*args)[i])
-		}
-	}
-	return nil
 }

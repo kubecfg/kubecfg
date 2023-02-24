@@ -56,10 +56,6 @@ var updateCmd = &cobra.Command{
 		var err error
 		c := kubecfg.UpdateCmd{}
 
-		if err := processCommonEvalFlags(flags, &args); err != nil {
-			return err
-		}
-
 		validate, err := flags.GetBool(flagValidate)
 		if err != nil {
 			return err

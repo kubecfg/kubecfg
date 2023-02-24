@@ -46,10 +46,6 @@ var validateCmd = &cobra.Command{
 
 		c := kubecfg.ValidateCmd{}
 
-		if err := processCommonEvalFlags(flags, &args); err != nil {
-			return err
-		}
-
 		_, c.Mapper, c.Discovery, err = getDynamicClients(cmd)
 		if err != nil {
 			return err

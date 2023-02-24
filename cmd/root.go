@@ -281,11 +281,37 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 }
 
 func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
+	flags := cmd.Flags()
+
+	exec, err := flags.GetString(flagExec)
+	if err != nil {
+		return nil, err
+	}
+	if exec != "" {
+		paths = append(paths, utils.ToDataURL(exec))
+	}
+
+	overlay, err := flags.GetString(flagOverlay)
+	if err != nil {
+		return nil, err
+	}
+	if overlay != "" {
+		alpha := viper.GetBool(flagAlpha)
+		if !alpha {
+			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlay, flagAlpha)
+		}
+		opts = append(opts, utils.WithOverlayURL(overlay))
+	}
+	return readObjsInternal(cmd, paths, opts...)
+}
+
+func readObjsInternal(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
 	vm, err := JsonnetVM(cmd)
 	if err != nil {
 		return nil, err
 	}
 	return kubecfg.ReadObjects(vm, paths, opts...)
+
 }
 
 // For debugging
@@ -297,10 +323,6 @@ func dumpJSON(v interface{}) string {
 		return err.Error()
 	}
 	return string(buf.Bytes())
-}
-
-func toDataURL(code string) string {
-	return fmt.Sprintf("data:,%s", url.PathEscape(code))
 }
 
 func getDynamicClients(cmd *cobra.Command) (dynamic.Interface, meta.RESTMapper, discovery.DiscoveryInterface, error) {
