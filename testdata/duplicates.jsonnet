@@ -7,6 +7,9 @@
         name: 'foo',
         namespace: 'myns',
       },
+      data: {
+        some: 'value1',
+      },
     },
   },
   t2: {
@@ -16,6 +19,9 @@
       metadata: {
         name: 'foo',
         namespace: 'myns',
+      },
+      data: {
+        some: 'value2',
       },
     },
   },
