@@ -28,3 +28,16 @@ func TestReadObjsDuplicatesVersion(t *testing.T) {
 		t.Fatalf("got: %s, want: %s", got, want)
 	}
 }
+
+func TestReadObjsDuplicatesLiteral(t *testing.T) {
+	cmd := RootCmd
+	if err := cmd.ParseFlags(nil); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := readObjs(cmd, []string{filepath.FromSlash("../testdata/duplicates_literal.jsonnet")})
+	if err != nil {
+		got := err.Error()
+		t.Fatalf("got: %s, want: nil", got)
+	}
+}
