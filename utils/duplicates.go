@@ -45,6 +45,8 @@ func CheckDuplicates(objs []*unstructured.Unstructured) error {
 
 func hash(obj *unstructured.Unstructured) string {
 	h := sha1.New()
-	json.NewEncoder(h).Encode(obj)
+	if err := json.NewEncoder(h).Encode(obj); err != nil {
+		panic(fmt.Errorf("unexpected error encoding unstructured object as json: %w", err))
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
