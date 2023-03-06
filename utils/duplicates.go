@@ -18,6 +18,7 @@ package utils
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -44,9 +45,6 @@ func CheckDuplicates(objs []*unstructured.Unstructured) error {
 
 func hash(obj *unstructured.Unstructured) string {
 	h := sha1.New()
-	// ignore error based on the unvalidated assumption that we already have a valid, marshallable unstructured object
-	json, _ := obj.MarshalJSON()
-	h.Write([]byte(json))
-
+	json.NewEncoder(h).Encode(obj)
 	return hex.EncodeToString(h.Sum(nil))
 }
