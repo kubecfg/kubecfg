@@ -24,13 +24,13 @@ import (
 // CheckDuplicates returns error if the provided object slice contains multiple
 // objects sharing the same version/kind/namespace/name combination.
 func CheckDuplicates(objs []*unstructured.Unstructured) error {
-	seen := map[string]struct{}{}
+	seen := map[string]string{}
 	for _, o := range objs {
 		k := fmt.Sprintf("%s, %q, %q", o.GroupVersionKind().GroupKind(), o.GetNamespace(), o.GetName())
 		if _, found := seen[k]; found {
 			return fmt.Errorf("duplicate resource %s", k)
 		}
-		seen[k] = struct{}{}
+		seen[k] = ""
 	}
 	return nil
 }
