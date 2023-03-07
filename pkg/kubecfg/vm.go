@@ -242,8 +242,9 @@ func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*u
 
 		res = append(res, utils.FlattenToV1(objs)...)
 	}
-	if err := utils.CheckDuplicates(res); err != nil {
+	deduped, err := utils.RemoveDuplicates(res)
+	if err != nil {
 		return nil, err
 	}
-	return res, nil
+	return deduped, nil
 }

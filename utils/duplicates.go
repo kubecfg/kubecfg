@@ -24,23 +24,33 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// CheckDuplicates returns error if the provided object slice contains multiple
-// objects sharing the same version/kind/namespace/name combination.
-func CheckDuplicates(objs []*unstructured.Unstructured) error {
-	seen := map[string]string{}
+type objectHashPair struct {
+	object *unstructured.Unstructured
+	hash   string
+}
+
+// RemoveDuplicates returns error if the provided object slice contains multiple
+// objects sharing the same version/kind/namespace/name combination that are not literal matches.
+func RemoveDuplicates(objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
+	seen := map[string]objectHashPair{}
 	for _, o := range objs {
 		k := fmt.Sprintf("%s, %q, %q", o.GroupVersionKind().GroupKind(), o.GetNamespace(), o.GetName())
-		v := hash(o)
+		v := objectHashPair{o, hash(o)}
 		if h, found := seen[k]; found {
 			// allow but elide literal duplicates
-			if h == v {
+			if h.hash == v.hash {
 				continue
 			}
-			return fmt.Errorf("duplicate resource %s", k)
+			return nil, fmt.Errorf("duplicate resource %s", k)
 		}
 		seen[k] = v
 	}
-	return nil
+
+	ret := make([]*unstructured.Unstructured, 0, len(seen))
+	for _, v := range seen {
+		ret = append(ret, v.object)
+	}
+	return ret, nil
 }
 
 func hash(obj *unstructured.Unstructured) string {
