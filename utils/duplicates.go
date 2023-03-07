@@ -45,8 +45,29 @@ func CheckDuplicates(objs []*unstructured.Unstructured) error {
 
 func hash(obj *unstructured.Unstructured) string {
 	h := sha1.New()
-	if err := json.NewEncoder(h).Encode(obj); err != nil {
+	// strip provenance annotations as they have the potential to make every object unique
+	if err := json.NewEncoder(h).Encode(withoutProvenanceAnnotations(obj)); err != nil {
 		panic(fmt.Errorf("unexpected error encoding unstructured object as json: %w", err))
 	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func withoutProvenanceAnnotations(obj *unstructured.Unstructured) *unstructured.Unstructured {
+	copy := obj.DeepCopy()
+
+	annotations := copy.GetAnnotations()
+	if annotations == nil {
+		return copy
+	}
+
+	if _, ok := annotations[AnnotationProvenanceFile]; ok {
+		delete(annotations, AnnotationProvenanceFile)
+	}
+	if _, ok := annotations[AnnotationProvenancePath]; ok {
+		delete(annotations, AnnotationProvenancePath)
+	}
+
+	copy.SetAnnotations(annotations)
+
+	return copy
 }
