@@ -8,7 +8,7 @@ require (
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.5.2
-	github.com/google/gnostic v0.5.7-v3refs
+	github.com/google/gnostic v0.6.9
 	github.com/google/go-jsonnet v0.19.1
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/klauspost/compress v1.13.6
