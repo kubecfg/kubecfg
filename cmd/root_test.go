@@ -37,7 +37,7 @@ func TestReadObjsDuplicatesLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readObjs(cmd, []string{filepath.FromSlash("../testdata/duplicates_literal.jsonnet")})
+	_, err := readObjsInternal(cmd, []string{filepath.FromSlash("../testdata/duplicates_literal.jsonnet")})
 	if err != nil {
 		got := err.Error()
 		t.Fatalf("got: %s, want: nil", got)
@@ -50,7 +50,7 @@ func TestReadObjsDuplicatesLiteralShowProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readObjs(cmd, []string{filepath.FromSlash("../testdata/duplicates_literal.jsonnet")}, utils.WithProvenance(true))
+	_, err := readObjsInternal(cmd, []string{filepath.FromSlash("../testdata/duplicates_literal.jsonnet")}, utils.WithProvenance(true))
 	if err != nil {
 		got := err.Error()
 		t.Fatalf("got: %s, want: nil", got)
