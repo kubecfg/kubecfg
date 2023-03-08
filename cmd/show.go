@@ -50,10 +50,6 @@ var showCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 
-		if err := processCommonEvalFlags(flags, &args); err != nil {
-			return err
-		}
-
 		outputFormat, err := flags.GetString(flagFormat)
 		if err != nil {
 			return err

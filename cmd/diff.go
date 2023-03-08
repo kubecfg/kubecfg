@@ -45,10 +45,6 @@ var diffCmd = &cobra.Command{
 
 		c := kubecfg.DiffCmd{}
 
-		if err := processCommonEvalFlags(flags, &args); err != nil {
-			return err
-		}
-
 		c.DiffStrategy, err = flags.GetString(flagDiffStrategy)
 		if err != nil {
 			return err

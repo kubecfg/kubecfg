@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	jsonnet "github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/internal/acquire"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,29 +40,36 @@ const (
 	AnnotationProvenancePath = "kubecfg.github.com/provenance-path"
 )
 
-type readOptions struct {
-	showProvenance bool
-	readTwice      bool
-	expr           string
-}
-
-type ReadOption func(*readOptions)
+// breaks import cycle
+type ReadOption = acquire.ReadOption
 
 func WithProvenance(show bool) ReadOption {
-	return func(opts *readOptions) {
-		opts.showProvenance = show
+	return func(opts *acquire.ReadOptions) {
+		opts.ShowProvenance = show
 	}
 }
 
 func WithReadTwice(twice bool) ReadOption {
-	return func(opts *readOptions) {
-		opts.readTwice = twice
+	return func(opts *acquire.ReadOptions) {
+		opts.ReadTwice = twice
 	}
 }
 
 func WithExpr(expr string) ReadOption {
-	return func(opts *readOptions) {
-		opts.expr = expr
+	return func(opts *acquire.ReadOptions) {
+		opts.Expr = expr
+	}
+}
+
+func WithOverlayURL(overlayURL string) ReadOption {
+	return func(opts *acquire.ReadOptions) {
+		opts.OverlayURL = overlayURL
+	}
+}
+
+func WithOverlayCode(overlayCode string) ReadOption {
+	return func(opts *acquire.ReadOptions) {
+		opts.OverlayCode = overlayCode
 	}
 }
 
@@ -69,10 +77,7 @@ func WithExpr(expr string) ReadOption {
 // TODO: Replace this with something supporting more sophisticated
 // content negotiation.
 func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, error) {
-	var opt readOptions
-	for _, o := range opts {
-		o(&opt)
-	}
+	opt := acquire.MakeReadOptions(opts)
 
 	if isURL(path) {
 		return jsonnetReader(vm, path, opt)
@@ -243,7 +248,7 @@ func expandDataURL(pathURL string) (string, string, error) {
 	return content, foundAt, nil
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Object, error) {
+func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]runtime.Object, error) {
 	// TODO(mkm): evaluate expressions in opts.expr
 
 	pathURL, err := PathToURL(path)
@@ -268,7 +273,7 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Obj
 
 	log.Debugf("jsonnet result is: %s", jsonstr)
 
-	if opts.readTwice {
+	if opts.ReadTwice {
 		str2, err := vm.EvaluateSnippet(foundAt, content)
 		if err != nil {
 			return nil, fmt.Errorf("error re-reading %s: %w", foundAt, err)
@@ -286,7 +291,7 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts readOptions) ([]runtime.Obj
 
 	var ret []runtime.Object
 	visitor := func(c *walkContext, obj *unstructured.Unstructured) error {
-		if opts.showProvenance {
+		if opts.ShowProvenance {
 			annotateProvenance(c, obj)
 		}
 		ret = append(ret, obj)
@@ -318,4 +323,8 @@ func FlattenToV1(objs []runtime.Object) []*unstructured.Unstructured {
 		}
 	}
 	return ret
+}
+
+func ToDataURL(code string) string {
+	return fmt.Sprintf("data:,%s", url.PathEscape(code))
 }
