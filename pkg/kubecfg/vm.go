@@ -24,6 +24,7 @@ import (
 
 	"github.com/genuinetools/reg/registry"
 	"github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/internal/acquire"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
 	log "github.com/sirupsen/logrus"
@@ -233,6 +234,25 @@ func dirURL(path string) *url.URL {
 // ReadObjects evaluates all jsonnet files in paths and return all the k8s objects found in it.
 // Unlike utils.Read this checks for duplicates and flattens the v1 Lists.
 func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
+	opt := acquire.MakeReadOptions(opts)
+
+	if overlay := opt.OverlayURL; overlay != "" {
+		overlayExpression := func(url string) string {
+			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (import %q)`, url, overlay))
+		}
+		for i := range paths {
+			paths[i] = overlayExpression(paths[i])
+		}
+	}
+	if overlay := opt.OverlayCode; overlay != "" {
+		overlayExpression := func(src string) string {
+			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, src, overlay))
+		}
+		for i := range paths {
+			paths[i] = overlayExpression(paths[i])
+		}
+	}
+
 	res := []*unstructured.Unstructured{}
 	for _, path := range paths {
 		objs, err := utils.Read(vm, path, opts...)

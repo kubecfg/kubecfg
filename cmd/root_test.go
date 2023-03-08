@@ -13,7 +13,7 @@ func TestReadObjsDuplicates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readObjs(cmd, []string{filepath.FromSlash("../testdata/duplicates.jsonnet")})
+	_, err := readObjsInternal(cmd, []string{filepath.FromSlash("../testdata/duplicates.jsonnet")})
 	if got, want := err.Error(), `duplicate resource ConfigMap, "myns", "foo"`; got != want {
 		t.Fatalf("got: %s, want: %s", got, want)
 	}
@@ -25,7 +25,7 @@ func TestReadObjsDuplicatesVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readObjs(cmd, []string{filepath.FromSlash("../testdata/duplicates_version.jsonnet")})
+	_, err := readObjsInternal(cmd, []string{filepath.FromSlash("../testdata/duplicates_version.jsonnet")})
 	if got, want := err.Error(), `duplicate resource Ingress.networking.k8s.io, "myns", "foo"`; got != want {
 		t.Fatalf("got: %s, want: %s", got, want)
 	}

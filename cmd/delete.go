@@ -43,10 +43,6 @@ var deleteCmd = &cobra.Command{
 
 		c := kubecfg.DeleteCmd{}
 
-		if err := processCommonEvalFlags(flags, &args); err != nil {
-			return err
-		}
-
 		c.GracePeriod, err = flags.GetInt64(flagGracePeriod)
 		if err != nil {
 			return err
