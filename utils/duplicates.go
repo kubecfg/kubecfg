@@ -16,21 +16,62 @@
 package utils
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// CheckDuplicates returns error if the provided object slice contains multiple
-// objects sharing the same version/kind/namespace/name combination.
-func CheckDuplicates(objs []*unstructured.Unstructured) error {
-	seen := map[string]struct{}{}
+// RemoveDuplicates returns error if the provided object slice contains multiple
+// objects sharing the same version/kind/namespace/name combination that are not literal matches.
+func RemoveDuplicates(objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
+	seen := map[string]string{}
+	var ret []*unstructured.Unstructured
+
 	for _, o := range objs {
 		k := fmt.Sprintf("%s, %q, %q", o.GroupVersionKind().GroupKind(), o.GetNamespace(), o.GetName())
-		if _, found := seen[k]; found {
-			return fmt.Errorf("duplicate resource %s", k)
+		v := hash(o)
+		if h, found := seen[k]; found {
+			// allow but elide literal duplicates
+			if h == v {
+				continue
+			}
+			return nil, fmt.Errorf("duplicate resource %s", k)
 		}
-		seen[k] = struct{}{}
+		seen[k] = v
+		ret = append(ret, o)
 	}
-	return nil
+
+	return ret, nil
+}
+
+func hash(obj *unstructured.Unstructured) string {
+	h := sha1.New()
+	// strip provenance annotations as they have the potential to make every object unique
+	if err := json.NewEncoder(h).Encode(withoutProvenanceAnnotations(obj)); err != nil {
+		panic(fmt.Errorf("unexpected error encoding unstructured object as json: %w", err))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func withoutProvenanceAnnotations(obj *unstructured.Unstructured) *unstructured.Unstructured {
+	copy := obj.DeepCopy()
+
+	annotations := copy.GetAnnotations()
+	if annotations == nil {
+		return copy
+	}
+
+	if _, ok := annotations[AnnotationProvenanceFile]; ok {
+		delete(annotations, AnnotationProvenanceFile)
+	}
+	if _, ok := annotations[AnnotationProvenancePath]; ok {
+		delete(annotations, AnnotationProvenancePath)
+	}
+
+	copy.SetAnnotations(annotations)
+
+	return copy
 }

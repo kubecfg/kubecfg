@@ -8,7 +8,7 @@
         namespace: 'myns',
       },
       data: {
-        some: 'value1',
+        some: 'value',
       },
     },
   },
@@ -21,7 +21,7 @@
         namespace: 'myns',
       },
       data: {
-        some: 'value2',
+        some: 'value',
       },
     },
   },
