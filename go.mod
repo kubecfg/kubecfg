@@ -29,7 +29,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.26.0
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
-	k8s.io/klog/v2 v2.90.0
+	k8s.io/klog/v2 v2.90.1
 	k8s.io/kube-openapi v0.0.0-20230303024457-afdc3dddf62d
 	k8s.io/kubectl v0.26.1
 	oras.land/oras-go v1.2.2
