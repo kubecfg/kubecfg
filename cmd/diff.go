@@ -32,7 +32,7 @@ func init() {
 	cmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all, subset or last-applied")
 	cmd.PersistentFlags().Bool(flagOmitSecrets, false, "hide secret details when showing diff")
 
-	addCommonEvalFlags(cmd.PersistentFlags())
+	addCommonEvalFlags(cmd)
 }
 
 var diffCmd = &cobra.Command{
