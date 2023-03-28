@@ -98,7 +98,7 @@ func Read(vm *jsonnet.VM, path string, opts ...ReadOption) ([]runtime.Object, er
 		}
 		defer f.Close()
 		return yamlReader(f)
-	case ".jsonnet":
+	case ".jsonnet", ".libsonnet":
 		return jsonnetReader(vm, path, opt)
 	}
 	return nil, fmt.Errorf("unknown file extension: %s", path)
