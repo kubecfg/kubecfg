@@ -26,6 +26,8 @@ const (
 	flagOverlay         = "overlay" // deprecated
 	flagOverlayCode     = "overlay-code"
 	flagOverlayCodeFile = "overlay-code-file"
+
+	evalCmdAnno = "evalCmd"
 )
 
 type commonFlagOpts struct {

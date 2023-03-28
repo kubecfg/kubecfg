@@ -44,9 +44,10 @@ func init() {
 }
 
 var showCmd = &cobra.Command{
-	Use:   "show",
-	Short: "Show expanded resource definitions",
-	Args:  cobra.ArbitraryArgs,
+	Use:         "show",
+	Short:       "Show expanded resource definitions",
+	Args:        cobra.ArbitraryArgs,
+	Annotations: map[string]string{evalCmdAnno: ""},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 
