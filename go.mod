@@ -33,7 +33,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20230303024457-afdc3dddf62d
 	k8s.io/kubectl v0.26.3
 	oras.land/oras-go v1.2.3
-	oras.land/oras-go/v2 v2.0.0
+	oras.land/oras-go/v2 v2.0.2
 )
 
 require (
