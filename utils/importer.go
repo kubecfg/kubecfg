@@ -61,6 +61,7 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
 	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
 	t.RegisterProtocol("oci", newOCIImporter())
+	t.RegisterProtocol("data", newDataURIImporter())
 
 	return &universalImporter{
 		BaseSearchURLs: searchURLs,
