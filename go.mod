@@ -7,7 +7,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.3
 	github.com/google/gnostic v0.6.9
 	github.com/google/go-jsonnet v0.19.1
 	github.com/hexops/gotextdiff v1.0.3
@@ -15,7 +15,7 @@ require (
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.17
 	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.26.0
+	github.com/onsi/gomega v1.27.5
 	github.com/opencontainers/image-spec v1.1.0-rc2
 	github.com/sergi/go-diff v1.3.1
 	github.com/sirupsen/logrus v1.9.0
