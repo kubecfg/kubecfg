@@ -37,7 +37,7 @@ func init() {
 	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
 	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
 
-	addCommonEvalFlags(cmd.PersistentFlags(), withoutShortEvalFlag())
+	addCommonEvalFlags(cmd, withoutShortEvalFlag())
 }
 
 func tlaNames(flags *pflag.FlagSet) ([]string, error) {

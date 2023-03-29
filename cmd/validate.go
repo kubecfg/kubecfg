@@ -33,7 +33,7 @@ func init() {
 	cmd.PersistentFlags().Bool(flagIgnoreUnknown, true, "Don't fail if the schema for a given resource type is not found")
 	cmd.PersistentFlags().Bool(flagRepeatEval, true, "Repeat evaluation twice to verify idempotency")
 
-	addCommonEvalFlags(cmd.PersistentFlags())
+	addCommonEvalFlags(cmd)
 }
 
 var validateCmd = &cobra.Command{

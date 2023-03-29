@@ -291,17 +291,40 @@ func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*
 		paths = append(paths, utils.ToDataURL(exec))
 	}
 
+	overlayCodeFile, err := flags.GetString(flagOverlayCodeFile)
+	if err != nil {
+		return nil, err
+	}
+
 	overlay, err := flags.GetString(flagOverlay)
 	if err != nil {
 		return nil, err
 	}
 	if overlay != "" {
+		// deprecated. pflag will print a warning
+		overlayCodeFile = overlay
+	}
+
+	if overlayCodeFile != "" {
 		alpha := viper.GetBool(flagAlpha)
 		if !alpha {
-			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlay, flagAlpha)
+			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlayCodeFile, flagAlpha)
 		}
-		opts = append(opts, utils.WithOverlayURL(overlay))
+		opts = append(opts, utils.WithOverlayURL(overlayCodeFile))
 	}
+
+	overlayCode, err := flags.GetString(flagOverlayCode)
+	if err != nil {
+		return nil, err
+	}
+	if overlayCode != "" {
+		alpha := viper.GetBool(flagAlpha)
+		if !alpha {
+			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlayCode, flagAlpha)
+		}
+		opts = append(opts, utils.WithOverlayCode(overlayCode))
+	}
+
 	return readObjsInternal(cmd, paths, opts...)
 }
 

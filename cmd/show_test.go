@@ -44,6 +44,7 @@ func resetFlagsOf(cmd *cobra.Command) {
 		} else {
 			f.Value.Set(f.DefValue)
 		}
+		f.Changed = false
 	})
 	for _, c := range cmd.Commands() {
 		resetFlagsOf(c)
@@ -234,7 +235,7 @@ func TestShowExec(t *testing.T) {
 	}
 }
 
-func TestShowOverlay(t *testing.T) {
+func TestShowOverlayCodeFile(t *testing.T) {
 	// TODO(mkm): fix the reset flags utilities.
 	// This hack ensures that any global state left over from other tests doesn't affect this test
 	// and that any global state left over from this test doesn't affect other tests
@@ -270,8 +271,65 @@ metadata:
 		"show",
 		filepath.FromSlash("../testdata/configmap.jsonnet"),
 		filepath.FromSlash("../testdata/secret.jsonnet"),
-		"--overlay",
+		"--overlay-code-file",
 		filepath.FromSlash("../testdata/namespace-overlay.jsonnet")})
+	want = `---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  namespace: myns
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test
+  namespace: myns
+`
+
+	if got != want {
+		t.Fatalf("got: %q, want: %q", got, want)
+	}
+}
+
+func TestShowOverlayCode(t *testing.T) {
+	// TODO(mkm): fix the reset flags utilities.
+	// This hack ensures that any global state left over from other tests doesn't affect this test
+	// and that any global state left over from this test doesn't affect other tests
+	resetFlagsOf(RootCmd)
+	resetFlagsOf(showCmd)
+	defer resetFlagsOf(RootCmd)
+	defer resetFlagsOf(showCmd)
+
+	got := cmdOutput(t, []string{
+		"--alpha",
+		"show",
+		filepath.FromSlash("../testdata/configmap.jsonnet"),
+		filepath.FromSlash("../testdata/secret.jsonnet"),
+	})
+	want := `---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test
+`
+
+	if got != want {
+		t.Fatalf("got: %q, want: %q", got, want)
+	}
+
+	got = cmdOutput(t, []string{
+		"--alpha",
+		"show",
+		filepath.FromSlash("../testdata/configmap.jsonnet"),
+		filepath.FromSlash("../testdata/secret.jsonnet"),
+		"--overlay-code",
+		`{metadata+:{namespace: 'myns'}}`})
 	want = `---
 apiVersion: v1
 kind: ConfigMap

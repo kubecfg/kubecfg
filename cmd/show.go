@@ -40,7 +40,7 @@ func init() {
 	cmd.PersistentFlags().String(flagExportFileNameExt, "", fmt.Sprintf("Override the file extension used when creating filenames when using %s", flagExportFileNameFormat))
 	cmd.PersistentFlags().Bool(flagShowProvenance, false, "Add provenance annotations showing the file and the field path to each rendered k8s object")
 
-	addCommonEvalFlags(cmd.PersistentFlags())
+	addCommonEvalFlags(cmd)
 }
 
 var showCmd = &cobra.Command{

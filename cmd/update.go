@@ -44,7 +44,7 @@ func init() {
 	cmd.PersistentFlags().Bool(flagValidate, true, "Validate input against server schema")
 	cmd.PersistentFlags().Bool(flagIgnoreUnknown, false, "Don't fail validation if the schema for a given resource type is not found")
 
-	addCommonEvalFlags(cmd.PersistentFlags())
+	addCommonEvalFlags(cmd)
 }
 
 var updateCmd = &cobra.Command{
