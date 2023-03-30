@@ -15,7 +15,7 @@ require (
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.18
 	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.27.5
+	github.com/onsi/gomega v1.27.6
 	github.com/opencontainers/image-spec v1.1.0-rc2.0.20221005185240-3a7f492d3f1b
 	github.com/sergi/go-diff v1.3.1
 	github.com/sirupsen/logrus v1.9.0
