@@ -30,7 +30,7 @@ require (
 	k8s.io/apimachinery v0.26.3
 	k8s.io/client-go v0.26.3
 	k8s.io/klog/v2 v2.90.1
-	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c
+	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f
 	k8s.io/kubectl v0.26.3
 	oras.land/oras-go v1.2.3
 	oras.land/oras-go/v2 v2.0.2
