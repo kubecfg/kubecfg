@@ -28,6 +28,7 @@ import (
 const (
 	flagExpr     = "expr"
 	flagShowKeys = "show-keys"
+	flagTrace    = "trace"
 )
 
 func init() {
@@ -36,6 +37,7 @@ func init() {
 	cmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
 	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
 	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+	cmd.PersistentFlags().Bool(flagTrace, false, "print a causal trace")
 
 	addCommonEvalFlags(cmd, withoutShortEvalFlag())
 }
@@ -80,6 +82,11 @@ var evalCmd = &cobra.Command{
 		}
 
 		c.ShowKeys, err = flags.GetBool(flagShowKeys)
+		if err != nil {
+			return err
+		}
+
+		c.Trace, err = flags.GetBool(flagTrace)
 		if err != nil {
 			return err
 		}
