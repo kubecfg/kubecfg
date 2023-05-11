@@ -48,9 +48,10 @@ func init() {
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update Kubernetes resources with local config",
-	Args:  cobra.ArbitraryArgs,
+	Use:         "update",
+	Short:       "Update Kubernetes resources with local config",
+	Args:        cobra.ArbitraryArgs,
+	Annotations: map[string]string{evalCmdAnno: ""},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 		var err error

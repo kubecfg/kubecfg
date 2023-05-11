@@ -29,6 +29,7 @@ import (
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -132,8 +133,118 @@ var RootCmd = &cobra.Command{
 			logflags.Set("v", fmt.Sprintf("%d", verbosity*3))
 		}
 
+		if err := flagsFromFile(cmd, args); err != nil {
+			return err
+		}
 		return nil
 	},
+}
+
+func flagsFromFile(cmd *cobra.Command, args []string) error {
+	if _, found := cmd.Annotations[evalCmdAnno]; !found {
+		// ignore flagsFromFile when there are no context files
+		return nil
+	}
+
+	rcFile, found, err := findKubecfgRCFile(args)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	vm, err := kubecfg.JsonnetVM()
+	if err != nil {
+		return err
+	}
+	rcURL, err := utils.PathToURL(rcFile)
+	if err != nil {
+		return err
+	}
+
+	rcStr, err := vm.EvaluateFile(rcURL)
+	if err != nil {
+		return err
+	}
+
+	var rc struct {
+		Commands map[string]map[string]interface{} `json:"commands"`
+	}
+	if err := json.Unmarshal([]byte(rcStr), &rc); err != nil {
+		return err
+	}
+	command := rc.Commands[cmd.Name()]
+
+	for k, v := range command {
+		f := cmd.Flags().Lookup(k)
+
+		normalizeFlagValue := func(v interface{}) string {
+			s := fmt.Sprint(v)
+
+			_, isFileFlag := f.Annotations[cobra.BashCompFilenameExt]
+			_, isDirFlag := f.Annotations[cobra.BashCompSubdirsInDir]
+			if isFileFlag || isDirFlag {
+				return filepath.Join(filepath.Dir(rcFile), s)
+			}
+			return s
+		}
+
+		if !f.Changed {
+			switch v := v.(type) {
+			case []interface{}:
+				var values []string
+				for _, i := range v {
+					values = append(values, normalizeFlagValue(i))
+				}
+				sliceValue, ok := f.Value.(pflag.SliceValue)
+				if !ok {
+					return fmt.Errorf("flag %q is not an array flag, but instead it's a %q", k, f.Value.Type())
+				}
+				sliceValue.Replace(values)
+			default:
+				f.Value.Set(normalizeFlagValue(v))
+			}
+		}
+	}
+
+	return nil
+}
+
+func findKubecfgRCFile(files []string) (string, bool, error) {
+	if len(files) == 0 {
+		return "", false, nil
+	}
+
+	seen := map[string]struct{}{}
+	const noRcFileFound = "<no .kubecfgrc.jsonnet found>"
+
+	for _, f := range files {
+		path, found, err := utils.SearchUp(".kubecfgrc.jsonnet", f)
+		if err != nil {
+			return "", false, err
+		}
+		key := path
+		if !found {
+			key = noRcFileFound
+		}
+		seen[key] = struct{}{}
+	}
+	if len(seen) != 1 {
+		var files []string
+		for k := range seen {
+			files = append(files, k)
+		}
+		return "", false, fmt.Errorf("all evaluated files should resolve to the same .kubecfgrc.jsonnet, found %q instead", files)
+	}
+
+	for k := range seen {
+		if k == noRcFileFound {
+			return "", false, nil
+		} else {
+			return k, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // clientConfig.Namespace() is broken in client-go 3.0:
