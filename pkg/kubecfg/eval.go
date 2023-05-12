@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
-	"github.com/kubecfg/yaml/v2"
 	"github.com/kubecfg/ursonnet"
+	"github.com/kubecfg/yaml/v2"
 )
 
 // EvalCmd represents the eval subcommand
@@ -76,17 +77,23 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	}
 
 	if c.Trace {
-		roots, err := ursonnet.Roots(vm, pathURL, expr)
-		if err != nil {
+		if err := traceback(os.Stderr, vm, pathURL, expr, false); err != nil {
 			return err
-		}
-		for _, r := range roots {
-			if strings.HasPrefix(r, "internal://") {
-				continue
-			}
-			fmt.Fprintln(os.Stderr, strings.TrimPrefix(r, "file://"))
 		}
 	}
 
+	return nil
+}
+
+func traceback(w io.Writer, vm *jsonnet.VM, pathURL string, expr string, showAll bool) error {
+	roots, err := ursonnet.Roots(vm, pathURL, expr)
+	if err != nil {
+		return err
+	}
+	for _, r := range roots {
+		if showAll || strings.HasPrefix(r, "file://") {
+			fmt.Fprintln(w, strings.TrimPrefix(r, "file://"))
+		}
+	}
 	return nil
 }
