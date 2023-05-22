@@ -28,6 +28,8 @@ spec:
         - name: QUX2
           value: QUX2
   replicas: 1
+  someArrayOfScalars:
+  - foo
 `
 
 	testCases := []struct {
@@ -56,6 +58,8 @@ spec:
 		{20, "$.spec.template.spec.containers[1].env[1].name"},
 		{21, "$.spec.template.spec.containers[1].env[1].value"},
 		{22, "$.spec.replicas"},
+		{23, "$.spec.someArrayOfScalars"},
+		{24, "$.spec.someArrayOfScalars[0]"},
 	}
 
 	for i, tc := range testCases {

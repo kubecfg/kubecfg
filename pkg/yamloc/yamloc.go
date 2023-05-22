@@ -90,6 +90,8 @@ func (line lineFinder) visit(acc string, node *yaml.Node) (string, bool, error) 
 			}
 		}
 		return acc, true, nil
+	case yaml.ScalarNode:
+		return acc, false, nil
 	default:
 		return "", false, fmt.Errorf("unhandled node %q", nodeKind(node))
 	}
