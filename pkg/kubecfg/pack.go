@@ -127,6 +127,12 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		Config:    configDesc,
 		Layers:    []ocispec.Descriptor{bodyDesc},
 		Versioned: specs.Versioned{SchemaVersion: 2},
+		Annotations: map[string]string{
+			// compatibility with fluxcd ocirepo source
+			"org.opencontainers.image.created":  "1970-01-01T00:00:00Z",
+			"org.opencontainers.image.revision": "unknown",
+			"org.opencontainers.image.source":   "kubecfg pack",
+		},
 	}
 	manifestBlob, err := json.Marshal(manifest)
 	if err != nil {
