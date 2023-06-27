@@ -35,7 +35,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20230515203736-54b630e78af5
 	k8s.io/kubectl v0.27.2
 	oras.land/oras-go v1.2.3
-	oras.land/oras-go/v2 v2.0.2
+	oras.land/oras-go/v2 v2.2.0
 )
 
 require (
@@ -109,7 +109,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/term v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
