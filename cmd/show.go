@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/utils"
@@ -29,6 +30,7 @@ const (
 	flagExportFileNameFormat = "export-filename-format"
 	flagExportFileNameExt    = "export-filename-extension"
 	flagShowProvenance       = "show-provenance"
+	flagReorder              = "reorder"
 )
 
 func init() {
@@ -39,6 +41,7 @@ func init() {
 	cmd.PersistentFlags().String(flagExportFileNameFormat, kubecfg.DefaultFileNameFormat, "Go template expression used to render path names for resources.")
 	cmd.PersistentFlags().String(flagExportFileNameExt, "", fmt.Sprintf("Override the file extension used when creating filenames when using %s", flagExportFileNameFormat))
 	cmd.PersistentFlags().Bool(flagShowProvenance, false, "Add provenance annotations showing the file and the field path to each rendered k8s object")
+	cmd.PersistentFlags().String(flagReorder, "", "--reorder=server: Reorder resources like the 'update' command does. --reorder=client: TODO")
 
 	addCommonEvalFlags(cmd)
 }
@@ -66,6 +69,10 @@ var showCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		reorder, err := flags.GetString(flagReorder)
+		if err != nil {
+			return err
+		}
 
 		c, err := kubecfg.NewShowCmd(outputFormat, exportDir, exportFileNameFormat, exportFileNameExt)
 		if err != nil {
@@ -80,6 +87,24 @@ var showCmd = &cobra.Command{
 		objs, err := readObjs(cmd, args, utils.WithProvenance(showProvenance))
 		if err != nil {
 			return err
+		}
+
+		switch reorder {
+		case "":
+			// no reordering
+		case "server":
+			_, mapper, discovery, err := getDynamicClients(cmd)
+			if err != nil {
+				return err
+			}
+
+			depOrder, err := utils.DependencyOrder(discovery, mapper, objs)
+			if err != nil {
+				return err
+			}
+			sort.Sort(depOrder)
+		default:
+			return fmt.Errorf("unsupported %q reordering", reorder)
 		}
 
 		return c.Run(objs, cmd.OutOrStdout())
