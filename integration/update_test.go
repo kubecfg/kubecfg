@@ -23,7 +23,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
