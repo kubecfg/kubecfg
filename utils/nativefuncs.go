@@ -242,6 +242,22 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 			return ret, nil
 		},
 	})
+
+	vm.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "validate",
+		Params: []jsonnetAst.Identifier{"input", "schema"},
+		Func: func(args []interface{}) (res interface{}, err error) {
+
+			// Take input jsonnet
+			// validate against schema
+			// return true/false result
+
+			// input := args[0].(string)
+			// schema := args[1].(string)
+
+			return "", nil
+		},
+	})
 }
 
 func unmarshalYAMLString(yamlStr string) ([]interface{}, error) {
