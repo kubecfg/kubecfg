@@ -13,7 +13,7 @@ For a more detailed explanation of how Metacontroller works and the many options
 `Kubecfg` integrates with Metacontroller by exposing an `httpd` endpoint that accept `POSTs` from the metacontroller and respond with the expected JSON object.
 By leveraging `kubecfg` to produce the response you can use all the extra features provided on top of standard jsonnet.
 
-## Architecture
+## Flow Diagram
 
 ``` mermaid
 sequenceDiagram
