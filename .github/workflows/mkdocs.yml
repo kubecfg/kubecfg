@@ -1,12 +1,9 @@
 # Simple workflow for deploying static content to GitHub Pages
 name: Deploy static content to Pages
 
-env:
-  PIP_CACHE_DIR: .pip # Configure the PIP cache directory
-
 on:
   push:
-    paths: [ docs/**.md ] # Only trigger workflow when there are changes on docs
+    #paths: [ docs/**.md ] # Only trigger workflow when there are changes on docs
     branches: [ main, add-docs-github-pages ] # Configure the branchs which you want to run this workflow
 
   # Allows you to run this workflow manually from the Actions tab
@@ -34,24 +31,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.x
-      # Cache dependencies for faster build time in future
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ./.pip
-          key: ${{ runner.os }}-modules-${{ hashFiles('./mkdocs-pip.txt') }}
-      # Install dependencies for build process
-      - name: Install build dependencies
-        run: |
-          pip install -IU -r mkdocs-pip.txt
       # Build docs
       - name: Build documentations
         run: |
-          mkdocs build
+          make build-docs
       - name: Setup Pages
         uses: actions/configure-pages@v3
       - name: Upload artifact
