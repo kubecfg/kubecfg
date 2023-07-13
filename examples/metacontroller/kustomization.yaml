@@ -1,0 +1,10 @@
+resources:
+- v1/crdv1.yaml
+- manifests/deployment.yaml
+- manifests/service.yaml
+- manifests/compositeController.yaml
+configMapGenerator:
+- name: hooks
+  namespace: metacontroller
+  files:
+  - jsonnet/sync.jsonnet

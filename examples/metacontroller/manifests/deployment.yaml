@@ -1,0 +1,37 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: useless-controller
+  namespace: metacontroller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: useless-controller
+  template:
+    metadata:
+      labels:
+        app: useless-controller
+    spec:
+      containers:
+      - name: hooks
+        image: 'ghcr.io/kubecfg/kubecfg/kubecfg@sha256:98d47fc69a7fb9ce5f936d658b1f1ae6f2b1e801255570347c43e2e6b4305965'
+        imagePullPolicy: Always
+        args: ['--alpha', 'httpd', 'sync.jsonnet']
+        env:
+          - name: KUBECFG_JPATH
+            value: '/hooks'
+        workingDir: '/hooks'
+        ports:
+          - name: hook
+            containerPort: 8080
+            protocol: TCP
+        volumeMounts:
+        - name: hooks
+          mountPath: /hooks
+      volumes:
+      - name: hooks
+        configMap:
+          name: hooks
+
