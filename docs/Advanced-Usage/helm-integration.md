@@ -2,6 +2,8 @@
 
 **Supported**: `from version v0.28.0`
 
+---
+
 Kubecfg supports rendering an Helm chart into Jsonnet at runtime using the `parseHelmChart` native extension.
 
 * the Helm Chart source code *must be vendored* and imported as a binary blob using `importbin`
