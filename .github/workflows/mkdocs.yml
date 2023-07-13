@@ -7,7 +7,7 @@ env:
 on:
   push:
     paths: [ docs/**.md ] # Only trigger workflow when there are changes on docs
-    branches: [ main ] # Configure the branchs which you want to run this workflow
+    branches: [ main, add-docs-github-pages ] # Configure the branchs which you want to run this workflow
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
