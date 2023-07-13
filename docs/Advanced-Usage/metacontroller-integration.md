@@ -29,5 +29,4 @@ sequenceDiagram
   Note right of kubecfg-httpd: kubecfg render json response
   kubecfg-httpd-->>metacontroller: response with manifests to create
   metacontroller->>apiserver: Manifests to Create
-  apiserver-->kubernetes: Resources are created
 ```
