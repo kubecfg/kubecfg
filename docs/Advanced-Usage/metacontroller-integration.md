@@ -1,6 +1,6 @@
 # Metacontroller Integration
 
-**Supported**: from version `v0.29.0`
+**Supported**: `from version v0.29.0`
 
 **Alpha Feature**
 
@@ -22,7 +22,9 @@ sequenceDiagram
   loop Validation
       apiserver->>apiserver: Validate CR vs CRD
   end
-  apiserver-->>kubectl: CR Persisted
+  loop ETCd
+      apiserver->>apiserver: CR Persisted
+  end
   metacontroller->>apiserver: Watch for instances of CRD
   Note right of metacontroller: CompositeController defines hooks
   metacontroller->>kubecfg-httpd: POST request to kubecfg-httpd
