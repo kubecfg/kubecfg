@@ -194,8 +194,8 @@ func TestValidateJSONSchema(t *testing.T) {
 
     std.native('validateJSONSchema')(obj, schema)`)
 	if err != nil {
-		if !strings.Contains("invalid against schema", t.Error()) {
-			t.Errorf("expected invalid schema error. got: %s\n", err)
+		if !strings.Contains(err.Error(), "invalid against the schema") {
+			t.Errorf("expected invalid schema error. got: %s\n", err.Error())
 		}
 	}
 }
