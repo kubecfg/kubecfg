@@ -28,6 +28,7 @@ import (
 	goyaml "github.com/ghodss/yaml"
 	jsonnet "github.com/google/go-jsonnet"
 	jsonnetAst "github.com/google/go-jsonnet/ast"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 	log "github.com/sirupsen/logrus"
 	helmLoader "helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -244,18 +245,29 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 	})
 
 	vm.NativeFunction(&jsonnet.NativeFunction{
-		Name:   "validate",
-		Params: []jsonnetAst.Identifier{"input", "schema"},
-		Func: func(args []interface{}) (res interface{}, err error) {
+		Name:   "validateJSONSchema",
+		Params: []jsonnetAst.Identifier{"obj", "schema"},
+		Func: func(args []interface{}) (interface{}, error) {
+			obj := args[0].(map[string]interface{})
+			schema := args[1].(map[string]interface{})
 
-			// Take input jsonnet
-			// validate against schema
-			// return true/false result
+			jSchema, err := json.Marshal(schema)
+			if err != nil {
+				return nil, fmt.Errorf("unable to json marshal schema: %w\n", err)
+			}
 
-			// input := args[0].(string)
-			// schema := args[1].(string)
+			// No URL defaults to draft 7 of JSONSchema
+			sch, err := jsonschema.CompileString("", string(jSchema))
+			if err != nil {
+				return false, fmt.Errorf("unable to compile jsonschema: %w\n", err)
+			}
 
-			return "", nil
+			err = sch.Validate(obj)
+			if err != nil {
+				return false, fmt.Errorf("object is invalid against the schema: %w\n", err)
+			}
+
+			return true, nil
 		},
 	})
 }
