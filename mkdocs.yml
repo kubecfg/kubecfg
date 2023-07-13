@@ -1,0 +1,33 @@
+site_name: KubeCFG
+site_description: 'KubeCFG Documentation'
+
+site_dir: docs-build
+
+theme:
+  name: 'material'
+  logo: 'https://avatars.githubusercontent.com/u/90627713?s=48&v=4' # TODO : Change this logo , it renderes horribly
+  features:
+    - navigation.tracking
+    - navigation.expand
+  palette:
+    primary: 'blue'
+    accent: 'lightblue'
+
+#extra_css:
+#  - 'css/extra.css'
+#extra_javascript:
+#  - js/extra.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/primeroz/kubecfg
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      css_class: code
+      use_pygments: false
+      guess_lang: false
+  - toc:
+      permalink: true
