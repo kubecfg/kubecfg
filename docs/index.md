@@ -1,5 +1,7 @@
 # Welcome to KubeCFG Documentation
 
+**These Docs are a Work in progress and not complete by any means** - *PRs are welcome*
+
 `Kubecfg` is a tool for managing Kubernetes resources as code.
 
 `kubecfg` allows you to express the patterns across your
