@@ -7,6 +7,27 @@ It will traverse the visible elements in the `jsonnet` output and render any obj
 * has a `kind` field
 * has an `apiVersion` field
 
+## Help
+
+```
+Show expanded resource definitions                                                                                                                                                                                 
+                                                                                                         
+Usage:                                                                                                                                                                                                             
+  kubecfg show [flags]                                                                                                                                                                                             
+                                                                                                         
+Flags:                                                                                                   
+  -e, --exec string                        Inline code
+      --export-dir string                  Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.
+      --export-filename-extension string   Override the file extension used when creating filenames when using export-filename-format
+      --export-filename-format string      Go template expression used to render path names for resources. (default "{{.apiVersion}}.{{.kind}}-{{default \"default\" .metadata.namespace}}.{{.metadata.name}}")
+  -o, --format string                      Output format.  Supported values are: json, yaml (default "yaml")
+  -h, --help                               help for show
+      --overlay-code string                Inline Jsonnet code to compose to each of the input files
+      --overlay-code-file string           Jsonnet file to compose to each of the input files
+      --reorder string                     --reorder=server: Reorder resources like the 'update' command does. --reorder=client: TODO
+      --show-provenance                    Add provenance annotations showing the file and the field path to each rendered k8s object
+```
+
 ## Jsonnet Code
 
 ```jsonnet
