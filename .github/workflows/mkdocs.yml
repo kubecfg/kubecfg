@@ -34,7 +34,7 @@ jobs:
       # Build docs
       - name: Build documentations
         run: |
-          make build-docs
+          make build-docs-ci
       - name: Setup Pages
         uses: actions/configure-pages@v3
       - name: Upload artifact
