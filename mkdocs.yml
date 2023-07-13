@@ -9,9 +9,25 @@ theme:
   features:
     - navigation.tracking
     - navigation.expand
+    - navigation.indexes
   palette:
     primary: 'blue'
     accent: 'lightblue'
+
+nav:
+- index.md
+- installation.md
+- Basic-Usage:
+  - Basic-Usage/index.md
+  - Basic-Usage/quickstart.md
+  - Commands:
+    - Basic-Usage/Kubecfg-Commands/show.md
+- Advanced-Usage:
+  - Advanced-Usage/index.md
+  - Advanced-Usage/helm-integration.md
+  - Advanced-Usage/metacontroller-integration.md
+  - Advanced-Usage/OCI-support.md
+
 
 #extra_css:
 #  - 'css/extra.css'
