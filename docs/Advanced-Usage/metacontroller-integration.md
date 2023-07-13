@@ -122,4 +122,44 @@ function(request)
     std.trace('request: ' + std.manifestJsonEx(request, '  ') + '\n\nresponse: ' + std.manifestJsonEx(response, '  '), response)
 ```
 
+
 every object returned in the `children` key will be applied to Kubernetes by the metacontroller
+
+## Example 
+
+When an instance of the `UselessPod` is created 
+
+1. ApiServer will validate the `CR` against the `CRD` definition
+1. Persist the `CR` in etcd
+1. Metacontroller watches the `UselessPods` `CRs` 
+1. when an event on a watched CR is observed a `POST request` will be sent by the `metacontroller` to the `useless-controller` with the CR as part of the request
+1. the `useless-controller` will run `kubecfg` on the `sync.jsonnet` code `Top Level Function` using the request as parameter 
+1. the `response` to the metacontroller will include a `deployment` in the `children` field
+1. the metacontroller will `apply` the `children resources` ( the deployment ) to the apiserver
+1. kubernetes will create the generated deployment
+
+
+```shell
+➜ cat << EOF | kubectl apply -f -           
+apiVersion: "example.com/v1"
+kind: UselessPod
+metadata:
+  name: test1
+  namespace: default
+spec:
+  name: instance1
+EOF
+uselesspod.example.com/test1 created
+```
+
+```shell
+➜ kubectl rollout status -n default deployment/useless-instance1 
+deployment "useless-instance1" successfully rolled out
+```
+
+## Cleanup
+
+```shell
+➜ make clean
+```
+
