@@ -30,5 +30,5 @@ sequenceDiagram
   metacontroller->>kubecfg-httpd: POST request to kubecfg-httpd
   Note right of kubecfg-httpd: kubecfg render json response
   kubecfg-httpd-->>metacontroller: response with manifests to create
-  metacontroller->>apiserver: Manifests to Create
+  metacontroller-->>apiserver: Manifests to Create
 ```
