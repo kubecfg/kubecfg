@@ -55,6 +55,8 @@ partitioned roll out complete: 1 new pods have been updated...
 Create the example `useless-controller`
 
 ```shell
+➜ make controller
+
 ➜ kubectl rollout status --timeout 180s -n metacontroller deployment/useless-controller
 deployment "useless-controller" successfully rolled out
 ```
