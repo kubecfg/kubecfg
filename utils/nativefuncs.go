@@ -264,7 +264,7 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 
 			err = sch.Validate(obj)
 			if err != nil {
-				return false, fmt.Errorf("object is invalid against the schema: %w\n", err)
+				return nil, fmt.Errorf("object is invalid against the schema: %w\n", err)
 			}
 
 			return true, nil
