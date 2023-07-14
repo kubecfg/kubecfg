@@ -18,6 +18,7 @@ package utils
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
@@ -147,6 +148,56 @@ func TestParseHelmChart(t *testing.T) {
    "docker.io/bitnami/mysql:8.0.28-debian-10-r23"
 ]
 `)
+}
+
+func TestValidateJSONSchema(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+
+	res, err := vm.EvaluateSnippet("validObject", `
+    local schema = {
+      type: 'object',
+      properties: {
+        age: {
+          description: 'Age in years which must be equal to or greater than zero.',
+          type: 'integer',
+          minimum: 0,
+        },
+      },
+    };
+    local obj = {
+      age: 26,
+    };
+
+    std.native('validateJSONSchema')(obj, schema)`)
+	check(t, err, res, "true\n")
+
+	res, err = vm.EvaluateSnippet("invalidObjectErrors", `
+    local schema = {
+      type: 'object',
+      properties: {
+        projectName: {
+          description: 'projectName is required for the name of a project',
+          type: 'string',
+        },
+        language: {
+          description: 'Programming language implementation',
+          type: 'string',
+        },
+      },
+      required: ["projectName"],
+    };
+
+    local obj = {
+        language: 'go',
+    };
+
+    std.native('validateJSONSchema')(obj, schema)`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "invalid against the schema") {
+			t.Errorf("expected invalid schema error. got: %s\n", err.Error())
+		}
+	}
 }
 
 func TestArrayReader(t *testing.T) {
