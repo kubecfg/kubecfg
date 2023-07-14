@@ -26,7 +26,7 @@
 
 // This example uses kube.libsonnet from Bitnami.  There are other
 // Kubernetes libraries available, or write your own!
-local kube = import "https://github.com/bitnami-labs/kube-libsonnet/raw/52ba963ca44f7a4960aeae9ee0fbee44726e481f/kube.libsonnet";
+local kube = import 'https://github.com/bitnami-labs/kube-libsonnet/raw/52ba963ca44f7a4960aeae9ee0fbee44726e481f/kube.libsonnet';
 
 // A function that returns 2 k8s objects: a redis Deployment and Service
 local redis(name) = {
@@ -40,17 +40,17 @@ local redis(name) = {
       template+: {
         spec+: {
           containers_: {
-            redis: kube.Container("redis") {
-              image: "bitnami/redis:4.0.9",
-              resources: {requests: {cpu: "100m", memory: "100Mi"}},
-              ports: [{containerPort: 6379}],
+            redis: kube.Container('redis') {
+              image: 'bitnami/redis:4.0.9',
+              resources: { requests: { cpu: '100m', memory: '100Mi' } },
+              ports: [{ containerPort: 6379 }],
 
               // kube.libsonnet has a few optional "underscore"
               // helpers to convert k8s API structures into more
               // natural jsonnet structures.  See kube.libsonnet.
               env_: {
-                REDIS_REPLICATION_MODE: "master",
-                ALLOW_EMPTY_PASSWORD: "yes",
+                REDIS_REPLICATION_MODE: 'master',
+                ALLOW_EMPTY_PASSWORD: 'yes',
               },
             },
           },
@@ -65,25 +65,25 @@ local redis(name) = {
 // (array or object) of Kubernetes API objects.
 {
   frontend: {
-    svc: kube.Service("frontend") {
+    svc: kube.Service('frontend') {
       target_pod: $.frontend.deploy.spec.template,
-      spec+: {type: "LoadBalancer"},
+      spec+: { type: 'LoadBalancer' },
     },
 
-    deploy: kube.Deployment("frontend") {
+    deploy: kube.Deployment('frontend') {
       spec+: {
         replicas: 3,
         template+: {
           spec+: {
             containers_+: {
-              frontend: kube.Container("php-redis") {
-                image: "gcr.io/google-samples/gb-frontend:v3",
+              frontend: kube.Container('php-redis') {
+                image: 'gcr.io/google-samples/gb-frontend:v3',
                 resources: {
-                  requests: {cpu: "100m", memory: "100Mi"},
+                  requests: { cpu: '100m', memory: '100Mi' },
                 },
-                ports: [{containerPort: 80}],
+                ports: [{ containerPort: 80 }],
                 readinessProbe: {
-                  httpGet: {path: "/", port: 80},
+                  httpGet: { path: '/', port: 80 },
                 },
                 livenessProbe: self.readinessProbe {
                   initialDelaySeconds: 10,
@@ -96,10 +96,10 @@ local redis(name) = {
     },
   },
 
-  master: redis("redis-master"),
+  master: redis('redis-master'),
 
   // "Override" some parameters in the slave redis Deployment.
-  slave: redis("redis-slave") {
+  slave: redis('redis-slave') {
     deploy+: {
       spec+: {
         replicas: 2,
@@ -108,9 +108,9 @@ local redis(name) = {
             containers_+: {
               redis+: {
                 env_+: {
-                  REDIS_REPLICATION_MODE: "slave",
+                  REDIS_REPLICATION_MODE: 'slave',
                   REDIS_MASTER_HOST: $.master.svc.metadata.name,
-                  REDIS_MASTER_PORT_NUMBER: "6379",
+                  REDIS_MASTER_PORT_NUMBER: '6379',
                 },
               },
             },
