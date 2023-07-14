@@ -253,18 +253,18 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 
 			jSchema, err := json.Marshal(schema)
 			if err != nil {
-				return nil, fmt.Errorf("unable to json marshal schema: %w\n", err)
+				return nil, fmt.Errorf("unable to json marshal schema: %w", err)
 			}
 
 			// No URL defaults to draft 7 of JSONSchema
 			sch, err := jsonschema.CompileString("", string(jSchema))
 			if err != nil {
-				return false, fmt.Errorf("unable to compile jsonschema: %w\n", err)
+				return false, fmt.Errorf("unable to compile jsonschema: %w", err)
 			}
 
 			err = sch.Validate(obj)
 			if err != nil {
-				return nil, fmt.Errorf("object is invalid against the schema: %w\n", err)
+				return nil, fmt.Errorf("object is invalid against the schema: %w", err)
 			}
 
 			return true, nil
