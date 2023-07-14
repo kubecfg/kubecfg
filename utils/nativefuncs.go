@@ -248,8 +248,8 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 		Name:   "validateJSONSchema",
 		Params: []jsonnetAst.Identifier{"obj", "schema"},
 		Func: func(args []interface{}) (interface{}, error) {
-			obj := args[0].(map[string]interface{})
-			schema := args[1].(map[string]interface{})
+			obj := args[0]
+			schema := args[1]
 
 			jSchema, err := json.Marshal(schema)
 			if err != nil {
