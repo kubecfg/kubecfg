@@ -66,7 +66,7 @@
   // validateJSONSchema(obj, schema): Validates a given object against the provided
   // schema. Returns 'true' is the schema is valid. If this is not the case, an error stream
   // is omitted based on the given schema's rules.
-  validateJSONSchema(obj, schema):: std.native('validateJSONSchema')(obj, schema),
+  validateJSONSchema:: std.native('validateJSONSchema'),
 
   // isK8sObject(o): Return true iff o is a Kubernetes object.
   isK8sObject(o):: (
