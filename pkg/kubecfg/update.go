@@ -538,13 +538,13 @@ func getGcTagFromObj(obj metav1.Object) (bool, string) {
 	}
 }
 
-// gcTags: map is used as a set to lookup keys. The values are ignored. 
+// gcTags: map is used as a set to lookup keys. The values are ignored.
 func eligibleForGc(obj metav1.Object, gcTags map[string]bool) bool {
 	objectHasGcTag, objectGcTag := getGcTagFromObj(obj)
 
 	if objectHasGcTag {
-		_, objectGcTagInEligibleGcTags := gcTags[objectGcTag]	
-		
+		_, objectGcTagInEligibleGcTags := gcTags[objectGcTag]
+
 		return objectGcTagInEligibleGcTags
 	} else {
 		return false
