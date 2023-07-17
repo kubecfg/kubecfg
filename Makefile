@@ -73,6 +73,4 @@ clean:
 serve-docs:
 	@docker run --rm -t -i -u $$(id -u) -v `pwd`:/docs -p 8000:8000 squidfunk/mkdocs-material:9 serve -a 0.0.0.0:8000
 build-docs:
-	@docker run --rm -t -i -u $$(id -u) -v `pwd`:/docs -p 8000:8000 squidfunk/mkdocs-material:9 build
-build-docs-ci:
 	@docker run --rm -u $$(id -u) -v `pwd`:/docs -p 8000:8000 squidfunk/mkdocs-material:9 build
