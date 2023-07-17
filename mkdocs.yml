@@ -33,6 +33,7 @@ nav:
   - "Metacontroller Integration": Advanced-Usage/metacontroller-integration.md
   - "OCI Support": Advanced-Usage/OCI-support.md
   - "Provenance and Tracing": Advanced-Usage/provenance-traceback.md
+  - "JSON schema validation": Advanced-Usage/schema-validation.md
 
 
 #extra_css:
