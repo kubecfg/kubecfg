@@ -91,6 +91,114 @@ local data = {
 }
 ```
 
+### Code WalkThrough
+
+* Importing the helm chart bundle
+```
+local data = {
+  '4.7.1': importbin './ingress-nginx-4.7.1.tgz',
+  '4.6.1': importbin './ingress-nginx-4.6.1.tgz',
+  };
+```
+
+Jsonnet does not support `dynamic imports` so all versions that you might want to render must be imported separately
+
+* Configuration of the helm values and version
+
+```
+  _config:: {
+    version: '4.6.1',
+  },
+
+  values:: {
+    nameOverride: 'nginx-example',
+    fullNameOverride: 'nginx-example',
+    commonLabels: { app: 'nginx-example' },
+    controller: {
+      minReadySeconds: 10,
+    },
+  },
+
+  valuesByVersion:: {
+    '4.7.1': {
+      commonLabels+: { extra: 'label' },
+    },
+    '4.6.1': {},
+  },
+```
+
+We define a `common` values in jsonnet syntax and a `per-version` overlay , we also define a `version` key in the `_config` object to use to render the specific version and overlay the right configurations
+
+* render the Helm chart into jsonnet using kubecfg
+
+```
+  renderHelm::
+    kubecfg.fold(
+      kubecfg.layouts.gvkNsName,  // Render list output of ParseHelmChart into a hierarchy layout
+      kubecfg.parseHelmChart(
+        data[$._config.version],
+        'nginx-example',
+        'ingress',
+        $.values + $.valuesByVersion[$._config.version]
+      ),
+      {}
+    ),
+```
+
+Here we wrap the actual `kubecfg.parseHelmChart` into a set of helper functions to get an output that is more flexible to be further extended using jsonnet since the output from the `parseHelmChart` function is a flat list of manifests that jsonnet is not very good at managing and mangling any further.
+
+from the inside to the outside 
+
+* we run `kubecfg.parseHelmChart` passing 
+    * the `binary import of the **data[$._config.version]**` helm chart bundle. by setting the right `version` at runtime we can render different version of the helm chart
+    * the revision name, as expected by helm
+    * the namespace, as expected by helm
+    * the `values` to pass to helm, here we use `jsonnet` to overlay the `common` `$.values` with the `version specific` `values`
+* we call the `kubecfg.fold` function passsing which will iterate over the list ( the output of `parseHelmChart` ) and for each element will call the `layout` function and add the output to the `{}` empty dict
+    * the `layout` we want to use `gvkNsName` or `gvkName`
+    * the output of `parseHelmChart` 
+    * the `initial` `empty dict` to add elements to
+
+the output of such a wrap in `renderHelm` key is a structure like 
+
+```yaml
+renderHelm:
+  "apps.v1": # GROUP.VERSION
+    "deployments": # KIND
+      "ingress": # NAMESPACE
+        "ingress-nginx": # NAME
+  "v1": #GROUP.VERSION
+    "Secrets": # KIND
+      "ingress": # NAMESPACE
+        "some_secret_name": # NAME
+    "ConfigMaps": # KIND
+      "ingress": # NAMESPACE
+        "some_configmap_name": # NAME
+```
+
+This structure is now easy to further work on using `jsonnet`
+
+```jsonnet
+{
+  "renderHelm": "...",
+
+  "objects": renderHelm + {
+    "apps.v1"+: {
+      "deployments"+: {
+        "ingress"+: {
+          "ingress-nginx"+: {
+            "metadata"+: { "labels"+: { "a_label": "a_value" } },
+          }
+        }
+      }
+    }
+
+  }
+}
+
+```
+
+
 ## Render and Export manifests
 
 `kubecfg show --export-dir output/ show.jsonnet`
