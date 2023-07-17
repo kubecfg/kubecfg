@@ -18,8 +18,9 @@ import (
 
 // return sorted list of directory entries and the hash of their contents.
 // Example:
-//   ./foo/bar/baz.yaml:b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c
-//   ./foo/zar/aaa.yaml:7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730
+//
+//	./foo/bar/baz.yaml:b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c
+//	./foo/zar/aaa.yaml:7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730
 func dirDigests(dir string) (res []string, err error) {
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
