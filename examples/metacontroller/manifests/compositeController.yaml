@@ -1,0 +1,22 @@
+---
+apiVersion: metacontroller.k8s.io/v1alpha1
+kind: CompositeController
+metadata:
+  name: useless-controller
+spec:
+  generateSelector: true
+  parentResource:
+    apiVersion: example.com/v1
+    resource: uselesspods
+    revisionHistory:
+      fieldPaths:
+      - spec.name
+  childResources:
+  - apiVersion: apps/v1
+    resource: deployments
+    updateStrategy:
+      method: InPlace
+  hooks:
+    sync:
+      webhook:
+        url: http://useless-controller.metacontroller/sync

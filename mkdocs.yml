@@ -1,0 +1,61 @@
+site_name: KubeCFG
+site_description: 'KubeCFG Documentation'
+
+site_dir: docs-build
+
+theme:
+  name: 'material'
+  logo: 'https://avatars.githubusercontent.com/u/90627713?s=48&v=4' # TODO : Change this logo , it renderes horribly
+  features:
+    - navigation.tracking
+    - navigation.expand
+    - navigation.indexes
+  palette:
+    primary: 'blue'
+    accent: 'lightblue'
+
+nav:
+- index.md
+- installation.md
+- "Basic Usage":
+  - Basic-Usage/index.md
+  - Basic-Usage/quickstart.md
+  - Commands:
+    - Basic-Usage/Kubecfg-Commands/show.md
+    - Basic-Usage/Kubecfg-Commands/eval.md
+    - Basic-Usage/Kubecfg-Commands/update.md
+    - Basic-Usage/Kubecfg-Commands/delete.md
+    - Basic-Usage/Kubecfg-Commands/diff.md
+    - Basic-Usage/Kubecfg-Commands/validate.md
+- "Advanced Usage":
+  - Advanced-Usage/index.md
+  - "Helm Integration": Advanced-Usage/helm-integration.md
+  - "Metacontroller Integration": Advanced-Usage/metacontroller-integration.md
+  - "OCI Support": Advanced-Usage/OCI-support.md
+  - "Provenance and Tracing": Advanced-Usage/provenance-traceback.md
+  - "JSON schema validation": Advanced-Usage/schema-validation.md
+
+
+#extra_css:
+#  - 'css/extra.css'
+#extra_javascript:
+#  - js/extra.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kubecfg/kubecfg
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      css_class: code
+      use_pygments: false
+      guess_lang: false
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
