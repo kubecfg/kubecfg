@@ -1,4 +1,4 @@
-module randomSecret
+module uselessPod
 
 go 1.19
 
