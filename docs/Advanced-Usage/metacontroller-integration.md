@@ -17,6 +17,18 @@ By leveraging `kubecfg` to produce the response you can use all the extra featur
 
 The following example will use code from [metacontroller-example](https://github.com/kubecfg/kubecfg/tree/main/examples/metacontroller)
 
+## Overview
+
+`kubecfg` supports exposing individual `.jsonnet` files over https as hooks by rendering the `TopLevelFunction` in those jsonnet files as expected by the `metacontroller`
+
+the functionality is exposed by running `kubecfg --alpha httpd <jsonnet files> `
+
+* each jsonnet file must expose a `TopLevelFunction` with a `request parameter` that will be called by kubecfg when the hook is called with a `POST`
+* `kubecfg --alpha httpd sync.jsonnet` - will expose on port `:8080/sync` the `TopLevelFunction` defined in the `sync.jsonnet`
+* `kubecfg --alpha httpd sync-pods.jsonnet sync-services.jsonnet` - will expose multiple endpoints `:8080/sync-pods` and `:8080/sync-jsonnet` calling each individial TLF for each files
+
+See [sync.jsonnet](https://github.com/kubecfg/kubecfg/tree/main/examples/metacontroller/jsonnet/sync.jsonnet) in the `metacontroller` example for a working example
+
 ## Flow Diagram
 
 ``` mermaid
