@@ -37,7 +37,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/primeroz/kubecfg
+      link: https://github.com/kubecfg/kubecfg
 
 markdown_extensions:
   - admonition
