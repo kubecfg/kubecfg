@@ -28,6 +28,7 @@ import (
 	goyaml "github.com/ghodss/yaml"
 	jsonnet "github.com/google/go-jsonnet"
 	jsonnetAst "github.com/google/go-jsonnet/ast"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 	log "github.com/sirupsen/logrus"
 	helmLoader "helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -240,6 +241,33 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 			}
 
 			return ret, nil
+		},
+	})
+
+	vm.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "validateJSONSchema",
+		Params: []jsonnetAst.Identifier{"obj", "schema"},
+		Func: func(args []interface{}) (interface{}, error) {
+			obj := args[0]
+			schema := args[1]
+
+			jSchema, err := json.Marshal(schema)
+			if err != nil {
+				return nil, fmt.Errorf("unable to json marshal schema: %w", err)
+			}
+
+			// No URL defaults to draft 7 of JSONSchema
+			sch, err := jsonschema.CompileString("", string(jSchema))
+			if err != nil {
+				return false, fmt.Errorf("unable to compile jsonschema: %w", err)
+			}
+
+			err = sch.Validate(obj)
+			if err != nil {
+				return nil, fmt.Errorf("object is invalid against the schema: %w", err)
+			}
+
+			return true, nil
 		},
 	})
 }
