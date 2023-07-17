@@ -26,6 +26,7 @@ nav:
     - Basic-Usage/Kubecfg-Commands/update.md
     - Basic-Usage/Kubecfg-Commands/delete.md
     - Basic-Usage/Kubecfg-Commands/diff.md
+    - Basic-Usage/Kubecfg-Commands/validate.md
 - "Advanced Usage":
   - Advanced-Usage/index.md
   - "Helm Integration": Advanced-Usage/helm-integration.md
