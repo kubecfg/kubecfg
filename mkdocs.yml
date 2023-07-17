@@ -22,6 +22,7 @@ nav:
   - Basic-Usage/quickstart.md
   - Commands:
     - Basic-Usage/Kubecfg-Commands/show.md
+    - Basic-Usage/Kubecfg-Commands/eval.md
 - "Advanced Usage":
   - Advanced-Usage/index.md
   - "Helm Integration": Advanced-Usage/helm-integration.md
