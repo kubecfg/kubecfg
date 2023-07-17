@@ -17,16 +17,17 @@ theme:
 nav:
 - index.md
 - installation.md
-- Basic-Usage:
+- "Basic Usage":
   - Basic-Usage/index.md
   - Basic-Usage/quickstart.md
   - Commands:
     - Basic-Usage/Kubecfg-Commands/show.md
-- Advanced-Usage:
+- "Advanced Usage":
   - Advanced-Usage/index.md
-  - Advanced-Usage/helm-integration.md
-  - Advanced-Usage/metacontroller-integration.md
-  - Advanced-Usage/OCI-support.md
+  - "Helm Integration": Advanced-Usage/helm-integration.md
+  - "Metacontroller Integration": Advanced-Usage/metacontroller-integration.md
+  - "OCI Support": Advanced-Usage/OCI-support.md
+  - "Provenance and Tracing": Advanced-Usage/provenance-traceback.md
 
 
 #extra_css:
