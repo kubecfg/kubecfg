@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
+  log "github.com/sirupsen/logrus"
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
 )
@@ -16,23 +18,24 @@ type HttpdCmd struct {
 	ListenAddr string
 }
 
-func evaluateFile(vm *jsonnet.VM, path string) (string, error) {
-	pathURL, err := utils.PathToURL(path)
-	if err != nil {
-		return "", err
-	}
-	// TODO(mkm): figure out why vm.EvaluateFile and vm.EvaluateAnonymousSnippet don't work with our custom importers.
-	snippet := fmt.Sprintf("(import %q)", path)
-	jsonstr, err := vm.EvaluateSnippet(pathURL, snippet)
-	if err != nil {
-		return "", err
-	}
-	return jsonstr, nil
-}
-
 func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), paths []string) error {
+  log.Info("Staring Kubecfg HTTPD")
 	for _, path := range paths {
+
 		base := strings.TrimSuffix(path, ".jsonnet")
+
+		filename, err := utils.PathToURL(path)
+		if err != nil {
+      log.Fatalf("cannot convert path to filename %q: %v", path, err)
+		}
+
+		filedata, err := ioutil.ReadFile(path)
+		if err != nil {
+      log.Fatalf("cannot read filename %q: %v", path, err)
+		}
+		hookcode := string(filedata)
+
+    log.Infof("HTTPD Hook: /%s - Filename: %s", base, filename)
 		http.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -50,7 +53,7 @@ func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), pat
 				return
 			}
 			vm.TLACode("request", string(body))
-			result, err := evaluateFile(vm, path)
+			result, err := vm.EvaluateSnippet(filename, hookcode)
 
 			if err != nil {
 				http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
