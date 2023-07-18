@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	jsonnet "github.com/google/go-jsonnet"
+	"github.com/google/go-jsonnet/formatter"
 	"github.com/kubecfg/kubecfg/internal/acquire"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -194,7 +195,7 @@ func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkConte
 
 		for _, k := range keys {
 			v := o[k]
-			if err := jsonWalk(parentCtx.child(fmt.Sprintf(".%s", k)), v, visitor); err != nil {
+			if err := jsonWalk(parentCtx.child(jsonnetPathAccessor(k)), v, visitor); err != nil {
 				return err
 			}
 		}
@@ -209,6 +210,24 @@ func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkConte
 		return nil
 	default:
 		return fmt.Errorf("Looking for kubernetes object at %q, but instead found %T", parentCtx.path(), o)
+	}
+}
+
+func jsonnetPathAccessor(field string) string {
+	// Leverage the jsonnet formatter that knows when it's safe to remove quotes around identifiers
+	// that are non-reserved and that otherwise don't require escaping.
+	f, err := formatter.Format("", fmt.Sprintf("{%q:null}", field), formatter.Options{PrettyFieldNames: true})
+
+	// should not error because we guarantee the input is valid. However the guarantee is not so strong as to
+	// completely ignore the error. Let's panic in case of a broken internal invariant.
+	if err != nil {
+		panic(err)
+	}
+
+	if strings.HasPrefix(f, `{"`) {
+		return fmt.Sprintf("[%q]", field)
+	} else {
+		return fmt.Sprintf(".%s", field)
 	}
 }
 

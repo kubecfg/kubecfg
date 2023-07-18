@@ -53,6 +53,24 @@ func TestJsonWalk(t *testing.T) {
 			},
 		},
 	}
+	bazObjP := map[string]interface{}{
+		"apiVersion": "test",
+		"kind":       "Baz",
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				AnnotationProvenancePath: `$.foo[0]["self"]`,
+			},
+		},
+	}
+	baz2ObjP := map[string]interface{}{
+		"apiVersion": "test",
+		"kind":       "Baz",
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				AnnotationProvenancePath: `$.foo[0]["1a"]`,
+			},
+		},
+	}
 
 	tests := []struct {
 		input      string
@@ -104,6 +122,18 @@ func TestJsonWalk(t *testing.T) {
 			result:     []interface{}{barObjP, fooObjP},
 		},
 		{
+			// Deeply nested with provenance requiring escaping
+			input:      `{"foo": [{"self": {"apiVersion": "test", "kind": "Baz"}}]}`,
+			provenance: true,
+			result:     []interface{}{bazObjP},
+		},
+		{
+			// Deeply nested with provenance requiring escaping (2)
+			input:      `{"foo": [{"1a": {"apiVersion": "test", "kind": "Baz"}}]}`,
+			provenance: true,
+			result:     []interface{}{baz2ObjP},
+		},
+		{
 			// Error: nested misplaced value
 			input: `{"foo": {"bar": [null, 42]}}`,
 			error: "Looking for kubernetes object at \"$.foo.bar[1]\", but instead found float64",
@@ -149,6 +179,41 @@ func TestJsonWalk(t *testing.T) {
 			})
 			if !reflect.DeepEqual(objs, test.result) {
 				t.Errorf("Expected %v, got %v", test.result, objs)
+			}
+		})
+	}
+}
+
+func TestJsonnetPathAccessor(t *testing.T) {
+	testCases := []struct {
+		input string
+		want  string
+	}{
+		{"foo", ".foo"},
+		{"1foo", `["1foo"]`},
+		{"a b", `["a b"]`},
+		{"a-b", `["a-b"]`},
+		{"a,b", `["a,b"]`},
+		{"a:b", `["a:b"]`},
+		{"a+b", `["a+b"]`},
+		{"self", `["self"]`},
+		{"super", `["super"]`},
+		{"if", `["if"]`},
+		{"local", `["local"]`},
+		{"import", `["import"]`},
+		{"importbin", `["importbin"]`},
+		{"tailstrict", `["tailstrict"]`},
+		{"function", `["function"]`},
+		{"false", `["false"]`},
+		{"true", `["true"]`},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Logf("%d: %q", i, tc.input)
+
+			if got, want := jsonnetPathAccessor(tc.input), tc.want; got != want {
+				t.Errorf("got: %q, want: %q", got, want)
 			}
 		})
 	}
