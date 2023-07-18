@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-  log "github.com/sirupsen/logrus"
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 // HttpdCmd represents the eval subcommand
@@ -19,23 +19,23 @@ type HttpdCmd struct {
 }
 
 func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), paths []string) error {
-  log.Info("Staring Kubecfg HTTPD")
+	log.Info("Staring Kubecfg HTTPD")
 	for _, path := range paths {
 
 		base := strings.TrimSuffix(path, ".jsonnet")
 
 		filename, err := utils.PathToURL(path)
 		if err != nil {
-      log.Fatalf("cannot convert path to filename %q: %v", path, err)
+			log.Fatalf("cannot convert path to filename %q: %v", path, err)
 		}
 
 		filedata, err := ioutil.ReadFile(path)
 		if err != nil {
-      log.Fatalf("cannot read filename %q: %v", path, err)
+			log.Fatalf("cannot read filename %q: %v", path, err)
 		}
 		hookcode := string(filedata)
 
-    log.Infof("HTTPD Hook: /%s - Filename: %s", base, filename)
+		log.Infof("HTTPD Hook: /%s - Filename: %s", base, filename)
 		http.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
