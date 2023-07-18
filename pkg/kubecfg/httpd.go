@@ -37,7 +37,7 @@ func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), pat
 
 		log.Infof("HTTPD Registering Hook: /%s - Filename: %s", base, filename)
 		http.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
-		  log.Infof("HTTPD Executing Hook: /%s - Filename: %s", base, filename)
+			log.Infof("HTTPD Executing Hook: /%s - Filename: %s", base, filename)
 
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
