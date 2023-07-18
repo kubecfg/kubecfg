@@ -13,6 +13,10 @@ using kubecfg.
 Yes, Google employees will recognise this as being very similar to a
 similarly-named internal tool ;)
 
+## Documentation
+
+https://kubecfg.github.io/kubecfg/
+
 ## Install
 
 Pre-compiled executables exist for some platforms on
