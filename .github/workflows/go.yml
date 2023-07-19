@@ -82,7 +82,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && startsWith(github.ref, 'refs/tags/v')
         run: |
           tag=$(echo ${{ github.ref }} | cut -c11-)  # get tag name without tags/refs/ prefix.
-          ko build -B --platform linux/amd64,linux/arm/v7,linux/arm64 --tag-only --tags ${tag}
+          ko build -B --platform linux/amd64,linux/arm/v7,linux/arm64 --tags ${tag}
 
   create_release:
     name: Create Release
