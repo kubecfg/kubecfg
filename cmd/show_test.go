@@ -109,6 +109,7 @@ func TestShow(t *testing.T) {
 		os.Setenv("anVar", "aVal2")
 		os.Setenv("extVarEnvDefined", "DEFINED")
 		defer os.Unsetenv("anVar")
+		defer os.Unsetenv("extVarEnvDefined")
 
 		output := cmdOutput(t, []string{"show",
 			"-J", filepath.FromSlash("../testdata/lib"),
