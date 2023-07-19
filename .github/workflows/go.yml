@@ -68,7 +68,7 @@ jobs:
           retention-days: 5
 
       - if: matrix.os == 'ubuntu-latest'
-        uses: imjasonh/setup-ko@ace48d793556083a76f1e3e6068850c1f4a369aa # v0.6
+        uses: ko-build/setup-ko@v0.6
 
       - name: Build OCI image using ko
         if: matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork
