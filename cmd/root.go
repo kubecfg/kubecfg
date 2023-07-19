@@ -62,6 +62,7 @@ const (
 	flagTLACodeFile = "tla-code-file"
 	flagResolver    = "resolve-images"
 	flagResolvFail  = "resolve-images-error"
+	flagExtVarEnv   = "ext-str-env"
 )
 
 var clientConfig clientcmd.ClientConfig
@@ -89,6 +90,7 @@ func init() {
 	RootCmd.MarkPersistentFlagFilename(flagTLACodeFile)
 	RootCmd.PersistentFlags().String(flagResolver, "noop", "Change implementation of resolveImage native function. One of: noop, registry")
 	RootCmd.PersistentFlags().String(flagResolvFail, "warn", "Action when resolveImage fails. One of ignore,warn,error")
+	RootCmd.PersistentFlags().StringArray(flagExtVarEnv, nil, "Values of external variables with string values to fetch from the process environment with a default value `ENV=default`")
 
 	// The "usual" clientcmd/kubectl flags
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -250,6 +252,7 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 		{flagTLAVarFile, true, withVar(vars.TLA, vars.String, vars.File)},
 		{flagTLACode, false, withVar(vars.TLA, vars.Code, vars.Literal)},
 		{flagTLACodeFile, true, withVar(vars.TLA, vars.Code, vars.File)},
+		{flagExtVarEnv, false, withVar(vars.Ext, vars.String, vars.Literal)},
 	} {
 		entries, err := flags.GetStringArray(spec.flagName)
 		if err != nil {
@@ -271,6 +274,13 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 						return nil, fmt.Errorf("Missing environment variable: %s", kv[0])
 					}
 				case 2:
+					if spec.flagName == flagExtVarEnv {
+						if v, present := os.LookupEnv(kv[0]); present {
+							spec.setter(kv[0], v)
+						} else {
+							spec.setter(kv[0], kv[1])
+						}
+					}
 					spec.setter(kv[0], kv[1])
 				}
 			}
