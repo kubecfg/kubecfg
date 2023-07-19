@@ -280,8 +280,9 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 						} else {
 							spec.setter(kv[0], kv[1])
 						}
+					} else {
+					  spec.setter(kv[0], kv[1])
 					}
-					spec.setter(kv[0], kv[1])
 				}
 			}
 		}

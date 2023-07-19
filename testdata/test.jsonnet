@@ -3,6 +3,8 @@ local aVar = std.extVar('aVar');
 local anVar = std.extVar('anVar');
 local filevar = std.extVar('filevar');
 local extcode = std.extVar('extcode');
+local extVarEnvDefined = std.extVar('extVarEnvDefined');
+local extVarEnvUnDefined = std.extVar('extVarEnvUnDefined');
 
 {
   apiVersion: 'v1',
@@ -14,6 +16,8 @@ local extcode = std.extVar('extcode');
       notAnotherVal: anVar,
       filevar: filevar,
       extcode: extcode,
+      extVarEnvDefined: extVarEnvDefined,
+      extVarEnvUnDefined: extVarEnvUnDefined,
     },
   ],
 }

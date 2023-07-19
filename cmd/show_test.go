@@ -94,7 +94,9 @@ func TestShow(t *testing.T) {
   "filevar": "foo\n",
   "array": ["one", 2, [3]],
   "object": {"foo": "bar"},
-  "extcode": {"foo": 1, "bar": "test"}
+  "extcode": {"foo": 1, "bar": "test"},
+  "extVarEnvDefined": "DEFINED",
+  "extVarEnvUnDefined": "FOO"
 }
 `
 
@@ -105,6 +107,7 @@ func TestShow(t *testing.T) {
 		}
 
 		os.Setenv("anVar", "aVal2")
+		os.Setenv("extVarEnvDefined", "DEFINED")
 		defer os.Unsetenv("anVar")
 
 		output := cmdOutput(t, []string{"show",
@@ -115,6 +118,8 @@ func TestShow(t *testing.T) {
 			"-V", "anVar",
 			"--ext-str-file", "filevar=" + filepath.FromSlash("../testdata/extvar.file"),
 			"--ext-code", `extcode={foo: 1, bar: "test"}`,
+			"--ext-str-env", "extVarEnvDefined=FOO",
+			"--ext-str-env", "extVarEnvUnDefined=FOO",
 		})
 
 		t.Log("output is", output)
