@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"sort"
 	"strings"
 
@@ -187,12 +188,14 @@ func shortNames(urls []*url.URL, rootURL *url.URL) ([]string, string) {
 	return s, strings.TrimPrefix(rootURL.Path, prefix)
 }
 
+// returns common directory part between various paths, including the trailing '/'.
+// If only one path is given, return its directory path
 func findCommonPathPrefix(paths []string) string {
 	if len(paths) == 0 {
 		return ""
 	}
 	if len(paths) == 1 {
-		return paths[0]
+		return path.Dir(paths[0]) + "/"
 	}
 
 	first, last := paths[0], paths[len(paths)-1]
