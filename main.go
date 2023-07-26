@@ -22,13 +22,14 @@ import (
 
 	"github.com/kubecfg/kubecfg/cmd"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
+	pkgversion "github.com/kubecfg/kubecfg/pkg/version"
 )
 
 // Version is overridden using `-X main.version` during release builds
-var version = cmd.DevVersion
+var version = pkgversion.DevVersion
 
 func main() {
-	cmd.Version = version
+	pkgversion.Version = version
 
 	if err := cmd.RootCmd.Execute(); err != nil {
 		// PersistentPreRunE may not have been run for early

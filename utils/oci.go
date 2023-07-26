@@ -40,7 +40,8 @@ const (
 )
 
 type OCIBundleConfig struct {
-	Entrypoint string `json:"entrypoint"`
+	Entrypoint string          `json:"entrypoint"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
 }
 
 type OCIBundle struct {
