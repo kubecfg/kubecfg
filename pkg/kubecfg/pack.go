@@ -31,10 +31,16 @@ import (
 
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/pkg/oci"
+	"github.com/kubecfg/kubecfg/pkg/version"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2/content"
+)
+
+const (
+	packMetadataField = "_kubecfg_pack_metadata"
+	packMetadataKey   = "pack.kubecfg.dev/v1alpha1"
 )
 
 // PackCmd represents the eval subcommand
@@ -69,7 +75,33 @@ func (c PackCmd) Run(ctx context.Context, vm *jsonnet.VM, ociPackage string, roo
 		return os.WriteFile(c.OutputFile, bodyBlob.Bytes(), 0666)
 	}
 
-	return c.pushOCIBundle(ctx, ociPackage, bodyBlob.Bytes(), shortEntrypoint)
+	metadata, err := bundleConfigMetadata(vm, rootURL)
+	if err != nil {
+		return err
+	}
+
+	return c.pushOCIBundle(ctx, ociPackage, bodyBlob.Bytes(), shortEntrypoint, metadata)
+}
+
+func bundleConfigMetadata(vm *jsonnet.VM, rootURL *url.URL) (json.RawMessage, error) {
+	packMetadata := map[string]struct {
+		Version string `json:"version"`
+	}{
+		packMetadataKey: {
+			Version: version.Get(),
+		},
+	}
+	base, err := json.Marshal(packMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataExpr := fmt.Sprintf(`%s + std.get(import %q, %q, {})`, string(base), rootURL, packMetadataField)
+	metadata, err := vm.EvaluateAnonymousSnippet("", metadataExpr)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(metadata), nil
 }
 
 // Writes a targz to w, containing rootURL and all files transitively imported from rootURL.
@@ -103,7 +135,7 @@ func bundleAllDependencies(w io.Writer, vm *jsonnet.VM, rootURL *url.URL) (strin
 	return shortEntrypoint, nil
 }
 
-func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte, entryPoint string) error {
+func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte, entryPoint string, bundleConfigMetadata json.RawMessage) error {
 	repo, err := oci.NewAuthenticatedRepository(ref)
 	if err != nil {
 		return err
@@ -115,7 +147,11 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		return err
 	}
 
-	configBlob, err := json.Marshal(utils.OCIBundleConfig{Entrypoint: entryPoint})
+	bundleConfig := utils.OCIBundleConfig{
+		Entrypoint: entryPoint,
+		Metadata:   bundleConfigMetadata,
+	}
+	configBlob, err := json.Marshal(bundleConfig)
 	if err != nil {
 		return err
 	}

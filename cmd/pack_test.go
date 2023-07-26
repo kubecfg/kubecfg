@@ -178,7 +178,7 @@ func TestPush(t *testing.T) {
 	// these digests have been observed by running the test failing and obverving the logs
 	const (
 		blobDigest = "sha256:90847d8bd5ca990ebf777bf131130cdcf695ace2f8bb59dee0571129af855f00"
-		confDigest = "sha256:918b7abf35db6a5e309be8760cca0e2c747cb186e03d7b32ed9f5da1d637f09f"
+		confDigest = "sha256:d5e1762d319a9de4f26f64420d485611ce6f1bdd4418e4d37d0b388ebc996fc0"
 	)
 	getBlob := func(key string) []byte {
 		got, ok := blobs[key]
@@ -190,7 +190,7 @@ func TestPush(t *testing.T) {
 
 	verifyBodyTarball(t, bytes.NewReader(getBlob(blobDigest)))
 
-	if got, want := string(getBlob(confDigest)), `{"entrypoint":"dir1/demo.jsonnet"}`; got != want {
+	if got, want := string(getBlob(confDigest)), `{"entrypoint":"dir1/demo.jsonnet","metadata":{"pack.kubecfg.dev/v1alpha1":{"version":"(dev build)"}}}`; got != want {
 		t.Errorf("got: %q, want: %q", got, want)
 	}
 
