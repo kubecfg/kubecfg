@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/genuinetools/reg/registry"
@@ -231,22 +232,45 @@ func dirURL(path string) *url.URL {
 	return &url.URL{Scheme: "file", Path: path}
 }
 
+func buildOverlayObject(format, flag string) string {
+	re := regexp.MustCompile(`^([^$=]*)=(.*)$`)
+	parts := re.FindStringSubmatch(flag)
+
+	if len(parts) > 0 {
+		path, value := parts[1], parts[2]
+		wrapper := fmt.Sprintf(format, value)
+		fields := strings.Split(path, ".")
+		// we can't use slices.Reverse(s) since we must build on Go 1.21
+		for i, j := 0, len(fields)-1; i < j; i, j = i+1, j-1 {
+			fields[i], fields[j] = fields[j], fields[i]
+		}
+		for _, p := range fields {
+			wrapper = fmt.Sprintf("{%s+:%s}", p, wrapper)
+		}
+		return wrapper
+	} else {
+		return fmt.Sprintf(format, flag)
+	}
+}
+
 // ReadObjects evaluates all jsonnet files in paths and return all the k8s objects found in it.
 // Unlike utils.Read this checks for duplicates and flattens the v1 Lists.
 func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
 	opt := acquire.MakeReadOptions(opts)
 
 	if overlay := opt.OverlayURL; overlay != "" {
+		add := buildOverlayObject("import %q", overlay)
 		overlayExpression := func(url string) string {
-			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (import %q)`, url, overlay))
+			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, url, add))
 		}
 		for i := range paths {
 			paths[i] = overlayExpression(paths[i])
 		}
 	}
 	if overlay := opt.OverlayCode; overlay != "" {
+		add := buildOverlayObject("%s", overlay)
 		overlayExpression := func(src string) string {
-			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, src, overlay))
+			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, src, add))
 		}
 		for i := range paths {
 			paths[i] = overlayExpression(paths[i])
