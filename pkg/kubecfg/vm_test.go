@@ -53,7 +53,7 @@ func renderReadObject(t *testing.T, opts ...utils.ReadOption) map[string]string 
 	return obj.GetAnnotations()
 }
 
-func TestReadObjec(t *testing.T) {
+func TestReadObject(t *testing.T) {
 	annos := renderReadObject(t)
 	if got, want := len(annos), 0; got != want {
 		t.Fatalf("got: %d, want: %d", got, want)
