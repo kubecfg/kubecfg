@@ -68,6 +68,25 @@
   // is omitted based on the given schema's rules.
   validateJSONSchema:: std.native('validateJSONSchema'),
 
+  // toOverlay is a function that takes a normal JSON/YAML object {a:{b:c:{d:1}}}
+  // and rewrites it as if it was written as {a+:{b+:c+:{d:1}}}.
+  // Care is taken to use the + operator only for objects, since for scalars and
+  // array it doesn't have the semantic of "extend".
+  //
+  // This behaves similar to std.mergePatch but mergePatch breaks lazy evaluation.
+  toOverlay(v):: (
+    local t = std.type(v);
+    if t == 'object' then {
+      [kv.key]+: $.toOverlay(kv.value)
+      for kv in std.objectKeysValues(v)
+      if std.type(kv.value) == 'object'
+    } + {
+      [kv.key]: kv.value
+      for kv in std.objectKeysValues(v)
+      if std.type(kv.value) != 'object'
+    } else v
+  ),
+
   // isK8sObject(o): Return true iff o is a Kubernetes object.
   isK8sObject(o):: (
     std.isObject(o) &&
