@@ -258,30 +258,33 @@ func buildOverlayObject(format, flag string) string {
 func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
 	opt := acquire.MakeReadOptions(opts)
 
+	overlayExpression := func(url string) (string, string) { return url, url }
+
+	if opt.OverlayURL != "" && opt.OverlayCode != "" {
+		return nil, fmt.Errorf("--overlay-code and --overlay-file are mutually exclusive")
+	}
+
 	if overlay := opt.OverlayURL; overlay != "" {
 		add := buildOverlayObject("import %q", overlay)
-		overlayExpression := func(url string) string {
-			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, url, add))
-		}
-		for i := range paths {
-			paths[i] = overlayExpression(paths[i])
+		overlayExpression = func(url string) (string, string) {
+			expr := fmt.Sprintf(`(import %q) + (%s)`, url, add)
+			return utils.ToDataURL(expr), expr
 		}
 	}
 	if overlay := opt.OverlayCode; overlay != "" {
 		add := buildOverlayObject("%s", overlay)
-		overlayExpression := func(src string) string {
-			return utils.ToDataURL(fmt.Sprintf(`(import %q) + (%s)`, src, add))
-		}
-		for i := range paths {
-			paths[i] = overlayExpression(paths[i])
+		overlayExpression = func(src string) (string, string) {
+			expr := fmt.Sprintf(`(import %q) + (%s)`, src, add)
+			return utils.ToDataURL(expr), expr
 		}
 	}
 
 	res := []*unstructured.Unstructured{}
 	for _, path := range paths {
-		objs, err := utils.Read(vm, path, opts...)
+		effectiveURL, diagnostic := overlayExpression(path)
+		objs, err := utils.Read(vm, effectiveURL, opts...)
 		if err != nil {
-			return nil, fmt.Errorf("error reading %s: %v", path, err)
+			return nil, fmt.Errorf("error reading %s: %v", diagnostic, err)
 		}
 
 		res = append(res, utils.FlattenToV1(objs)...)
