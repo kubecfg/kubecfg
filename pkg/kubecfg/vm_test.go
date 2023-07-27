@@ -12,7 +12,7 @@ import (
 func tempFile(t *testing.T, body string) (filename string) {
 	t.Helper()
 
-	tmpfile, err := os.CreateTemp("", "kubecfg-test-*.jsonnet")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "kubecfg-test-*.jsonnet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,9 +23,6 @@ func tempFile(t *testing.T, body string) (filename string) {
 	if err := tmpfile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		os.Remove(tmpfile.Name())
-	})
 	return tmpfile.Name()
 }
 
