@@ -78,7 +78,7 @@ local result =
 
   std.assertEqual(std.clamp(42, 0, 10), 10) &&
 
-  local testRenderOverlay = {
+  local testObj = {
     a: {
       b: {
         c: 1,
@@ -94,7 +94,7 @@ local result =
       },
     },
   };
-  std.assertEqual(testRenderOverlay + kubecfg.toOverlay(import 'overlay.json'), expectedOverlayObj) &&
+  std.assertEqual(testObj + kubecfg.toOverlay(import 'overlay.json'), expectedOverlayObj) &&
 
   // Testing import of pre-converted chart with standard import
   local chartData = import 'mysql-8.8.26.tgz.bin';
