@@ -87,6 +87,10 @@
     } else v
   ),
 
+  // renderOverlay wraps the functionality of 'toOverlay' so that the resulting object is returned
+  // from the overlay being applied.
+  renderOverlay(obj, overlay):: obj + $.toOverlay(overlay),
+
   // isK8sObject(o): Return true iff o is a Kubernetes object.
   isK8sObject(o):: (
     std.isObject(o) &&
