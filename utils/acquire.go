@@ -245,26 +245,7 @@ func PathToURL(path string) (string, error) {
 
 func isURL(path string) bool {
 	// TODO: figure a better way to tell filepaths and URLs apart (it also must work on windows...)
-	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "oci://") || strings.HasPrefix(path, "file://") || strings.HasPrefix(path, "data:,")
-}
-
-func expandDataURL(pathURL string) (string, string, error) {
-	content, err := url.PathUnescape(strings.TrimPrefix(pathURL, "data:,"))
-	if err != nil {
-		return "", "", err
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", "", err
-	}
-
-	foundAt, err := PathToURL(cwd)
-	if err != nil {
-		return "", "", err
-	}
-	foundAt += "/"
-
-	return content, foundAt, nil
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "oci://") || strings.HasPrefix(path, "file://") || strings.HasPrefix(path, "data:")
 }
 
 func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]runtime.Object, error) {
@@ -276,11 +257,16 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]run
 	}
 
 	var content, foundAt string
-	if strings.HasPrefix(pathURL, "data:,") {
-		content, foundAt, err = expandDataURL(pathURL)
+	if strings.HasPrefix(pathURL, "data:") {
+		u, uerr := url.Parse(pathURL)
+		if uerr != nil {
+			return nil, uerr
+		}
+		content, foundAt, err = expandDataURL(u)
 	} else {
 		content, foundAt, err = vm.ImportData(pathURL, pathURL)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +328,4 @@ func FlattenToV1(objs []runtime.Object) []*unstructured.Unstructured {
 		}
 	}
 	return ret
-}
-
-func ToDataURL(code string) string {
-	return fmt.Sprintf("data:,%s", url.PathEscape(code))
 }

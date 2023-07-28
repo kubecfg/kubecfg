@@ -348,3 +348,21 @@ metadata:
 		t.Fatalf("got: %q, want: %q", got, want)
 	}
 }
+
+func TestImportDataURI(t *testing.T) {
+	want := `{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "test",
+    "namespace": "foo"
+  }
+}
+`
+
+	got := cmdOutput(t, []string{"show", "-o", "json", "../testdata/data-uri.jsonnet"})
+
+	if got != want {
+		t.Fatalf("got: %q, want: %q", got, want)
+	}
+}
