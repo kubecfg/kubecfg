@@ -114,12 +114,12 @@ func TestParseHelmChart(t *testing.T) {
 	vm := jsonnet.MakeVM()
 	RegisterNativeFuncs(vm, NewIdentityResolver())
 
-	_, err := vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")("not_data", "rls", "myns", {})`)
+	_, err := vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")("not_data", "rls", "myns", {}, {})`)
 	if err == nil {
 		t.Errorf("helmTemplate succeeded with invalid data")
 	}
 
-	_, err = vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")([1, 2, 3, 256], "myrls", "myns", {})`)
+	_, err = vm.EvaluateSnippet("failtest", `std.native("parseHelmChart")([1, 2, 3, 256], "myrls", "myns", {}, {})`)
 	if err == nil {
 		t.Errorf("helmTemplate succeeded with invalid bytes")
 	}
@@ -128,7 +128,7 @@ func TestParseHelmChart(t *testing.T) {
 	RegisterNativeFuncs(vm, NewIdentityResolver())
 
 	x, err := vm.EvaluateSnippet("test", `
-    local chrt = std.native("parseHelmChart")(import "../testdata/mysql-8.8.26.tgz.bin", "myrls", "myns", {primary: {resources: {limits: {cpu: "2"}}}});
+    local chrt = std.native("parseHelmChart")(import "../testdata/mysql-8.8.26.tgz.bin", "myrls", "myns", {primary: {resources: {limits: {cpu: "2"}}}}, {});
     local ss = chrt["mysql/templates/primary/statefulset.yaml"][0];
     [
       // from nested chart
