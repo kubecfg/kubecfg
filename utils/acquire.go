@@ -245,7 +245,7 @@ func PathToURL(path string) (string, error) {
 
 func isURL(path string) bool {
 	// TODO: figure a better way to tell filepaths and URLs apart (it also must work on windows...)
-	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "oci://") || strings.HasPrefix(path, "file://") || strings.HasPrefix(path, "data:,")
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "oci://") || strings.HasPrefix(path, "file://") || strings.HasPrefix(path, "data:,") || strings.HasPrefix(path, "kustomize://")
 }
 
 func expandDataURL(pathURL string) (string, string, error) {
