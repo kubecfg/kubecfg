@@ -18,7 +18,7 @@ type kustomizeImporter struct{}
 func (k *kustomizeImporter) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// We know the scheme is kustomize+https, so simply grab the URL
-    // for kustomize to use
+	// for kustomize to use
 	url := strings.Split(req.URL.String(), "+")[1]
 
 	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
