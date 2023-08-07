@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -28,10 +29,25 @@ func (k *kustomizeImporter) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
-	yamlDocs, err := m.AsYaml()
+	// As we cannot simply convert directly to JSON,
+	// we pull out the resources first and append them
+	// individually to be marshaled together later into
+	// a JSON array.
+	var resources []map[string]interface{}
+	for _, r := range m.Resources() {
+		m, err := r.Map()
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, m)
+	}
+
+	// Convert our map to JSON so that we can simply import it directly.
+	data, err := json.Marshal(resources)
 	if err != nil {
 		return nil, err
 	}
-	r := io.NopCloser(bytes.NewReader(yamlDocs))
+
+	r := io.NopCloser(bytes.NewReader(data))
 	return simpleHTTPResponse(req, http.StatusOK, r), nil
 }
