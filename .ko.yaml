@@ -1,13 +1,14 @@
+defaultBaseImage: cgr.dev/chainguard/bash:latest
 builds:
-- id: kubecfg
-  dir: .
-  main: .
-  env:
-  - CGO_ENABLED=0
-  flags:
-  - -tags
-  - netgo
-  - -installsuffix
-  - netgo
-  ldflags:
-  - -X main.version={{.Env.VERSION}} {{.Env.GO_LDFLAGS}}
+  - id: kubecfg
+    dir: .
+    main: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -tags
+      - netgo
+      - -installsuffix
+      - netgo
+    ldflags:
+      - -X main.version={{.Env.VERSION}} {{.Env.GO_LDFLAGS}}
