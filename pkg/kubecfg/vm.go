@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -232,13 +233,37 @@ func dirURL(path string) *url.URL {
 	return &url.URL{Scheme: "file", Path: path}
 }
 
-func buildOverlayObject(format, flag string) string {
+type overlayFormat int
+
+const (
+	jsonnetCode overlayFormat = iota
+	jsonnetFile
+)
+
+func (f overlayFormat) parse(src string) string {
+	switch f {
+	case jsonnetCode:
+		return src
+	case jsonnetFile:
+		switch ext := path.Ext(src); ext {
+		case ".yml", ".yaml", ".json":
+			// JSON is a proper subset of YAML (for our intents and purposes)
+			return fmt.Sprintf("(import 'kubecfg.libsonnet').toOverlay(std.parseYaml(importstr %q))", src)
+		default:
+			return fmt.Sprintf("import %q", src)
+		}
+	default:
+		panic(fmt.Sprintf("unhandled format %q", f))
+	}
+}
+
+func buildOverlayObject(format overlayFormat, flag string) string {
 	re := regexp.MustCompile(`^([^$=]*)=(.*)$`)
 	parts := re.FindStringSubmatch(flag)
 
 	if len(parts) > 0 {
 		path, value := parts[1], parts[2]
-		wrapper := fmt.Sprintf(format, value)
+		wrapper := format.parse(value)
 		fields := strings.Split(path, ".")
 		// we can't use slices.Reverse(s) since we must build on Go 1.21
 		for i, j := 0, len(fields)-1; i < j; i, j = i+1, j-1 {
@@ -249,7 +274,7 @@ func buildOverlayObject(format, flag string) string {
 		}
 		return wrapper
 	} else {
-		return fmt.Sprintf(format, flag)
+		return format.parse(flag)
 	}
 }
 
@@ -265,14 +290,14 @@ func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*u
 	}
 
 	if overlay := opt.OverlayURL; overlay != "" {
-		add := buildOverlayObject("import %q", overlay)
+		add := buildOverlayObject(jsonnetFile, overlay)
 		overlayExpression = func(url string) (string, string) {
 			expr := fmt.Sprintf(`(import %q) + (%s)`, url, add)
 			return utils.ToDataURL(expr), expr
 		}
 	}
 	if overlay := opt.OverlayCode; overlay != "" {
-		add := buildOverlayObject("%s", overlay)
+		add := buildOverlayObject(jsonnetCode, overlay)
 		overlayExpression = func(src string) (string, string) {
 			expr := fmt.Sprintf(`(import %q) + (%s)`, src, add)
 			return utils.ToDataURL(expr), expr
