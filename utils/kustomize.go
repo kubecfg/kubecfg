@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -12,11 +13,17 @@ import (
 )
 
 // kustomizeImporter satifies the http.RoundTripper interface
-type kustomizeImporter struct{}
+type kustomizeImporter struct {
+	alpha bool
+}
 
 // RoundTrip performs a HTTP transaction for an `import kustomize+https://<url>` statement
 // by calling a simple Kustomize run against it, returning the rendered manifests.
 func (k *kustomizeImporter) RoundTrip(req *http.Request) (*http.Response, error) {
+
+	if !k.alpha {
+		return nil, fmt.Errorf("kustomize+https:// prefix is an alpha feature, please use the --alpha flag")
+	}
 
 	// We know the scheme is kustomize+https, so simply grab the URL
 	// for kustomize to use
