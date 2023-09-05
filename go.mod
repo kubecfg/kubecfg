@@ -15,7 +15,7 @@ require (
 	github.com/kubecfg/ursonnet v0.1.1
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.19
-	github.com/onsi/ginkgo/v2 v2.11.0
+	github.com/onsi/ginkgo/v2 v2.12.0
 	github.com/onsi/gomega v1.27.10
 	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -116,14 +116,14 @@ require (
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
-	golang.org/x/tools v0.9.3 // indirect
+	golang.org/x/tools v0.12.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/grpc v1.55.0 // indirect
