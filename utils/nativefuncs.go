@@ -165,12 +165,27 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 
 	vm.NativeFunction(&jsonnet.NativeFunction{
 		Name:   "parseHelmChart",
-		Params: []jsonnetAst.Identifier{"releaseName", "namespace", "chartData", "values"},
+		Params: []jsonnetAst.Identifier{"releaseName", "namespace", "chartData", "values", "capabilities"},
 		Func: func(args []interface{}) (interface{}, error) {
 			chartData := args[0].([]interface{})
 			releaseName := args[1].(string)
 			namespace := args[2].(string)
 			vals := args[3].(map[string]interface{})
+			mapCaps := args[4].(map[string]interface{})
+
+			// If capabilities are set, process them. Use the default
+			// capabilities as the base. If a user provided capabilities, only
+			// copy over the KubeVersion as the other fields are not easily
+			// configurable through the jsonnet interface or, in the case of the
+			// helm version, don't make sense.
+			var capabilities = chartutil.DefaultCapabilities.Copy()
+			if capKubeVersion, ok := mapCaps["KubeVersion"].(map[string]interface{}); ok {
+				capabilities.KubeVersion = chartutil.KubeVersion{
+					Version: capKubeVersion["Version"].(string),
+					Major:   fmt.Sprint(capKubeVersion["Major"]),
+					Minor:   fmt.Sprint(capKubeVersion["Minor"]),
+				}
+			}
 
 			reader := &ArrayReader{chartData}
 
@@ -186,7 +201,7 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 				Revision:  1,
 				IsInstall: true,
 			}
-			values, err := chartutil.ToRenderValues(chrt, vals, options, nil)
+			values, err := chartutil.ToRenderValues(chrt, vals, options, capabilities)
 			if err != nil {
 				return nil, err
 			}

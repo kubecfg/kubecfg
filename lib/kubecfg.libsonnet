@@ -57,11 +57,23 @@
   // package (python-ish).
   regexSubst:: std.native('regexSubst'),
 
-  // parseHelmChart(chartData, releaseName, namespace, values): Expand
+  // parseHelmChart(chartData, releaseName, namespace, values, capabilities={}): Expand
   // helm chart into jsonnet objects.  `chartData` should be valid
   // chart .tgz as an array of numbers (bytes).  `values` is a jsonnet
   // object that conforms to a schema defined by the chart.
-  parseHelmChart:: std.native('parseHelmChart'),
+  // `capabilities` is an object matching the struct format of Helm's
+  // "Capabilities" struct. Only "KubeVersion" is supported. For more
+  // information, see:
+  // https://helm.sh/docs/chart_template_guide/builtin_objects/
+  parseHelmChart(chartData, releaseName, namespace, values, capabilities={}):: (
+    std.native('parseHelmChart')(
+      chartData,
+      releaseName,
+      namespace,
+      values,
+      capabilities
+    )
+  ),
 
   // validateJSONSchema(obj, schema): Validates a given object against the provided
   // schema. Returns 'true' is the schema is valid. If this is not the case, an error stream
