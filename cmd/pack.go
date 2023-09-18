@@ -26,6 +26,7 @@ import (
 const (
 	flagOutput           = "output"
 	flagInsecureRegistry = "insecure-registry"
+	flagDocsTarFile      = "docs-tar-file"
 )
 
 func init() {
@@ -33,6 +34,7 @@ func init() {
 	RootCmd.AddCommand(cmd)
 	cmd.PersistentFlags().String(flagOutput, "", "Output archive file. Don't push to OCI but just dump into a file")
 	cmd.PersistentFlags().Bool(flagInsecureRegistry, false, "Use HTTP instead of HTTPS to access the OCI registry")
+	cmd.PersistentFlags().String(flagDocsTarFile, "", "Optional tar.gz file containing a documentation bundle")
 }
 
 var packCmd = &cobra.Command{
@@ -59,6 +61,11 @@ var packCmd = &cobra.Command{
 		}
 
 		c.InsecureRegistry, err = flags.GetBool(flagInsecureRegistry)
+		if err != nil {
+			return err
+		}
+
+		c.DocsTarFile, err = flags.GetString(flagDocsTarFile)
 		if err != nil {
 			return err
 		}

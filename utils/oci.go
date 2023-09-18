@@ -36,6 +36,7 @@ import (
 
 const (
 	OCIBundleBodyMediaType   = "application/vnd.kubecfg.bundle.tar+gzip"
+	OCIBundleDocsMediaType   = "application/vnd.kubecfg.bundle.docs.tar+gzip"
 	OCIBundleConfigMediaType = "application/vnd.kubecfg.bundle.config.v1+json"
 )
 

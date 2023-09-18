@@ -47,6 +47,7 @@ const (
 type PackCmd struct {
 	OutputFile       string
 	InsecureRegistry bool // use HTTP if true
+	DocsTarFile      string
 }
 
 func (c PackCmd) Run(ctx context.Context, vm *jsonnet.VM, ociPackage string, rootFile string) (err error) {
@@ -160,9 +161,26 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		return err
 	}
 
+	layers := []ocispec.Descriptor{bodyDesc}
+
+	if c.DocsTarFile != "" {
+		if !strings.HasSuffix(c.DocsTarFile, ".tar.gz") && !strings.HasSuffix(c.DocsTarFile, ".tgz") {
+			return fmt.Errorf("--docs-tar-file currently supports only gzipped tar archives (required .tar.gz or .tgz file extension)")
+		}
+		b, err := os.ReadFile(c.DocsTarFile)
+		if err != nil {
+			return err
+		}
+		docsDesc := content.NewDescriptorFromBytes(utils.OCIBundleDocsMediaType, b)
+		if err := repo.Push(ctx, docsDesc, bytes.NewReader(b)); err != nil {
+			return err
+		}
+		layers = append(layers, docsDesc)
+	}
+
 	manifest := ocispec.Manifest{
 		Config:    configDesc,
-		Layers:    []ocispec.Descriptor{bodyDesc},
+		Layers:    layers,
 		Versioned: specs.Versioned{SchemaVersion: 2},
 		Annotations: map[string]string{
 			// compatibility with fluxcd ocirepo source
