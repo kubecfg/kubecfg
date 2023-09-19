@@ -4,7 +4,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/containerd/containerd v1.7.6
 	github.com/docker/cli v24.0.6+incompatible
-	github.com/evanphx/json-patch/v5 v5.6.0
+	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.5.3
