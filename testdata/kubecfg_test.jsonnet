@@ -194,6 +194,16 @@ local result =
   local two = kubecfg.layouts.gvkNsName(one, obj('b'));
   std.assertEqual(two, { 'example.com/v1alpha1.Test': { _: { a: obj('a'), b: obj('b') } } }) &&
 
+  local nested_obj = {
+      foo:: {
+          bar:: {
+              baz:: 'nested!'
+          }
+      }
+  };
+  std.assertEqual(kubecfg.getAtPath(nested_obj, 'foo.bar.baz', 'default!'), 'nested!') &&
+  std.assertEqual(kubecfg.getAtPath(nested_obj, 'path.not.exist', 'default!'), 'default!') &&
+
   true;
 
 // Kubecfg wants to see something that looks like a k8s object
