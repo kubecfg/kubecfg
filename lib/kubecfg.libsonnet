@@ -144,6 +144,22 @@
       error ('o must be an object or array of k8s objects, found ' + std.type(o))
   ),
 
+  local objectGetDeep(o, f, default) = (
+    local objectGetDeep_(o, ks) =
+      if !std.objectHasAll(o, ks[0]) then
+        default
+      else if std.length(ks) == 1 then
+        o[ks[0]]
+      else
+        objectGetDeep_(o[ks[0]], ks[1:]);
+
+    objectGetDeep_(o, std.split(f, '.'))
+  ),
+
+  // Similar to std.get, but with a nested jsonpath.
+  // If a value is not available, then a default is given
+  getAtPath(obj, path, default):: objectGetDeep(obj, path, default),
+
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
     // two-level collection of objects by 'apiVersion.kind'
