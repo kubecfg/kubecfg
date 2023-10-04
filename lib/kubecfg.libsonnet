@@ -156,9 +156,24 @@
     objectGetDeep_(o, std.split(f, '.'))
   ),
 
+  local objectHasDeep(o, f) = (
+    local objectHasDeep_(o, ks) =
+      if !std.objectHasAll(o, ks[0]) then
+        false
+      else if std.length(ks) == 1 then
+        true
+      else
+        objectHasDeep_(o[ks[0]], ks[1:]);
+
+    objectHasDeep_(o, std.split(f, '.'))
+  ),
+
   // Similar to std.get, but with a nested jsonpath.
   // If a value is not available, then a default is given
   getAtPath(obj, path, default):: objectGetDeep(obj, path, default),
+
+  // Similar to std.objectHasAll, but with a nested jsonpath.
+  hasAtPath(obj, path):: objectHasDeep(obj, path),
 
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a

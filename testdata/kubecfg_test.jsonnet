@@ -203,6 +203,8 @@ local result =
   };
   std.assertEqual(kubecfg.getAtPath(nested_obj, 'foo.bar.baz', 'default!'), 'nested!') &&
   std.assertEqual(kubecfg.getAtPath(nested_obj, 'path.not.exist', 'default!'), 'default!') &&
+  std.assertEqual(kubecfg.hasAtPath(nested_obj, 'foo.bar.baz'), true) &&
+  std.assertEqual(kubecfg.hasAtPath(nested_obj, 'path.not.exist'), false) &&
 
   true;
 
