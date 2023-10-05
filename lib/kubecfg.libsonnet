@@ -144,9 +144,18 @@
       error ('o must be an object or array of k8s objects, found ' + std.type(o))
   ),
 
-  local objectGetDeep(o, f, default) = (
+  // Helper function for deciding which standard library implementation to use.
+  local hidden_fields_wrapper(o, f, inc_hidden) = (
+    if inc_hidden then
+      !std.objectHasAll(o, f)
+    else
+      !std.objectHas(o, f)
+  ),
+
+  local objectGetDeep(o, f, default, inc_hidden) = (
+
     local objectGetDeep_(o, ks) =
-      if !std.objectHasAll(o, ks[0]) then
+      if hidden_fields_wrapper(o, ks[0], inc_hidden) then
         default
       else if std.length(ks) == 1 then
         o[ks[0]]
@@ -156,9 +165,9 @@
     objectGetDeep_(o, std.split(f, '.'))
   ),
 
-  local objectHasDeep(o, f) = (
+  local objectHasDeep(o, f, inc_hidden) = (
     local objectHasDeep_(o, ks) =
-      if !std.objectHasAll(o, ks[0]) then
+      if hidden_fields_wrapper(o, ks[0], inc_hidden) then
         false
       else if std.length(ks) == 1 then
         true
@@ -168,12 +177,15 @@
     objectHasDeep_(o, std.split(f, '.'))
   ),
 
-  // Similar to std.get, but with a nested jsonpath.
-  // If a value is not available, then a default is given
-  getAtPath(obj, path, default):: objectGetDeep(obj, path, default),
+  // getPath(obj, path, default, inc_hidden): Similar to std.get, but with a nested
+  // jsonpath. If a value is not available, then a default or null is returned.
+  getPath(obj, path, default=null, inc_hidden=true):: objectGetDeep(obj, path, default, inc_hidden),
 
-  // Similar to std.objectHasAll, but with a nested jsonpath.
-  hasAtPath(obj, path):: objectHasDeep(obj, path),
+  // objectHasPath(obj path, inc_hidden): Similar to std.objectHasAll, but with a nested jsonpath.
+  objectHasPath(obj, path, inc_hidden=false):: objectHasDeep(obj, path, inc_hidden),
+
+  // objectHasPathAll(obj path): Shorthand for objectHasPath(obj, path, inc_hidden=true)
+  objectHasPathAll(obj, path):: objectHasDeep(obj, path, inc_hidden=true),
 
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
