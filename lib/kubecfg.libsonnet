@@ -158,7 +158,9 @@
 
   local objectHasDeep(o, f) = (
     local objectHasDeep_(o, ks) =
-      if !std.objectHasAll(o, ks[0]) then
+      if !(std.type(o) == 'object' || std.type(o) == 'array') then
+        false
+      else if !std.objectHasAll(o, ks[0]) then
         false
       else if std.length(ks) == 1 then
         true

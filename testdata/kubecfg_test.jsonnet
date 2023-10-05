@@ -195,16 +195,20 @@ local result =
   std.assertEqual(two, { 'example.com/v1alpha1.Test': { _: { a: obj('a'), b: obj('b') } } }) &&
 
   local nested_obj = {
-      foo:: {
-          bar:: {
-              baz:: 'nested!'
-          }
-      }
+    foo:: {
+      bar:: {
+        baz:: 'nested!',
+      },
+    },
   };
   std.assertEqual(kubecfg.getAtPath(nested_obj, 'foo.bar.baz', 'default!'), 'nested!') &&
   std.assertEqual(kubecfg.getAtPath(nested_obj, 'path.not.exist', 'default!'), 'default!') &&
+  std.assertEqual(kubecfg.getAtPath({ foo: 10 }, 'foo', 1), 10) &&
+  std.assertEqual(kubecfg.getAtPath({ foo: 10 }, 'bar.baz', null), null) &&
   std.assertEqual(kubecfg.hasAtPath(nested_obj, 'foo.bar.baz'), true) &&
-  std.assertEqual(kubecfg.hasAtPath(nested_obj, 'path.not.exist'), false) &&
+  std.assertEqual(kubecfg.hasAtPath(nested_obj, 'foo.not.exist'), false) &&
+  std.assertEqual(kubecfg.hasAtPath({ foo: 10 }, 'foo.bar.baz'), false) &&
+  std.assertEqual(kubecfg.hasAtPath({ foo: 10 }, 'baz'), false) &&
 
   true;
 
