@@ -181,7 +181,7 @@
   // jsonpath. If a value is not available, then a default or null is returned.
   getPath(obj, path, default=null, inc_hidden=true):: objectGetDeep(obj, path, default, inc_hidden),
 
-  // objectHasPath(obj path, inc_hidden): Similar to std.objectHasAll, but with a nested jsonpath.
+  // objectHasPath(obj, path, inc_hidden): Similar to std.objectHasAll, but with a nested jsonpath.
   objectHasPath(obj, path, inc_hidden=false):: objectHasDeep(obj, path, inc_hidden),
 
   // objectHasPathAll(obj path): Shorthand for objectHasPath(obj, path, inc_hidden=true)
