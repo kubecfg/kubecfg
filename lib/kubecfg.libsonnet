@@ -144,6 +144,49 @@
       error ('o must be an object or array of k8s objects, found ' + std.type(o))
   ),
 
+  // Helper function for deciding which standard library implementation to use.
+  local hidden_fields_wrapper(o, f, inc_hidden) = (
+    if inc_hidden then
+      !std.objectHasAll(o, f)
+    else
+      !std.objectHas(o, f)
+  ),
+
+  local objectGetDeep(o, f, default, inc_hidden) = (
+
+    local objectGetDeep_(o, ks) =
+      if hidden_fields_wrapper(o, ks[0], inc_hidden) then
+        default
+      else if std.length(ks) == 1 then
+        o[ks[0]]
+      else
+        objectGetDeep_(o[ks[0]], ks[1:]);
+
+    objectGetDeep_(o, std.split(f, '.'))
+  ),
+
+  local objectHasDeep(o, f, inc_hidden) = (
+    local objectHasDeep_(o, ks) =
+      if hidden_fields_wrapper(o, ks[0], inc_hidden) then
+        false
+      else if std.length(ks) == 1 then
+        true
+      else
+        objectHasDeep_(o[ks[0]], ks[1:]);
+
+    objectHasDeep_(o, std.split(f, '.'))
+  ),
+
+  // getPath(obj, path, default, inc_hidden): Similar to std.get, but with a nested
+  // jsonpath. If a value is not available, then a default or null is returned.
+  getPath(obj, path, default=null, inc_hidden=true):: objectGetDeep(obj, path, default, inc_hidden),
+
+  // objectHasPath(obj, path, inc_hidden): Similar to std.objectHasAll, but with a nested jsonpath.
+  objectHasPath(obj, path, inc_hidden=false):: objectHasDeep(obj, path, inc_hidden),
+
+  // objectHasPathAll(obj path): Shorthand for objectHasPath(obj, path, inc_hidden=true)
+  objectHasPathAll(obj, path):: objectHasDeep(obj, path, inc_hidden=true),
+
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
     // two-level collection of objects by 'apiVersion.kind'
