@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"io"
 	"net/url"
 	"os"
@@ -81,7 +83,7 @@ func (c PackCmd) Run(ctx context.Context, vm *jsonnet.VM, ociPackage string, roo
 		return err
 	}
 
-	return c.pushOCIBundle(ctx, ociPackage, bodyBlob.Bytes(), shortEntrypoint, metadata)
+	return c.pushOCIBundle(ctx, ociPackage, rootFile, bodyBlob.Bytes(), shortEntrypoint, metadata)
 }
 
 func bundleConfigMetadata(vm *jsonnet.VM, rootURL *url.URL) (json.RawMessage, error) {
@@ -136,12 +138,17 @@ func bundleAllDependencies(w io.Writer, vm *jsonnet.VM, rootURL *url.URL) (strin
 	return shortEntrypoint, nil
 }
 
-func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte, entryPoint string, bundleConfigMetadata json.RawMessage) error {
+func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string, bodyBlob []byte, entryPoint string, bundleConfigMetadata json.RawMessage) error {
 	repo, err := oci.NewAuthenticatedRepository(ref)
 	if err != nil {
 		return err
 	}
 	repo.PlainHTTP = c.InsecureRegistry
+
+	revision, err := getSourceRevision(rootFile)
+	if err != nil {
+		return err
+	}
 
 	bodyDesc := content.NewDescriptorFromBytes(utils.OCIBundleBodyMediaType, bodyBlob)
 	if err := repo.Push(ctx, bodyDesc, bytes.NewReader(bodyBlob)); err != nil {
@@ -185,7 +192,7 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		Annotations: map[string]string{
 			// compatibility with fluxcd ocirepo source
 			"org.opencontainers.image.created":  "1970-01-01T00:00:00Z",
-			"org.opencontainers.image.revision": "unknown",
+			"org.opencontainers.image.revision": revision,
 			"org.opencontainers.image.source":   "kubecfg pack",
 		},
 	}
@@ -199,6 +206,18 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 	}
 
 	return nil
+}
+
+func getSourceRevision(rootFile string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(rootFile, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return "unknown", err
+	}
+	hash, err := repo.ResolveRevision(plumbing.Revision(plumbing.HEAD))
+	if err != nil {
+		return "unknown", err
+	}
+	return hash.String(), nil
 }
 
 // returns rootFile parsed as a file URL along with a sorted list of files imported by rootFile
