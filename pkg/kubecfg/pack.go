@@ -145,11 +145,6 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 	}
 	repo.PlainHTTP = c.InsecureRegistry
 
-	revision, err := getSourceRevision(rootFile)
-	if err != nil {
-		return err
-	}
-
 	bodyDesc := content.NewDescriptorFromBytes(utils.OCIBundleBodyMediaType, bodyBlob)
 	if err := repo.Push(ctx, bodyDesc, bytes.NewReader(bodyBlob)); err != nil {
 		return err
@@ -185,6 +180,8 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 		layers = append(layers, docsDesc)
 	}
 
+	revision := getSourceRevision(rootFile)
+
 	manifest := ocispec.Manifest{
 		Config:    configDesc,
 		Layers:    layers,
@@ -208,16 +205,16 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 	return nil
 }
 
-func getSourceRevision(rootFile string) (string, error) {
+func getSourceRevision(rootFile string) string {
 	repo, err := git.PlainOpenWithOptions(rootFile, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		return "unknown", err
+		return "unknown"
 	}
 	hash, err := repo.ResolveRevision(plumbing.Revision(plumbing.HEAD))
 	if err != nil {
-		return "unknown", err
+		return "unknown"
 	}
-	return hash.String(), nil
+	return hash.String()
 }
 
 // returns rootFile parsed as a file URL along with a sorted list of files imported by rootFile
