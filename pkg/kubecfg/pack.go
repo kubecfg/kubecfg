@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"path"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/pkg/oci"
@@ -210,12 +210,12 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 func getSourceRevision(rootFile string) string {
 	repo, err := git.PlainOpenWithOptions(rootFile, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		log.Printf("error opening git repo: %s", err)
+		log.Debugf("populating vcs revision for OCI annotation: error opening git repo: %s", err)
 		return "unknown"
 	}
 	hash, err := repo.ResolveRevision(plumbing.Revision(plumbing.HEAD))
 	if err != nil {
-		log.Printf("error resolving git HEAD revision: %s", err)
+		log.Debugf("populating vcs revision for OCI annotation: error resolving git HEAD revision: %s", err)
 		return "unknown"
 	}
 	return hash.String()
