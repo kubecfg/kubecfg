@@ -29,6 +29,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/pkg/oci"
 	"github.com/kubecfg/kubecfg/pkg/version"
@@ -81,7 +85,7 @@ func (c PackCmd) Run(ctx context.Context, vm *jsonnet.VM, ociPackage string, roo
 		return err
 	}
 
-	return c.pushOCIBundle(ctx, ociPackage, bodyBlob.Bytes(), shortEntrypoint, metadata)
+	return c.pushOCIBundle(ctx, ociPackage, rootFile, bodyBlob.Bytes(), shortEntrypoint, metadata)
 }
 
 func bundleConfigMetadata(vm *jsonnet.VM, rootURL *url.URL) (json.RawMessage, error) {
@@ -136,7 +140,7 @@ func bundleAllDependencies(w io.Writer, vm *jsonnet.VM, rootURL *url.URL) (strin
 	return shortEntrypoint, nil
 }
 
-func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte, entryPoint string, bundleConfigMetadata json.RawMessage) error {
+func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string, bodyBlob []byte, entryPoint string, bundleConfigMetadata json.RawMessage) error {
 	repo, err := oci.NewAuthenticatedRepository(ref)
 	if err != nil {
 		return err
@@ -178,6 +182,8 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		layers = append(layers, docsDesc)
 	}
 
+	revision := getSourceRevision(rootFile)
+
 	manifest := ocispec.Manifest{
 		Config:    configDesc,
 		Layers:    layers,
@@ -185,7 +191,7 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 		Annotations: map[string]string{
 			// compatibility with fluxcd ocirepo source
 			"org.opencontainers.image.created":  "1970-01-01T00:00:00Z",
-			"org.opencontainers.image.revision": "unknown",
+			"org.opencontainers.image.revision": revision,
 			"org.opencontainers.image.source":   "kubecfg pack",
 		},
 	}
@@ -199,6 +205,20 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, bodyBlob []byte,
 	}
 
 	return nil
+}
+
+func getSourceRevision(rootFile string) string {
+	repo, err := git.PlainOpenWithOptions(rootFile, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		log.Debugf("populating vcs revision for OCI annotation: error opening git repo: %s", err)
+		return "unknown"
+	}
+	hash, err := repo.ResolveRevision(plumbing.Revision(plumbing.HEAD))
+	if err != nil {
+		log.Debugf("populating vcs revision for OCI annotation: error resolving git HEAD revision: %s", err)
+		return "unknown"
+	}
+	return hash.String()
 }
 
 // returns rootFile parsed as a file URL along with a sorted list of files imported by rootFile
