@@ -7,6 +7,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
+	github.com/go-git/go-git/v5 v5.9.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/gnostic v0.7.0
 	github.com/google/go-jsonnet v0.20.0
@@ -15,7 +16,7 @@ require (
 	github.com/kubecfg/ursonnet v0.1.1
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.19
-	github.com/onsi/ginkgo/v2 v2.12.1
+	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.27.10
 	github.com/opencontainers/image-spec v1.1.0-rc5
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -71,7 +72,6 @@ require (
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
-	github.com/go-git/go-git/v5 v5.9.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
