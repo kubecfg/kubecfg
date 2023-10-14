@@ -12,7 +12,7 @@ require (
 	github.com/google/gnostic v0.7.0
 	github.com/google/go-jsonnet v0.20.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/klauspost/compress v1.17.0
+	github.com/klauspost/compress v1.17.1
 	github.com/kubecfg/ursonnet v0.1.1
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.19
