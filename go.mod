@@ -38,7 +38,7 @@ require (
 	k8s.io/kubectl v0.27.4
 	oras.land/oras-go v1.2.4
 	oras.land/oras-go/v2 v2.3.0
-	sigs.k8s.io/kustomize/api v0.13.2
+	sigs.k8s.io/kustomize/api v0.14.0
 	sigs.k8s.io/kustomize/kyaml v0.14.3
 )
 
