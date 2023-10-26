@@ -7,7 +7,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-git/go-git/v5 v5.9.0
+	github.com/go-git/go-git/v5 v5.10.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/gnostic v0.7.0
 	github.com/google/go-jsonnet v0.20.0
