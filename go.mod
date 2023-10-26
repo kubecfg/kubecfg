@@ -39,7 +39,7 @@ require (
 	oras.land/oras-go v1.2.4
 	oras.land/oras-go/v2 v2.3.1
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3
-	sigs.k8s.io/kustomize/kyaml v0.14.3
+	sigs.k8s.io/kustomize/kyaml v0.15.0
 )
 
 require (
