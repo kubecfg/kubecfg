@@ -1,4 +1,4 @@
-# RFC02: Caching and vendoring
+# RFC03: Caching and vendoring
 
 ## Background
 
