@@ -99,7 +99,7 @@
     } else v
   ),
 
-  // isK8sObject(o): Return true iff o is a Kubernetes object.
+  // isK8sObject(o): Return true if o is a Kubernetes object.
   isK8sObject(o):: (
     std.isObject(o) &&
     std.objectHas(o, 'apiVersion') &&
