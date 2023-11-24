@@ -172,19 +172,55 @@ func annotateProvenance(ctx *walkContext, o *unstructured.Unstructured) {
 	SetMetaDataAnnotation(o, AnnotationProvenancePath, ctx.path())
 }
 
+// NewUnstructuredObject returns a new unstructured.Unstructured object from a raw json object expressed as an untyped tree
+// It returns an error if the object doesn't appear to be a valid k8s object.
+// If the object is a k8s List object, the validation is performed opn the list items recursively.
+func NewUnstructuredObject(o map[string]interface{}) (*unstructured.Unstructured, error) {
+	obj := &unstructured.Unstructured{Object: o}
+	if err := validateUnstructuredObject(obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func validateUnstructuredObject(obj *unstructured.Unstructured) error {
+	if obj.IsList() {
+		return obj.EachListItem(func(item runtime.Object) error { return validateUnstructuredObject(item.(*unstructured.Unstructured)) })
+	}
+
+	for _, field := range []string{"annotations", "labels"} {
+		anyMap, _, err := unstructured.NestedFieldNoCopy(obj.Object, "metadata", field)
+		if err != nil {
+			return err
+		}
+		if anyMap != nil {
+			stringMap, _, _ := unstructured.NestedStringMap(obj.Object, "metadata", field)
+			if stringMap == nil {
+				gvknsn := fmt.Sprintf("%s/%s.%s/%s", obj.GroupVersionKind().Version, obj.GroupVersionKind().GroupKind(), obj.GetNamespace(), obj.GetName())
+				return fmt.Errorf("%s map contains invalid (non-string) values in resource: %s", field, gvknsn)
+			}
+		}
+	}
+
+	return nil
+}
+
 func jsonWalk(parentCtx *walkContext, obj interface{}, visitor func(c *walkContext, obj *unstructured.Unstructured) error) error {
 	switch o := obj.(type) {
 	case nil:
 		return nil
 	case map[string]interface{}:
 		if o["kind"] != nil && o["apiVersion"] != nil {
-			obj := unstructured.Unstructured{Object: o}
+			obj, err := NewUnstructuredObject(o)
+			if err != nil {
+				return err
+			}
 			if obj.IsList() {
 				return obj.EachListItem(func(item runtime.Object) error {
 					return visitor(parentCtx.child(".item"), item.(*unstructured.Unstructured))
 				})
 			}
-			return visitor(parentCtx, &obj)
+			return visitor(parentCtx, obj)
 		}
 		// Use consistent traversal order
 		keys := make([]string, 0, len(o))

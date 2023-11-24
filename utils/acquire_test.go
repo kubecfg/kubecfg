@@ -71,6 +71,13 @@ func TestJsonWalk(t *testing.T) {
 			},
 		},
 	}
+	fooObjNullAnno := map[string]interface{}{
+		"apiVersion": "test",
+		"kind":       "Foo",
+		"metadata": map[string]interface{}{
+			"annotations": nil,
+		},
+	}
 
 	tests := []struct {
 		input      string
@@ -137,6 +144,31 @@ func TestJsonWalk(t *testing.T) {
 			// Error: nested misplaced value
 			input: `{"foo": {"bar": [null, 42]}}`,
 			error: "Looking for kubernetes object at \"$.foo.bar[1]\", but instead found float64",
+		},
+		{
+			// Error: non-string annotation value
+			input: `{"apiVersion": "test", "kind": "Foo", "metadata": {"name":"a", "namespace": "b", "annotations":{"x":true}}}`,
+			error: `annotations map contains invalid (non-string) values in resource: test/Foo.b/a`,
+		},
+		{
+			// Error: non-string label value
+			input: `{"apiVersion": "test", "kind": "Foo", "metadata": {"name":"a", "namespace": "b", "labels":{"x":true}}}`,
+			error: `labels map contains invalid (non-string) values in resource: test/Foo.b/a`,
+		},
+		{
+			// Error: non-string annotation value in list
+			input: `{"apiVersion": "test", "kind": "List", "items": [{"apiVersion": "test", "kind": "Foo", "metadata": {"name":"a", "namespace": "b", "annotations":{"x":true}}}]}`,
+			error: `annotations map contains invalid (non-string) values in resource: test/Foo.b/a`,
+		},
+		{
+			// Error: non-string annotation value in nested list
+			input: `{"apiVersion": "test", "kind": "List", "items": [{"apiVersion": "test", "kind": "List", "items": [{"apiVersion": "test", "kind": "Foo", "metadata": {"name":"a", "namespace": "b", "annotations":{"x":true}}}]}]}`,
+			error: `annotations map contains invalid (non-string) values in resource: test/Foo.b/a`,
+		},
+		{
+			// null annotations should work
+			input:  `{"apiVersion": "test", "kind": "Foo", "metadata": {"annotations":null}}`,
+			result: []interface{}{fooObjNullAnno},
 		},
 	}
 
