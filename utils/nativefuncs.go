@@ -33,7 +33,6 @@ import (
 	helmLoader "helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
 	helmEngine "helm.sh/helm/v3/pkg/engine"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -242,7 +241,10 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 						continue
 					}
 					if o, ok := objs[i].(map[string]interface{}); ok {
-						obj := unstructured.Unstructured{Object: o}
+						obj, err := NewUnstructuredObject(o)
+						if err != nil {
+							return nil, err
+						}
 						// Cheat and just set namespace on everything, even non-namespaced objects. Server will ignore namespace where it isn't relevant.
 						if obj.GetNamespace() == "" {
 							obj.SetNamespace(namespace)
