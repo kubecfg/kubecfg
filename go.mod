@@ -39,7 +39,7 @@ require (
 	oras.land/oras-go v1.2.4
 	oras.land/oras-go/v2 v2.3.1
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3
-	sigs.k8s.io/kustomize/kyaml v0.15.0
+	sigs.k8s.io/kustomize/kyaml v0.16.0
 )
 
 require (
@@ -160,7 +160,7 @@ require (
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
 go 1.21
