@@ -114,7 +114,7 @@ jobs:
 
     steps:
       - name: Download kubecfg artifact
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935 # v4
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
       - name: Upload assets
