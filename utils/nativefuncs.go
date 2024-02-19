@@ -172,11 +172,9 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 			vals := args[3].(map[string]interface{})
 			mapCaps := args[4].(map[string]interface{})
 
-			// If capabilities are set, process them. Use the default
-			// capabilities as the base. If a user provided capabilities, only
-			// copy over the KubeVersion as the other fields are not easily
-			// configurable through the jsonnet interface or, in the case of the
-			// helm version, don't make sense.
+			// If capabilities are set, process them.
+			// Use the default capabilities as the base.
+			// IGNORE user provided HelmVersion and warn the user.
 			var capabilities = chartutil.DefaultCapabilities.Copy()
 			if capKubeVersion, ok := mapCaps["KubeVersion"].(map[string]interface{}); ok {
 				capabilities.KubeVersion = chartutil.KubeVersion{
@@ -184,6 +182,14 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 					Major:   fmt.Sprint(capKubeVersion["Major"]),
 					Minor:   fmt.Sprint(capKubeVersion["Minor"]),
 				}
+			}
+			if capApiVers, ok := mapCaps["APIVersions"].([]interface{}); ok {
+				for _, av := range capApiVers {
+					capabilities.APIVersions = append(capabilities.APIVersions, av.(string))
+				}
+			}
+			if _, ok := mapCaps["HelmVersion"]; ok {
+				fmt.Printf("WARNING ignoring provided HelmVersion; using default: %s\n", capabilities.HelmVersion)
 			}
 
 			reader := &ArrayReader{chartData}
