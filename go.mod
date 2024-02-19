@@ -37,7 +37,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20240209001042-7a0d5b415232
 	k8s.io/kubectl v0.29.1
 	oras.land/oras-go v1.2.4
-	oras.land/oras-go/v2 v2.3.1
+	oras.land/oras-go/v2 v2.4.0
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3
 	sigs.k8s.io/kustomize/kyaml v0.16.0
 )
@@ -143,7 +143,7 @@ require (
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
-	golang.org/x/sync v0.5.0 // indirect
+	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
 	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
