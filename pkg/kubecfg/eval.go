@@ -32,10 +32,8 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	if err != nil {
 		return err
 	}
+
 	var eval string
-	if err != nil {
-		return err
-	}
 	if len(tla) > 0 {
 		formals := strings.Join(tla, ",")
 		pairs := make([]string, len(tla))
