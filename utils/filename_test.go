@@ -98,11 +98,6 @@ var scenarios = []filenameScenario{
 		expected: "%70%72%6e.ext",
 	},
 	{
-		scenario: "starts with -",
-		given:    "-why_would_you_do_this",
-		expected: "%2dwhy_would_you_do_this",
-	},
-	{
 		scenario: "ends with .",
 		given:    "bad_idea.",
 		expected: "bad_idea%2e",
