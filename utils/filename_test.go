@@ -39,18 +39,18 @@ var scenarios = []filenameScenario{
 	},
 	{
 		scenario: "capitals",
-		given:    "This Has Caps And Spaces",
-		expected: "%54his %48as %43aps %41nd %53paces",
+		given:    "This Has Caps",
+		expected: "%54his %48as %43aps",
 	},
 	{
 		scenario: "multi-code point symbols",
 		given:    "fist👊🏼bump",
-		expected: "fist%f0%9f%91%8a%f0%9f%8f%bcbump",
+		expected: "fist👊🏼bump",
 	},
 	{
 		scenario: "disallowed symbols",
-		given:    "?_<_>_*_|_\\_/_%",
-		expected: "%3f_%3c_%3e_%2a_%7c_%5c_%2f_%25",
+		given:    `^_"_:_?_<_>_*_|_\_/_%`,
+		expected: "%5e_%22_%3a_%3f_%3c_%3e_%2a_%7c_%5c_%2f_%25",
 	},
 	{
 		scenario: "one dot",
@@ -116,6 +116,11 @@ var scenarios = []filenameScenario{
 		scenario: "Cyrillic capitals",
 		given:    "Б б Г г Д д",
 		expected: "%d0%91 б %d0%93 г %d0%94 д",
+	},
+	{
+		scenario: "Greek capitals",
+		given:    "Γ γ Δ δ Ω ω",
+		expected: "%ce%93 γ %ce%94 δ %ce%a9 ω",
 	},
 }
 
