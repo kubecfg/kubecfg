@@ -7,26 +7,27 @@ import (
 
 const lowerHex = "0123456789abcdef"
 
-var allowedChars = regexp.MustCompile(`[^0-9a-z!@#$&()\[\]{},.;~\-_=+]`)
+var allowedChars = regexp.MustCompile(`[^0-9a-z!@#$()\[\]{},.;~\-_=+ ]`)
 
 // These are reserved words and symbols which cannot be a file name, with or without a file extension
 // Mainly special Windows devices
+// See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
 var reservedWords = regexp.MustCompile(`^aux|^com[0-9¹²³]|^con|^lpt[0-9¹²³]|^nul|^prn`)
 
-// Symbols that cannot (or should not) make up the entirety of a filename
-var illegalSolo = regexp.MustCompile(`^\.+$`)
-
 // Symbols that cannot (or should not) begin a file name
+// This is technically legal on all major OSes, but it's very hard to work with these files because many common shells
+// interpret the file name as a flag rather than a file
 var illegalPrefix = regexp.MustCompile(`^-`)
 
 // Symbols that cannot (or should not) end a file name
-var illegalSuffix = regexp.MustCompile(`\.$`)
+// Windows does not allow file names to end in a '.' or ' '
+var illegalSuffix = regexp.MustCompile(`[. ]$`)
 
 // Encode percent encodes a filename string, to minimize cross-platform compatibility issues related to case handling,
 // allowed characters, and reserved words
 func Encode(str string) (string, error) {
 	filename := allowedChars.ReplaceAllStringFunc(str, escape)
-	filename = illegalSolo.ReplaceAllStringFunc(filename, escape)
+	//filename = illegalSolo.ReplaceAllStringFunc(filename, escape)
 	filename = illegalPrefix.ReplaceAllStringFunc(filename, escape)
 	filename = illegalSuffix.ReplaceAllStringFunc(filename, escape)
 
@@ -39,21 +40,14 @@ func Encode(str string) (string, error) {
 // escape converts every byte in string s to a percent encoded string
 // similar to net/url methods, but simplified to remove any decision logic, and using lowercase letters
 func escape(s string) string {
-	bufSize := len(s)
+	var buf strings.Builder
 
-	if bufSize == 0 {
-		return s
-	}
-
-	required := len(s) + 2*bufSize
-	buf := make([]byte, required)
-
-	for iBuf, i := 0, 0; i < len(s); i++ {
+	for i := 0; i < len(s); i++ {
 		c := s[i]
-		buf[iBuf] = '%'
-		buf[iBuf+1] = lowerHex[c>>4]
-		buf[iBuf+2] = lowerHex[c&15]
-		iBuf += 3
+		buf.WriteByte('%')
+		buf.WriteByte(lowerHex[c>>4])
+		buf.WriteByte(lowerHex[c&15])
 	}
-	return string(buf)
+
+	return buf.String()
 }

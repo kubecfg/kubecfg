@@ -23,22 +23,27 @@ var scenarios = []filenameScenario{
 		expected: "this_is_valid",
 	},
 	{
+		scenario: "with extension",
+		given:    "this_is_valid.txt",
+		expected: "this_is_valid.txt",
+	},
+	{
+		scenario: "with multiple dots",
+		given:    "this_is_valid..txt",
+		expected: "this_is_valid..txt",
+	},
+	{
 		scenario: "spaces",
 		given:    "this has spaces",
-		expected: "this%20has%20spaces",
+		expected: "this has spaces",
 	},
 	{
 		scenario: "capitals",
 		given:    "This Has Caps And Spaces",
-		expected: "%54his%20%48as%20%43aps%20%41nd%20%53paces",
+		expected: "%54his %48as %43aps %41nd %53paces",
 	},
 	{
-		scenario: "emojis",
-		given:    "happy😀file",
-		expected: "happy%f0%9f%98%80file",
-	},
-	{
-		scenario: "complex emojis",
+		scenario: "multi-code point symbols",
 		given:    "fist👊🏼bump",
 		expected: "fist%f0%9f%91%8a%f0%9f%8f%bcbump",
 	},
@@ -55,12 +60,12 @@ var scenarios = []filenameScenario{
 	{
 		scenario: "two dots",
 		given:    "..",
-		expected: "%2e%2e",
+		expected: ".%2e",
 	},
 	{
 		scenario: "all dots",
 		given:    "....",
-		expected: "%2e%2e%2e%2e",
+		expected: "...%2e",
 	},
 	{
 		scenario: "reserved words (aux)",
@@ -101,6 +106,16 @@ var scenarios = []filenameScenario{
 		scenario: "ends with .",
 		given:    "bad_idea.",
 		expected: "bad_idea%2e",
+	},
+	{
+		scenario: "ends with space",
+		given:    "invalid ",
+		expected: "invalid%20",
+	},
+	{
+		scenario: "Cyrillic capitals",
+		given:    "Б б Г г Д д",
+		expected: "%d0%91 б %d0%93 г %d0%94 д",
 	},
 }
 
