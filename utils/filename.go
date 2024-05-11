@@ -46,7 +46,7 @@ func escapeAll(s string) string {
 	var buf strings.Builder
 
 	for i := 0; i < len(s); i++ {
-		buf.WriteString(fmt.Sprintf("%%%02x", s[i]))
+		fmt.Fprintf(&buf, "%%%02x", s[i])
 	}
 
 	return buf.String()
