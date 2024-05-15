@@ -1,4 +1,4 @@
-package utils
+package filenamemangle
 
 import (
 	"fmt"
@@ -6,8 +6,7 @@ import (
 	"strings"
 )
 
-const lowerHex = "0123456789abcdef"
-
+// Used to test characters individually for casing issues
 var allChars = regexp.MustCompile(`.`)
 
 // Symbols that are never allowed in file names on at least one platform

@@ -1,4 +1,4 @@
-package utils
+package filenamemangle
 
 import (
 	"net/url"
