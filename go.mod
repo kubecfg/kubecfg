@@ -3,7 +3,7 @@ module github.com/kubecfg/kubecfg
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/containerd/containerd v1.7.12
-	github.com/docker/cli v25.0.3+incompatible
+	github.com/docker/cli v25.0.5+incompatible
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
