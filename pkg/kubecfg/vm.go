@@ -84,17 +84,42 @@ const (
 	RegistryResolver
 )
 
-// Enum value maps for ResolverType.
 var (
-	ResolverType_name = map[ResolverType]string{
-		0: "noop",
-		1: "registry",
+	// resolverTypeValue returns the ResolverType value for a string
+	resolverTypeValue = map[string]ResolverType{
+		"noop":     NoopResolver,
+		"registry": RegistryResolver,
 	}
-	ResolverType_value = map[string]ResolverType{
-		"noop":     0,
-		"registry": 1,
+	// resolverTypeName returns the string value for a ResolverType
+	resolverTypeName = map[ResolverType]string{
+		NoopResolver:     "noop",
+		RegistryResolver: "registry",
 	}
 )
+
+func (t ResolverType) String() string {
+	return resolverTypeName[t]
+}
+
+// AvailableResolverTypes returns the possible values of ResolverTypes
+func AvailableResolverTypes() []string {
+	var types []string
+	for t, _ := range resolverTypeValue {
+		types = append(types, t)
+	}
+	return types
+}
+
+func ParseResolverType(rt string) ResolverType {
+	switch rt {
+	case "noop":
+		return NoopResolver
+	case "registry":
+		return RegistryResolver
+	default:
+		return NoopResolver
+	}
+}
 
 type ResolverFailureAction int
 
@@ -104,19 +129,46 @@ const (
 	ReportResolverError
 )
 
-// Enum value maps for ResolverFailureAction.
 var (
-	ResolverFailureAction_name = map[ResolverFailureAction]string{
-		0: "ignore",
-		1: "warn",
-		2: "error",
+	// resolverFailureActionValue returns the ResolverFailureAction value for a string
+	resolverFailureActionValue = map[string]ResolverFailureAction{
+		"ignore": IgnoreResolverError,
+		"warn":   WarnResolverError,
+		"error":  ReportResolverError,
 	}
-	ResolverFailureAction_value = map[string]ResolverFailureAction{
-		"ignore": 0,
-		"warn":   1,
-		"error":  2,
+	// resolverFailureActionName returns the string value for a ResolverFailureAction
+	resolverFailureActionName = map[ResolverFailureAction]string{
+		IgnoreResolverError: "ignore",
+		WarnResolverError:   "warn",
+		ReportResolverError: "error",
 	}
 )
+
+func (t ResolverFailureAction) String() string {
+	return resolverFailureActionName[t]
+}
+
+// AvailableResolverFailureAction returns the possible values of ResolverFailureAction
+func AvailableResolverFailureAction() []string {
+	var types []string
+	for t, _ := range resolverFailureActionValue {
+		types = append(types, t)
+	}
+	return types
+}
+
+func ParseResolverFailureAction(rfa string) ResolverFailureAction {
+	switch rfa {
+	case "ignore":
+		return IgnoreResolverError
+	case "warn":
+		return WarnResolverError
+	case "error":
+		return ReportResolverError
+	default:
+		return WarnResolverError
+	}
+}
 
 func WithResolver(typ ResolverType, failureMode ResolverFailureAction) JsonnetVMOpt {
 	return func(opts *jsonnetVMOpts) {
