@@ -237,6 +237,10 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 		}
 	}
 
+	resolverType := kubecfg.ResolverType_value[viper.GetString(flagResolver)]
+	resolverFailureAction := kubecfg.ResolverFailureAction_value[viper.GetString(flagResolvFail)]
+	opts = append(opts, kubecfg.WithResolver(resolverType, resolverFailureAction))
+
 	for _, spec := range []struct {
 		flagName string
 		fromFile bool

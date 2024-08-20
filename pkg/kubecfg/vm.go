@@ -26,11 +26,12 @@ import (
 
 	"github.com/genuinetools/reg/registry"
 	"github.com/google/go-jsonnet"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/kubecfg/kubecfg/internal/acquire"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type jsonnetVMOpts struct {
@@ -83,12 +84,38 @@ const (
 	RegistryResolver
 )
 
+// Enum value maps for ResolverType.
+var (
+	ResolverType_name = map[ResolverType]string{
+		0: "noop",
+		1: "registry",
+	}
+	ResolverType_value = map[string]ResolverType{
+		"noop":     0,
+		"registry": 1,
+	}
+)
+
 type ResolverFailureAction int
 
 const (
 	IgnoreResolverError ResolverFailureAction = iota
 	WarnResolverError
 	ReportResolverError
+)
+
+// Enum value maps for ResolverFailureAction.
+var (
+	ResolverFailureAction_name = map[ResolverFailureAction]string{
+		0: "ignore",
+		1: "warn",
+		2: "error",
+	}
+	ResolverFailureAction_value = map[string]ResolverFailureAction{
+		"ignore": 0,
+		"warn":   1,
+		"error":  2,
+	}
 )
 
 func WithResolver(typ ResolverType, failureMode ResolverFailureAction) JsonnetVMOpt {
