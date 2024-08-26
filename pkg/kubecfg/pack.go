@@ -161,6 +161,7 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 		return err
 	}
 	configDesc := content.NewDescriptorFromBytes(utils.OCIBundleConfigMediaType, configBlob)
+	configDesc.ArtifactType = utils.OCIBundleConfigArtifactType
 	if err := repo.Push(ctx, configDesc, bytes.NewReader(configBlob)); err != nil {
 		return err
 	}
