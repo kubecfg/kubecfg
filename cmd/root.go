@@ -87,8 +87,8 @@ func init() {
 	RootCmd.PersistentFlags().StringArray(flagTLACode, nil, "Values of top level arguments with values supplied as Jsonnet code")
 	RootCmd.PersistentFlags().StringArray(flagTLACodeFile, nil, "Read top level arguments with values supplied as Jsonnet code from files")
 	RootCmd.MarkPersistentFlagFilename(flagTLACodeFile)
-	RootCmd.PersistentFlags().String(flagResolver, "noop", "Change implementation of resolveImage native function. One of: noop, registry")
-	RootCmd.PersistentFlags().String(flagResolvFail, "warn", "Action when resolveImage fails. One of ignore,warn,error")
+	RootCmd.PersistentFlags().String(flagResolver, kubecfg.NoopResolver.String(), fmt.Sprintf("Change implementation of resolveImage native function. One of: %s", strings.Join(kubecfg.AvailableResolverTypes(), ", ")))
+	RootCmd.PersistentFlags().String(flagResolvFail, kubecfg.WarnResolverError.String(), fmt.Sprintf("Action when resolveImage fails. One of: %s", strings.Join(kubecfg.AvailableResolverFailureAction(), ", ")))
 
 	// The "usual" clientcmd/kubectl flags
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -236,6 +236,10 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 			opts = append(opts, kubecfg.WithVar(vars.New(typ, expr, source, name, value)))
 		}
 	}
+
+	resolverType := kubecfg.ParseResolverType(viper.GetString(flagResolver))
+	resolverFailureAction := kubecfg.ParseResolverFailureAction(viper.GetString(flagResolvFail))
+	opts = append(opts, kubecfg.WithResolver(resolverType, resolverFailureAction))
 
 	for _, spec := range []struct {
 		flagName string

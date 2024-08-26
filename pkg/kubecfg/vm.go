@@ -26,11 +26,12 @@ import (
 
 	"github.com/genuinetools/reg/registry"
 	"github.com/google/go-jsonnet"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/kubecfg/kubecfg/internal/acquire"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type jsonnetVMOpts struct {
@@ -83,6 +84,43 @@ const (
 	RegistryResolver
 )
 
+var (
+	// resolverTypeValue returns the ResolverType value for a string
+	resolverTypeValue = map[string]ResolverType{
+		"noop":     NoopResolver,
+		"registry": RegistryResolver,
+	}
+	// resolverTypeName returns the string value for a ResolverType
+	resolverTypeName = map[ResolverType]string{
+		NoopResolver:     "noop",
+		RegistryResolver: "registry",
+	}
+)
+
+func (t ResolverType) String() string {
+	return resolverTypeName[t]
+}
+
+// AvailableResolverTypes returns the possible values of ResolverTypes
+func AvailableResolverTypes() []string {
+	var types []string
+	for t, _ := range resolverTypeValue {
+		types = append(types, t)
+	}
+	return types
+}
+
+func ParseResolverType(rt string) ResolverType {
+	switch rt {
+	case "noop":
+		return NoopResolver
+	case "registry":
+		return RegistryResolver
+	default:
+		return NoopResolver
+	}
+}
+
 type ResolverFailureAction int
 
 const (
@@ -90,6 +128,47 @@ const (
 	WarnResolverError
 	ReportResolverError
 )
+
+var (
+	// resolverFailureActionValue returns the ResolverFailureAction value for a string
+	resolverFailureActionValue = map[string]ResolverFailureAction{
+		"ignore": IgnoreResolverError,
+		"warn":   WarnResolverError,
+		"error":  ReportResolverError,
+	}
+	// resolverFailureActionName returns the string value for a ResolverFailureAction
+	resolverFailureActionName = map[ResolverFailureAction]string{
+		IgnoreResolverError: "ignore",
+		WarnResolverError:   "warn",
+		ReportResolverError: "error",
+	}
+)
+
+func (t ResolverFailureAction) String() string {
+	return resolverFailureActionName[t]
+}
+
+// AvailableResolverFailureAction returns the possible values of ResolverFailureAction
+func AvailableResolverFailureAction() []string {
+	var types []string
+	for t, _ := range resolverFailureActionValue {
+		types = append(types, t)
+	}
+	return types
+}
+
+func ParseResolverFailureAction(rfa string) ResolverFailureAction {
+	switch rfa {
+	case "ignore":
+		return IgnoreResolverError
+	case "warn":
+		return WarnResolverError
+	case "error":
+		return ReportResolverError
+	default:
+		return WarnResolverError
+	}
+}
 
 func WithResolver(typ ResolverType, failureMode ResolverFailureAction) JsonnetVMOpt {
 	return func(opts *jsonnetVMOpts) {
