@@ -52,6 +52,7 @@ type PackCmd struct {
 	OutputFile       string
 	InsecureRegistry bool // use HTTP if true
 	DocsTarFile      string
+	Annotations      []string
 }
 
 func (c PackCmd) Run(ctx context.Context, vm *jsonnet.VM, ociPackage string, rootFile string) (err error) {
@@ -195,6 +196,15 @@ func (c PackCmd) pushOCIBundle(ctx context.Context, ref string, rootFile string,
 			"org.opencontainers.image.revision": revision,
 			"org.opencontainers.image.source":   "kubecfg pack",
 		},
+	}
+	if c.Annotations != nil {
+		for _, a := range c.Annotations {
+			parts := strings.SplitN(a, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid annotation: %q", a)
+			}
+			manifest.Annotations[parts[0]] = parts[1]
+		}
 	}
 	manifestBlob, err := json.Marshal(manifest)
 	if err != nil {
