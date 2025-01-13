@@ -75,6 +75,10 @@ func ParseImageName(image string) (ImageName, error) {
 		ret.Digest = d.DigestStr()
 	}
 
+	if ret.Registry == name.DefaultRegistry {
+		ret.Registry = "docker.io"
+	}
+
 	return ret, nil
 }
 
