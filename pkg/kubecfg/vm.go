@@ -24,7 +24,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/genuinetools/reg/registry"
 	"github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -281,7 +280,7 @@ func buildResolver(opts *jsonnetVMOpts) (utils.Resolver, error) {
 	case NoopResolver:
 		ret.Inner = utils.NewIdentityResolver()
 	case RegistryResolver:
-		ret.Inner = utils.NewRegistryResolver(registry.Opt{})
+		ret.Inner = utils.NewRegistryResolver()
 	default:
 		return nil, fmt.Errorf("bad value %d for resolver tyoe", resolver)
 	}

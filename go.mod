@@ -5,11 +5,11 @@ require (
 	github.com/containerd/containerd v1.7.12
 	github.com/docker/cli v25.0.5+incompatible
 	github.com/evanphx/json-patch/v5 v5.9.0
-	github.com/genuinetools/reg v0.16.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic v0.7.0
+	github.com/google/go-containerregistry v0.14.0
 	github.com/google/go-jsonnet v0.20.0
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/klauspost/compress v1.17.4
@@ -101,6 +101,7 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -112,7 +113,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
-	github.com/peterhellberg/link v1.0.0 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

@@ -20,18 +20,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/genuinetools/reg/registry"
-	"github.com/genuinetools/reg/repoutils"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
-
-const defaultRegistry = "registry-1.docker.io"
 
 // ImageName represents the parts of a docker image name
 type ImageName struct {
 	// eg: "myregistryhost:5000/fedora/httpd:version1.0"
 	Registry   string // "myregistryhost:5000"
-	Repository string // "fedora"
-	Name       string // "httpd"
+	Repository string // "fedora/httpd"
 	Tag        string // "version1.0"
 	Digest     string
 }
@@ -45,9 +43,7 @@ func (n ImageName) String() string {
 	}
 	if n.Repository != "" {
 		buf.WriteString(n.Repository)
-		buf.WriteString("/")
 	}
-	buf.WriteString(n.Name)
 	if n.Digest != "" {
 		buf.WriteString("@")
 		buf.WriteString(n.Digest)
@@ -58,37 +54,30 @@ func (n ImageName) String() string {
 	return buf.String()
 }
 
-// RegistryRepoName returns the "repository" as used in the registry URL
-func (n ImageName) RegistryRepoName() string {
-	repo := n.Repository
-	if repo == "" {
-		repo = "library"
-	}
-	return fmt.Sprintf("%s/%s", repo, n.Name)
-}
-
-// RegistryURL returns the deduced base URL of the registry for this image
-func (n ImageName) RegistryURL() string {
-	reg := n.Registry
-	if reg == "" {
-		reg = defaultRegistry
-	}
-	return fmt.Sprintf("https://%s", reg)
-}
-
 // ParseImageName parses a docker image into an ImageName struct.
 func ParseImageName(image string) (ImageName, error) {
 	ret := ImageName{}
 
-	img, err := registry.ParseImage(image)
+	ref, err := name.ParseReference(image)
 	if err != nil {
-		return ret, err
+		return ret, fmt.Errorf("parsing reference %q: %w", image, err)
 	}
 
-	ret.Registry = img.Domain
-	ret.Name = img.Path
-	ret.Digest = img.Digest.String()
-	ret.Tag = img.Tag
+	if t, ok := ref.(name.Tag); ok {
+		ret.Registry = t.RegistryStr()
+		ret.Repository = t.RepositoryStr()
+		ret.Tag = t.TagStr()
+	}
+
+	if d, ok := ref.(name.Digest); ok {
+		ret.Registry = d.RegistryStr()
+		ret.Repository = d.RepositoryStr()
+		ret.Digest = d.DigestStr()
+	}
+
+	if ret.Registry == name.DefaultRegistry {
+		ret.Registry = "docker.io"
+	}
 
 	return ret, nil
 }
@@ -112,15 +101,13 @@ func (r identityResolver) Resolve(image *ImageName) error {
 
 // NewRegistryResolver returns a resolver that looks up a docker
 // registry to resolve digests
-func NewRegistryResolver(opt registry.Opt) Resolver {
+func NewRegistryResolver() Resolver {
 	return &registryResolver{
-		opt:   opt,
 		cache: make(map[string]string),
 	}
 }
 
 type registryResolver struct {
-	opt   registry.Opt
 	cache map[string]string
 }
 
@@ -133,33 +120,27 @@ func (r *registryResolver) Resolve(n *ImageName) error {
 		return nil
 	}
 
-	if digest, ok := r.cache[n.String()]; ok {
+	image := n.String()
+	if digest, ok := r.cache[image]; ok {
 		n.Digest = digest
 		return nil
 	}
 
-	img, err := registry.ParseImage(n.String())
+	ref, err := name.ParseReference(image)
 	if err != nil {
-		return fmt.Errorf("unable to parse image name: %v", err)
+		return fmt.Errorf("parsing reference %q: %w", image, err)
 	}
 
-	auth, err := repoutils.GetAuthConfig("", "", img.Domain)
+	dsc, err := remote.Get(ref,
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+	)
 	if err != nil {
-		return fmt.Errorf("unable to get auth config for registry: %v", err)
+		return fmt.Errorf("fetching manifest of %q: %w", image, err)
 	}
 
-	c, err := registry.New(ctx, auth, r.opt)
-	if err != nil {
-		return fmt.Errorf("unable to create registry client: %v", err)
-	}
-
-	digest, err := c.Digest(ctx, img)
-	if err != nil {
-		return fmt.Errorf("unable to get digest from the registry: %v", err)
-	}
-
-	n.Digest = digest.String()
-	r.cache[n.String()] = n.Digest
+	n.Digest = dsc.Digest.String()
+	r.cache[image] = n.Digest
 
 	return nil
 }
