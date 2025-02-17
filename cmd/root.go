@@ -62,6 +62,7 @@ const (
 	flagTLACodeFile = "tla-code-file"
 	flagResolver    = "resolve-images"
 	flagResolvFail  = "resolve-images-error"
+	flagQPSLimit    = "qps-limit"
 )
 
 var clientConfig clientcmd.ClientConfig
@@ -89,6 +90,7 @@ func init() {
 	RootCmd.MarkPersistentFlagFilename(flagTLACodeFile)
 	RootCmd.PersistentFlags().String(flagResolver, kubecfg.NoopResolver.String(), fmt.Sprintf("Change implementation of resolveImage native function. One of: %s", strings.Join(kubecfg.AvailableResolverTypes(), ", ")))
 	RootCmd.PersistentFlags().String(flagResolvFail, kubecfg.WarnResolverError.String(), fmt.Sprintf("Action when resolveImage fails. One of: %s", strings.Join(kubecfg.AvailableResolverFailureAction(), ", ")))
+	RootCmd.PersistentFlags().Float32(flagQPSLimit, 0, "Override k8s REST client-side rate limiting; library default is 5 QPS; a negative value disables.")
 
 	// The "usual" clientcmd/kubectl flags
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -356,6 +358,12 @@ func getDynamicClients(cmd *cobra.Command) (dynamic.Interface, meta.RESTMapper, 
 	conf, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Unable to read kubectl config: %v", err)
+	}
+
+	if qps, err := cmd.Flags().GetFloat32(flagQPSLimit); err != nil {
+		return nil, nil, nil, err
+	} else {
+		conf.QPS = qps
 	}
 
 	disco, err := discovery.NewDiscoveryClientForConfig(conf)
