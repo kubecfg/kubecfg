@@ -206,6 +206,10 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 				Revision:  1,
 				IsInstall: true,
 			}
+			if err := chartutil.ProcessDependenciesWithMerge(chrt, vals); err != nil {
+				return nil, err
+			}
+
 			values, err := chartutil.ToRenderValues(chrt, vals, options, capabilities)
 			if err != nil {
 				return nil, err
