@@ -61,7 +61,7 @@ jobs:
           make integrationtest GINKGO="ginkgo $GINKGO_FLAGS"
 
       - name: Upload kubecfg artifact
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
         with:
           name: kubecfg_${{ runner.os }}_${{ runner.arch }}
           path: kubecfg
