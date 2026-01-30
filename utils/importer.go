@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -115,6 +117,19 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		tried = append(tried, foundAt)
 		importedData, err := importer.tryImport(foundAt, binary)
 		if err == nil {
+			if strings.HasPrefix(u.Fragment, "sha256:") {
+				desiredSha := strings.TrimPrefix(u.Fragment, "sha256:")
+				h := sha256.New()
+				h.Write(importedData.Data())
+				importedSha := hex.EncodeToString(h.Sum(nil))
+				if got, want := importedSha, desiredSha; got != want {
+					return jsonnet.Contents{}, "", fmt.Errorf("content hash mismatch: got: %q, want %q", got, want)
+				}
+			} else if u.Fragment != "" && u.Fragment != "#binary" {
+				// TODO(mkm) remove deprecated ##binary fragment and keep only u.Fragment != ""
+				return jsonnet.Contents{}, "", fmt.Errorf("unsupported fragment: %q", u.Fragment)
+			}
+
 			importer.cache[foundAt] = importedData
 			return importedData, foundAt, nil
 		} else if err != errNotFound {
