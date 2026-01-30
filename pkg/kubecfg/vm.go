@@ -103,7 +103,7 @@ func (t ResolverType) String() string {
 // AvailableResolverTypes returns the possible values of ResolverTypes
 func AvailableResolverTypes() []string {
 	var types []string
-	for t, _ := range resolverTypeValue {
+	for t := range resolverTypeValue {
 		types = append(types, t)
 	}
 	return types
@@ -150,7 +150,7 @@ func (t ResolverFailureAction) String() string {
 // AvailableResolverFailureAction returns the possible values of ResolverFailureAction
 func AvailableResolverFailureAction() []string {
 	var types []string
-	for t, _ := range resolverFailureActionValue {
+	for t := range resolverFailureActionValue {
 		types = append(types, t)
 	}
 	return types
