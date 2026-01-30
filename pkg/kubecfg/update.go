@@ -500,6 +500,10 @@ func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.
 			log.Debugf("Listing %s", gvr)
 			obj, err := rc.List(ctx, listopts)
 			if err != nil {
+				if errors.IsForbidden(err) {
+					log.Debugf("Permission denied while listing %s; assuming no objects to GC", gvr)
+					continue
+				}
 				return err
 			}
 			if err = meta.EachListItem(obj, callback); err != nil {

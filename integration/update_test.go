@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -6,9 +7,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +24,9 @@ import (
 	"k8s.io/client-go/dynamic"
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	rbacv1client "k8s.io/client-go/kubernetes/typed/rbac/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/utils"
@@ -581,7 +589,7 @@ var _ = Describe("update", func() {
 							Labels: map[string]string{
 								kubecfg.LabelGcTag: gcTag,
 							},
-							Name: "existing-stale-outside-namespace",
+							Name:      "existing-stale-outside-namespace",
 							Namespace: ns2,
 						},
 					},
@@ -783,12 +791,12 @@ var _ = Describe("update", func() {
 							Labels: map[string]string{
 								kubecfg.LabelGcTag: gcTag,
 							},
-							Name: "existing-stale-outside-namespace",
+							Name:      "existing-stale-outside-namespace",
 							Namespace: ns2,
 						},
 					},
 				}
-				input = []*v1.ConfigMap{ }
+				input = []*v1.ConfigMap{}
 			})
 
 			AfterEach(func() {
@@ -805,7 +813,7 @@ var _ = Describe("update", func() {
 					NotTo(BeNil())
 			})
 		})
-		
+
 		Context("with gc-tags-from-input", func() {
 			BeforeEach(func() {
 				gcTag = ""
@@ -846,6 +854,71 @@ var _ = Describe("update", func() {
 				_, err := c.ConfigMaps(ns).Get(context.Background(), "existing-stale", metav1.GetOptions{})
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
+		})
+	})
+
+	Context("With restricted user (namespace admin)", func() {
+		var kubeconfigFile string
+
+		BeforeEach(func() {
+			config := clusterConfigOrDie()
+			rbacClient := rbacv1client.NewForConfigOrDie(config)
+
+			saName := "restricted-sa"
+			_, err := c.ServiceAccounts(ns).Create(context.Background(), &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Name: saName},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = rbacClient.RoleBindings(ns).Create(context.Background(), &rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: "sa-admin"},
+				Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: saName, Namespace: ns}},
+				RoleRef:    rbacv1.RoleRef{Kind: "ClusterRole", Name: "admin", APIGroup: "rbac.authorization.k8s.io"},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			tr, err := c.ServiceAccounts(ns).CreateToken(context.Background(), saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			token := tr.Status.Token
+
+			apiConfig := clientcmdapi.NewConfig()
+			clusterName := "test-cluster"
+			contextName := "restricted-context"
+			userName := "restricted-user"
+
+			cluster := clientcmdapi.NewCluster()
+			cluster.Server = config.Host
+			cluster.CertificateAuthorityData = config.CAData
+			cluster.InsecureSkipTLSVerify = config.Insecure
+
+			apiConfig.Clusters[clusterName] = cluster
+			apiConfig.AuthInfos[userName] = &clientcmdapi.AuthInfo{Token: token}
+			apiConfig.Contexts[contextName] = &clientcmdapi.Context{
+				Cluster:   clusterName,
+				AuthInfo:  userName,
+				Namespace: ns,
+			}
+			apiConfig.CurrentContext = contextName
+
+			f, err := ioutil.TempFile("", "kubeconfig")
+			Expect(err).NotTo(HaveOccurred())
+			kubeconfigFile = f.Name()
+			err = clientcmd.WriteToFile(*apiConfig, kubeconfigFile)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if kubeconfigFile != "" {
+				os.Remove(kubeconfigFile)
+			}
+		})
+
+		It("should complete successfully despite 'forbidden' errors", func() {
+			// Since default/admin ClusterRoles usually don't grant node listing at cluster scope
+			// when bound to a namespace, this should trigger the Forbidden error in walkObjects.
+			args := []string{"update", "-vv", "--gc-tag", "sometag", "--kubeconfig", kubeconfigFile}
+			err := runKubecfgWith(args, []runtime.Object{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
