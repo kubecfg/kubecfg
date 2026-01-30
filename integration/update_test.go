@@ -11,7 +11,6 @@ import (
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -877,9 +876,20 @@ var _ = Describe("update", func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			tr, err := c.ServiceAccounts(ns).CreateToken(context.Background(), saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			token := tr.Status.Token
+			// 1.19-compatible way to get a token: wait for the SA secret to be provisioned
+			var token string
+			Eventually(func() string {
+				sa, err := c.ServiceAccounts(ns).Get(context.Background(), saName, metav1.GetOptions{})
+				if err != nil || len(sa.Secrets) == 0 {
+					return ""
+				}
+				secret, err := c.Secrets(ns).Get(context.Background(), sa.Secrets[0].Name, metav1.GetOptions{})
+				if err != nil {
+					return ""
+				}
+				token = string(secret.Data["token"])
+				return token
+			}, "30s", "1s").ShouldNot(BeEmpty())
 
 			apiConfig := clientcmdapi.NewConfig()
 			clusterName := "test-cluster"
