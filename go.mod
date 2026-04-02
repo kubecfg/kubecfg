@@ -6,7 +6,7 @@ require (
 	github.com/docker/cli v28.5.1+incompatible
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-git/go-git/v5 v5.17.1
+	github.com/go-git/go-git/v5 v5.17.2
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic v0.7.0
 	github.com/google/go-containerregistry v0.14.0
