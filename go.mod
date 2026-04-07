@@ -10,7 +10,7 @@ require (
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic v0.7.0
 	github.com/google/go-containerregistry v0.14.0
-	github.com/google/go-jsonnet v0.20.0
+	github.com/google/go-jsonnet v0.22.0
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/klauspost/compress v1.18.0
 	github.com/kubecfg/ursonnet v0.1.1
@@ -160,4 +160,4 @@ require (
 	sigs.k8s.io/yaml v1.5.0 // indirect
 )
 
-go 1.24.0
+go 1.24.5
