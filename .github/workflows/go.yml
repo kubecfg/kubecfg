@@ -50,9 +50,9 @@ jobs:
         uses: engineerd/setup-kind@aa272fe2a7309878ffc2a81c56cfe3ef108ae7d0 # v0.5.0
         if: matrix.os == 'ubuntu-latest'
         with:
-          version: "v0.11.1"
+          version: "v0.22.0"
           # NOTE - Starting with k8s 1.20 a CM is created in every namespace  called "kube-root-ca.crt" which breaks the "Simple Delete" integration test
-          image: "kindest/node:v1.19.11@sha256:07db187ae84b4b7de440a73886f008cf903fcf5764ba8106a9fd5243d6f32729"
+          image: "kindest/node:v1.22.17@sha256:f5b2e5698c6c9d6d0adc419c0deae21a425c07d81bbf3b6a6834042f25d4fba2"
 
       - name: Integration Testing
         if: matrix.os == 'ubuntu-latest'
