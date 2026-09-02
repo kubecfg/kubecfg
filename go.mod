@@ -12,7 +12,7 @@ require (
 	github.com/google/go-containerregistry v0.14.0
 	github.com/google/go-jsonnet v0.22.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.20.0
 	github.com/kubecfg/ursonnet v0.1.1
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.20
@@ -160,4 +160,4 @@ require (
 	sigs.k8s.io/yaml v1.5.0 // indirect
 )
 
-go 1.24.5
+go 1.25
