@@ -30,8 +30,13 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/containerd/remotes/docker"
+	"github.com/docker/cli/cli/config"
+	"github.com/docker/cli/cli/config/configfile"
+	"github.com/docker/cli/cli/config/credentials"
+	ctypes "github.com/docker/cli/cli/config/types"
+	"github.com/docker/docker/registry"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/pkg/auth/docker"
 )
 
 const (
@@ -128,15 +133,59 @@ func simpleHTTPResponse(req *http.Request, statusCode int, r io.ReadCloser) *htt
 	}
 }
 
+type dockerClient struct {
+	configs []*configfile.ConfigFile
+}
+
+func (c *dockerClient) Credential(hostname string) (string, string, error) {
+	hostname = resolveHostname(hostname)
+	var (
+		auth ctypes.AuthConfig
+		err  error
+	)
+	for _, cfg := range c.configs {
+		auth, err = cfg.GetAuthConfig(hostname)
+		if err != nil {
+			// fall back to next config
+			continue
+		}
+		if auth.IdentityToken != "" {
+			return "", auth.IdentityToken, nil
+		}
+		if auth.Username == "" && auth.Password == "" {
+			// fall back to next config
+			continue
+		}
+		return auth.Username, auth.Password, nil
+	}
+	return "", "", err
+}
+
+func resolveHostname(hostname string) string {
+	switch hostname {
+	case registry.IndexHostname, registry.IndexName, registry.DefaultV2Registry.Host:
+		return registry.IndexServer
+	}
+	return hostname
+}
+
 func (o *ociImporter) fetchBundle(ctx context.Context, pkg string) (*OCIBundle, error) {
-	cli, err := docker.NewClient()
+	cfg, err := config.Load(config.Dir())
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := cli.Resolver(ctx, o.httpClient, false)
-	if err != nil {
-		return nil, err
+	if !cfg.ContainsAuth() {
+		cfg.CredentialsStore = credentials.DetectDefaultStore(cfg.CredentialsStore)
 	}
+
+	cli := &dockerClient{
+		configs: []*configfile.ConfigFile{cfg},
+	}
+	var resolver remotes.Resolver = docker.NewResolver(docker.ResolverOptions{
+		Credentials: cli.Credential,
+		Client:      o.httpClient,
+		PlainHTTP:   false,
+	})
 
 	fetcher, err := resolver.Fetcher(ctx, pkg)
 	if err != nil {
