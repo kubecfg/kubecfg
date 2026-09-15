@@ -174,6 +174,6 @@ func TestCompactEncodeRoundTrip(t *testing.T) {
 	t.Logf("in:  %#v", obj)
 	t.Logf("out: %#v", out)
 	if !apiequality.Semantic.DeepEqual(obj, out) {
-		t.Error("Objects differed: ", diff.ObjectDiff(obj, out))
+		t.Error("Objects differed: ", diff.Diff(obj, out))
 	}
 }
