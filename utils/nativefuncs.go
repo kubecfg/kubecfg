@@ -30,9 +30,10 @@ import (
 	jsonnetAst "github.com/google/go-jsonnet/ast"
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 	log "github.com/sirupsen/logrus"
-	helmLoader "helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/chartutil"
-	helmEngine "helm.sh/helm/v3/pkg/engine"
+	chartcommon "helm.sh/helm/v4/pkg/chart/common"
+	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
+	helmLoader "helm.sh/helm/v4/pkg/chart/v2/loader"
+	helmEngine "helm.sh/helm/v4/pkg/engine"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -175,9 +176,9 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 			// If capabilities are set, process them.
 			// Use the default capabilities as the base.
 			// IGNORE user provided HelmVersion and warn the user.
-			var capabilities = chartutil.DefaultCapabilities.Copy()
+			capabilities := chartcommon.DefaultCapabilities.Copy()
 			if capKubeVersion, ok := mapCaps["KubeVersion"].(map[string]interface{}); ok {
-				capabilities.KubeVersion = chartutil.KubeVersion{
+				capabilities.KubeVersion = chartcommon.KubeVersion{
 					Version: capKubeVersion["Version"].(string),
 					Major:   fmt.Sprint(capKubeVersion["Major"]),
 					Minor:   fmt.Sprint(capKubeVersion["Minor"]),
@@ -200,7 +201,7 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 			}
 			log.Debugf("Loaded helm chart %s/%s", chrt.Name(), chrt.AppVersion())
 
-			options := chartutil.ReleaseOptions{
+			options := chartcommon.ReleaseOptions{
 				Name:      releaseName,
 				Namespace: namespace,
 				Revision:  1,

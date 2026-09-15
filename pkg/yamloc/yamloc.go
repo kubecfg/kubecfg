@@ -20,7 +20,7 @@ package yamloc
 import (
 	"fmt"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // Return a JsonnetPath that will locate the yaml field at a given line. Lines are numbered from 1 (like most editors do).

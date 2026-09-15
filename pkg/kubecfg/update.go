@@ -234,7 +234,7 @@ func createOrUpdate(ctx context.Context, rc dynamic.ResourceInterface, obj *unst
 		return mergedObj, nil
 	}
 
-	log.Debug("About to make change: ", diff.ObjectDiff(existing, mergedObj))
+	log.Debug("About to make change: ", diff.Diff(existing, mergedObj))
 	log.Info("Updating ", desc, dryRunText)
 	if dryRun {
 		return mergedObj, nil
@@ -242,7 +242,7 @@ func createOrUpdate(ctx context.Context, rc dynamic.ResourceInterface, obj *unst
 	newobj, err := rc.Update(ctx, mergedObj, metav1.UpdateOptions{})
 	log.Debugf("Update(%s) returned (%v, %v)", mergedObj.GetName(), newobj, err)
 	if err != nil {
-		log.Debug("Updated object: ", diff.ObjectDiff(existing, newobj))
+		log.Debug("Updated object: ", diff.Diff(existing, newobj))
 	}
 	return newobj, err
 }

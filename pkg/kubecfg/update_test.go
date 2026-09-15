@@ -203,7 +203,7 @@ func TestPatchNoop(t *testing.T) {
 	t.Logf("existing: %#v", existing)
 	t.Logf("result: %#v", result)
 	if !apiequality.Semantic.DeepEqual(existing, result) {
-		t.Error("Objects differed: ", diff.ObjectDiff(existing, result))
+		t.Error("Objects differed: ", diff.Diff(existing, result))
 	}
 }
 
@@ -228,7 +228,7 @@ func TestPatchNoopNoAnnotation(t *testing.T) {
 
 	utils.DeleteMetaDataAnnotation(result, AnnotationOrigObject)
 	if !apiequality.Semantic.DeepEqual(existing, result) {
-		t.Error("Objects differed: ", diff.ObjectDiff(existing, result))
+		t.Error("Objects differed: ", diff.Diff(existing, result))
 	}
 }
 
