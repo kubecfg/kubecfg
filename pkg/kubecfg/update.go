@@ -504,6 +504,11 @@ func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.
 					log.Debugf("Permission denied while listing %s; assuming no objects to GC", gvr)
 					continue
 				}
+				if errors.IsNotFound(err) {
+					// e.g. a CRD deleted between discovery and list
+					log.Debugf("%s no longer exists; assuming no objects to GC", gvr)
+					continue
+				}
 				return err
 			}
 			if err = meta.EachListItem(obj, callback); err != nil {
