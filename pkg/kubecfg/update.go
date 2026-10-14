@@ -467,7 +467,11 @@ func gcDelete(ctx context.Context, client dynamic.Interface, mapper meta.RESTMap
 
 func walkObjects(ctx context.Context, client dynamic.Interface, disco discovery.DiscoveryInterface, gcNamespace string, listopts metav1.ListOptions, callback func(runtime.Object) error) error {
 	rsrclists, err := disco.ServerPreferredResources()
-	if err != nil {
+	if discovery.IsGroupDiscoveryFailedError(err) {
+		// e.g. an unavailable aggregated API. Skipping a group can only cause
+		// fewer deletions, so carry on with the groups we could discover.
+		log.Warnf("Skipping garbage collection of some API groups: %v", err)
+	} else if err != nil {
 		return err
 	}
 	for _, rsrclist := range rsrclists {
