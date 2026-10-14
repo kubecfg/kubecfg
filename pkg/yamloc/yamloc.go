@@ -62,7 +62,7 @@ func (line lineFinder) visit(acc string, node *yaml.Node) (string, bool, error) 
 	switch node.Kind {
 	case yaml.DocumentNode:
 		if got, want := len(node.Content), 1; got != want {
-			return "", false, fmt.Errorf("document node children asserion failed: got %q, want %q", got, want)
+			return "", false, fmt.Errorf("document node children assertion failed: got %d, want %d", got, want)
 		}
 		return line.visit(acc, node.Content[0])
 	case yaml.SequenceNode:
