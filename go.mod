@@ -13,7 +13,7 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/google/go-jsonnet v0.22.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/klauspost/compress v1.19.2
+	github.com/klauspost/compress v1.20.3
 	github.com/kubecfg/ursonnet v0.1.1
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/mattn/go-isatty v0.0.24
