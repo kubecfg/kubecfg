@@ -11,6 +11,7 @@ import (
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -253,19 +254,31 @@ var _ = Describe("update", func() {
 
 				crd := &unstructured.Unstructured{
 					Object: map[string]interface{}{
-						"apiVersion": "apiextensions.k8s.io/v1beta1",
+						"apiVersion": "apiextensions.k8s.io/v1",
 						"kind":       "CustomResourceDefinition",
 						"metadata": map[string]interface{}{
 							"name": "things.random.example.com",
 						},
 						"spec": map[string]interface{}{
-							// Note: no schema information
-							"group":   "random.example.com",
-							"version": "v1",
-							"scope":   "Namespaced",
+							"group": "random.example.com",
+							"scope": "Namespaced",
 							"names": map[string]interface{}{
 								"plural": "things",
 								"kind":   "Thing",
+							},
+							"versions": []interface{}{
+								map[string]interface{}{
+									"name":    "v1",
+									"served":  true,
+									"storage": true,
+									// Note: no schema information (v1 requires a schema; this is the closest thing)
+									"schema": map[string]interface{}{
+										"openAPIV3Schema": map[string]interface{}{
+											"type":                                 "object",
+											"x-kubernetes-preserve-unknown-fields": true,
+										},
+									},
+								},
 							},
 						},
 					},
@@ -287,7 +300,7 @@ var _ = Describe("update", func() {
 				Expect(err).NotTo(HaveOccurred())
 				rc := client.Resource(schema.GroupVersionResource{
 					Group:    "apiextensions.k8s.io",
-					Version:  "v1beta1",
+					Version:  "v1",
 					Resource: "customresourcedefinitions",
 				})
 				_ = rc.Delete(context.Background(), "things.random.example.com", metav1.DeleteOptions{})
@@ -876,20 +889,9 @@ var _ = Describe("update", func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// 1.19-compatible way to get a token: wait for the SA secret to be provisioned
-			var token string
-			Eventually(func() string {
-				sa, err := c.ServiceAccounts(ns).Get(context.Background(), saName, metav1.GetOptions{})
-				if err != nil || len(sa.Secrets) == 0 {
-					return ""
-				}
-				secret, err := c.Secrets(ns).Get(context.Background(), sa.Secrets[0].Name, metav1.GetOptions{})
-				if err != nil {
-					return ""
-				}
-				token = string(secret.Data["token"])
-				return token
-			}, "30s", "1s").ShouldNot(BeEmpty())
+			tr, err := c.ServiceAccounts(ns).CreateToken(context.Background(), saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			token := tr.Status.Token
 
 			apiConfig := clientcmdapi.NewConfig()
 			clusterName := "test-cluster"

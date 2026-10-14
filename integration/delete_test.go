@@ -18,6 +18,10 @@ import (
 func objNames(list *v1.ConfigMapList) []string {
 	ret := make([]string, 0, len(list.Items))
 	for _, obj := range list.Items {
+		// created by kube-controller-manager in every namespace
+		if obj.GetName() == "kube-root-ca.crt" {
+			continue
+		}
 		ret = append(ret, obj.GetName())
 	}
 	return ret
