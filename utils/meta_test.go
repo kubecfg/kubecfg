@@ -177,3 +177,26 @@ func TestCompactEncodeRoundTrip(t *testing.T) {
 		t.Error("Objects differed: ", diff.Diff(obj, out))
 	}
 }
+
+func TestMetaDataLabelsAndAnnotations(t *testing.T) {
+	o := &unstructured.Unstructured{Object: map[string]interface{}{}}
+
+	// deleting from nil maps must not panic
+	DeleteMetaDataLabel(o, "x")
+	DeleteMetaDataAnnotation(o, "x")
+
+	SetMetaDataLabel(o, "l", "1")
+	SetMetaDataAnnotation(o, "a", "2")
+	if o.GetLabels()["l"] != "1" || o.GetAnnotations()["a"] != "2" {
+		t.Fatalf("set failed: labels=%v annotations=%v", o.GetLabels(), o.GetAnnotations())
+	}
+
+	DeleteMetaDataLabel(o, "l")
+	DeleteMetaDataAnnotation(o, "a")
+	if _, ok := o.GetLabels()["l"]; ok {
+		t.Errorf("label not deleted: %v", o.GetLabels())
+	}
+	if _, ok := o.GetAnnotations()["a"]; ok {
+		t.Errorf("annotation not deleted: %v", o.GetAnnotations())
+	}
+}

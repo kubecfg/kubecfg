@@ -84,3 +84,23 @@ func TestReadObject(t *testing.T) {
 		})
 	}
 }
+
+func TestParseResolverFlags(t *testing.T) {
+	for _, s := range AvailableResolverTypes() {
+		if got := ParseResolverType(s).String(); got != s {
+			t.Errorf("ParseResolverType(%q).String() = %q", s, got)
+		}
+	}
+	if got := ParseResolverType("bogus"); got != NoopResolver {
+		t.Errorf("ParseResolverType(bogus) = %v, want noop", got)
+	}
+
+	for _, s := range AvailableResolverFailureAction() {
+		if got := ParseResolverFailureAction(s).String(); got != s {
+			t.Errorf("ParseResolverFailureAction(%q).String() = %q", s, got)
+		}
+	}
+	if got := ParseResolverFailureAction("bogus"); got != WarnResolverError {
+		t.Errorf("ParseResolverFailureAction(bogus) = %v, want warn", got)
+	}
+}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -248,5 +249,38 @@ func TestJsonnetPathAccessor(t *testing.T) {
 				t.Errorf("got: %q, want: %q", got, want)
 			}
 		})
+	}
+}
+
+func TestDataURLRoundTrip(t *testing.T) {
+	code := `{ a: "b c/d%", "e": [1, 2] }`
+	u := ToDataURL(code)
+	if !isURL(u) {
+		t.Fatalf("ToDataURL(%q) = %q is not recognised as URL", code, u)
+	}
+	got, foundAt, err := expandDataURL(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != code {
+		t.Errorf("round trip = %q, want %q", got, code)
+	}
+	if !strings.HasPrefix(foundAt, "file://") || !strings.HasSuffix(foundAt, "/") {
+		t.Errorf("foundAt = %q, want file:// dir URL", foundAt)
+	}
+}
+
+func TestPathToURL(t *testing.T) {
+	for _, u := range []string{"http://x/y", "https://x/y", "oci://x/y", "file:///x/y", "data:,{}"} {
+		if got, err := PathToURL(u); err != nil || got != u {
+			t.Errorf("PathToURL(%q) = %q, %v; want unchanged", u, got, err)
+		}
+	}
+	got, err := PathToURL("some dir/file.jsonnet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "file:///") || !strings.HasSuffix(got, "/some%20dir/file.jsonnet") {
+		t.Errorf("PathToURL relative = %q", got)
 	}
 }
