@@ -331,7 +331,7 @@ func (f overlayFormat) parse(src string) string {
 			return fmt.Sprintf("import %q", src)
 		}
 	default:
-		panic(fmt.Sprintf("unhandled format %q", f))
+		panic(fmt.Sprintf("unhandled format %d", f))
 	}
 }
 
