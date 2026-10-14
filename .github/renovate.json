@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base",
+    "config:recommended",
     ":disableDependencyDashboard",
     ":maintainLockFilesWeekly",
     ":rebaseStalePrs",
@@ -10,24 +10,26 @@
     "group:recommended",
     "helpers:pinGitHubActionDigests"
   ],
-  "includeForks": false,
+  "forkProcessing": "disabled",
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
-      "description": "Automerge trivial updates",
+      "description": "Automerge trivial updates (Kodiak merges PRs labelled automerge)",
       "matchUpdateTypes": ["patch", "digest", "lockFileMaintenance"],
       "addLabels": ["automerge"]
     },
     {
-      "description": "Group Kubernetes packages",
-      "matchPackagePatterns": ["^kubernetes/", "^k8s\\.gcr\\.io/"],
-      "groupName": "Kubernetes packages"
+      "description": "Kubernetes Go modules must move together (e.g. kube-openapi, kustomize and structured-merge-diff track the k8s.io release)",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"],
+      "groupName": "kubernetes"
     }
   ],
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
       "matchStrings": ["go-version: *(?<currentValue>.*?)\\n"],
       "depNameTemplate": "go",
       "depTypeTemplate": "golang",
