@@ -1,6 +1,7 @@
 package kubecfg
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -9,11 +10,17 @@ import (
 	pb_proto "github.com/golang/protobuf/proto"
 	openapi_v2 "github.com/google/gnostic/openapiv2"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/client-go/discovery"
+	discoveryfake "k8s.io/client-go/discovery/fake"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/kube-openapi/pkg/util/proto"
 	"k8s.io/kubectl/pkg/util/openapi"
 
@@ -284,5 +291,47 @@ func TestPatchConflict(t *testing.T) {
 	value := result.GetAnnotations()["someanno"]
 	if value != "newvalue" {
 		t.Errorf("annotation was %q", value)
+	}
+}
+
+type partialDiscovery struct{ *discoveryfake.FakeDiscovery }
+
+func (partialDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	verbs := metav1.Verbs{"list"}
+	return []*metav1.APIResourceList{
+		{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "configmaps", Namespaced: true, Verbs: verbs}}},
+		{GroupVersion: "example.com/v1", APIResources: []metav1.APIResource{{Name: "things", Verbs: verbs}}},
+	}, &discovery.ErrGroupDiscoveryFailed{Groups: map[schema.GroupVersion]error{
+		{Group: "metrics.k8s.io", Version: "v1beta1"}: fmt.Errorf("service unavailable"),
+	}}
+}
+
+func TestWalkObjectsTolerant(t *testing.T) {
+	cm := &unstructured.Unstructured{}
+	cm.SetAPIVersion("v1")
+	cm.SetKind("ConfigMap")
+	cm.SetNamespace("ns")
+	cm.SetName("cm")
+
+	things := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "things"}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		{Version: "v1", Resource: "configmaps"}: "ConfigMapList",
+		things:                                  "ThingList",
+	}, cm)
+	// CRD deleted between discovery and list
+	client.PrependReactor("list", "things", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.NewNotFound(things.GroupResource(), "")
+	})
+
+	var seen []string
+	err := walkObjects(context.Background(), client, partialDiscovery{}, "", metav1.ListOptions{}, func(o runtime.Object) error {
+		seen = append(seen, o.(metav1.Object).GetName())
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 1 || seen[0] != "cm" {
+		t.Errorf("got %v, want [cm]", seen)
 	}
 }
