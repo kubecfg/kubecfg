@@ -1,6 +1,7 @@
 # kubecfg
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/kubecfg/kubecfg)](https://goreportcard.com/report/github.com/kubecfg/kubecfg)
+[![CI](https://github.com/kubecfg/kubecfg/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/kubecfg/kubecfg/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kubecfg/kubecfg.svg)](https://pkg.go.dev/github.com/kubecfg/kubecfg)
 
 A tool for managing Kubernetes resources as code.
 
