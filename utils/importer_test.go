@@ -54,3 +54,20 @@ func TestExpandImportToCandidateURLs(t *testing.T) {
 		}
 	})
 }
+
+func TestImportPath(t *testing.T) {
+	for path, want := range map[string]string{
+		"a.jamlet":                      "jamlet:a.jamlet",
+		"dir/a.jsonnet":                 "dir/a.jsonnet",
+		"jamlet:a.jamlet":               "jamlet:a.jamlet",
+		"file:///x/a.jamlet?raw=true":   "jamlet:file:///x/a.jamlet?raw=true",
+		"https://h/a.jamlet#fragment":   "jamlet:https://h/a.jamlet#fragment",
+		"https://h/a.jsonnet?x=.jamlet": "https://h/a.jsonnet?x=.jamlet",
+		"data:,{a: 1} // demo.jamlet":   "data:,{a: 1} // demo.jamlet",
+		`C:\x\a.jamlet`:                 `jamlet:C:\x\a.jamlet`,
+	} {
+		if got := ImportPath(path); got != want {
+			t.Errorf("ImportPath(%q) = %q, want %q", path, got, want)
+		}
+	}
+}

@@ -44,9 +44,11 @@ test: gotest jsonnettest
 gotest:
 	$(GO) test $(GO_FLAGS) $(GO_BUILDFLAGS) $(GO_TESTFLAGS) $(GO_PACKAGES)
 
-jsonnettest: kubecfg $(JSONNET_FILES)
+jsonnettest: kubecfg $(JSONNET_FILES) examples/guestbook.jamlet
 #	TODO: use `kubecfg validate` once it works offline
 	./kubecfg show --alpha $(JSONNET_FILES) >/dev/null
+#	separately, as it redefines the guestbook.jsonnet resources
+	./kubecfg show --alpha examples/guestbook.jamlet >/dev/null
 
 integrationtest: kubecfg
 	$(GINKGO) -tags 'integration' integration -- -kubeconfig $(KUBECONFIG) -kubecfg-bin $(abspath $<)

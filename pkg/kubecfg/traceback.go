@@ -69,7 +69,7 @@ func (c TracebackCmd) Run(ctx context.Context, vm *jsonnet.VM, fileloc string) e
 		return err
 	}
 
-	return traceback(os.Stdout, vm, provenanceFileURL, fullPath, c.ShowAll)
+	return traceback(os.Stdout, vm, utils.ImportPath(provenanceFileURL), fullPath, c.ShowAll)
 }
 
 const (

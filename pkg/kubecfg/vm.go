@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/kubecfg/kubecfg/internal/acquire"
+	"github.com/kubecfg/kubecfg/pkg/jamlet"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
 )
@@ -234,15 +235,13 @@ func JsonnetVM(opt ...JsonnetVMOpt) (*jsonnet.VM, error) {
 			if !filepath.IsAbs(path) {
 				path = filepath.Join(cwd, path)
 			}
-			u := &url.URL{Scheme: "file", Path: path}
-			var imp string
+			target := (&url.URL{Scheme: "file", Path: path}).String()
+			imp := "importstr"
 			if v.Expr == vars.Code {
-				imp = "import"
-			} else {
-				imp = "importstr"
+				imp, target = "import", utils.ImportPath(target)
 			}
 
-			value = fmt.Sprintf("%s @'%s'", imp, strings.ReplaceAll(u.String(), "'", "''"))
+			value = fmt.Sprintf("%s @'%s'", imp, strings.ReplaceAll(target, "'", "''"))
 		}
 
 		v.Setter()(vm, name, value)
@@ -327,6 +326,8 @@ func (f overlayFormat) parse(src string) string {
 		case ".yml", ".yaml", ".json":
 			// JSON is a proper subset of YAML (for our intents and purposes)
 			return fmt.Sprintf("(import 'kubecfg.libsonnet').toOverlay(std.parseYaml(importstr %q))", src)
+		case jamlet.Ext:
+			return fmt.Sprintf("(import 'kubecfg.libsonnet').toOverlay(import %q)", utils.ImportPath(src))
 		default:
 			return fmt.Sprintf("import %q", src)
 		}
@@ -370,14 +371,14 @@ func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*u
 	if overlay := opt.OverlayURL; overlay != "" {
 		add := buildOverlayObject(jsonnetFile, overlay)
 		overlayExpression = func(url string) (string, string) {
-			expr := fmt.Sprintf(`(import %q) + (%s)`, url, add)
+			expr := fmt.Sprintf(`(import %q) + (%s)`, utils.ImportPath(url), add)
 			return utils.ToDataURL(expr), expr
 		}
 	}
 	if overlay := opt.OverlayCode; overlay != "" {
 		add := buildOverlayObject(jsonnetCode, overlay)
 		overlayExpression = func(src string) (string, string) {
-			expr := fmt.Sprintf(`(import %q) + (%s)`, src, add)
+			expr := fmt.Sprintf(`(import %q) + (%s)`, utils.ImportPath(src), add)
 			return utils.ToDataURL(expr), expr
 		}
 	}
