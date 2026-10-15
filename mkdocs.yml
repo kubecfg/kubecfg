@@ -34,6 +34,7 @@ nav:
   - "OCI Support": Advanced-Usage/OCI-support.md
   - "Provenance and Tracing": Advanced-Usage/provenance-traceback.md
   - "JSON schema validation": Advanced-Usage/schema-validation.md
+  - "Jamlet (YAML + Jsonnet)": Advanced-Usage/jamlet.md
 
 
 #extra_css:

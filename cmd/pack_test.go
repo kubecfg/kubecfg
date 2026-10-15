@@ -195,3 +195,48 @@ func TestPush(t *testing.T) {
 	}
 
 }
+
+// .jamlet files are compiled on import, but must be packed as source.
+func TestPackJamlet(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"demo.jamlet": "kind: Namespace\napiVersion: v1\nmetadata:\n  name: ${(import 'jamlet:lib.jamlet').name}\n" +
+			"  annotations: {src: ${importstr 'lib.jamlet'}}\n",
+		"lib.jamlet": "name: ${'demo'}\n",
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	output := filepath.Join(dir, "out.tar.gz")
+	cmdOutput(t, []string{"--alpha", "pack", testRef, filepath.Join(dir, "demo.jamlet"), "--output", output})
+
+	f, err := os.Open(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gr)
+	var names []string
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, hdr.Name)
+		if b, _ := io.ReadAll(tr); string(b) != files[hdr.Name] {
+			t.Errorf("%s: got %q, want %q", hdr.Name, b, files[hdr.Name])
+		}
+	}
+	if got, want := strings.Join(names, ","), "demo.jamlet,lib.jamlet"; got != want {
+		t.Errorf("got files %s, want %s", got, want)
+	}
+}

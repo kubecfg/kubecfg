@@ -348,3 +348,44 @@ metadata:
 		t.Fatalf("got: %q, want: %q", got, want)
 	}
 }
+
+func TestShowJamlet(t *testing.T) {
+	path := filepath.FromSlash("../testdata/jamlet_test.jamlet")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{path, "file://" + filepath.ToSlash(abs) + "?raw=true"} {
+		got := cmdOutput(t, []string{
+			"--alpha",
+			"show",
+			"-J", filepath.FromSlash("../testdata/lib"),
+			"-V", "name=demo",
+			file,
+		})
+		if got != wantShowJamlet {
+			t.Errorf("%s: got: %q, want: %q", file, got, wantShowJamlet)
+		}
+	}
+}
+
+const wantShowJamlet = `---
+apiVersion: v1
+data:
+  answer: "42"
+  greeting: hello
+  kind: TestObject
+  shell: echo ${HOME}
+  source: |
+    greeting: ${'hello'}
+kind: ConfigMap
+metadata:
+  labels:
+    app: demo
+  name: demo
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-ns
+`
