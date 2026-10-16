@@ -1,4 +1,5 @@
 /kubecfg
+/kubecfg-show.wasm
 
 # Output dir of mkdocs
 /docs-build
