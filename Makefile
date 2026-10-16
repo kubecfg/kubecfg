@@ -39,7 +39,10 @@ all: kubecfg
 kubecfg:
 	CGO_ENABLED=0 $(GO) build $(GO_FLAGS) $(GO_BUILDFLAGS) .
 
-test: gotest jsonnettest
+kubecfg-show.wasm:
+	GOOS=wasip1 GOARCH=wasm $(GO) build $(GO_FLAGS) -o $@ ./wasm/cmd/kubecfg-show
+
+test: gotest jsonnettest wasmtest
 
 gotest:
 	$(GO) test $(GO_FLAGS) $(GO_BUILDFLAGS) $(GO_TESTFLAGS) $(GO_PACKAGES)
@@ -49,6 +52,9 @@ jsonnettest: kubecfg $(JSONNET_FILES) examples/guestbook.jamlet
 	./kubecfg show --alpha $(JSONNET_FILES) >/dev/null
 #	separately, as it redefines the guestbook.jsonnet resources
 	./kubecfg show --alpha examples/guestbook.jamlet >/dev/null
+
+wasmtest:
+	cd wasm/hosttest && $(GO) test $(GO_FLAGS) ./...
 
 integrationtest: kubecfg
 	$(GINKGO) -tags 'integration' integration -- -kubeconfig $(KUBECONFIG) -kubecfg-bin $(abspath $<)
@@ -66,10 +72,10 @@ vendor: tidy
 	@echo We no longer vendor Go dependencies
 
 clean:
-	$(RM) ./kubecfg
+	$(RM) ./kubecfg ./kubecfg-show.wasm
 
-.PHONY: all test clean vet fmt tidy vendor
-.PHONY: kubecfg
+.PHONY: all test wasmtest clean vet fmt tidy vendor
+.PHONY: kubecfg kubecfg-show.wasm
 
 .PHONY: serve-docs build-docs
 serve-docs:
