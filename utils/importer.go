@@ -3,12 +3,14 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"testing/fstest"
 	"time"
 
 	jsonnet "github.com/google/go-jsonnet"
@@ -20,6 +22,31 @@ import (
 var errNotFound = errors.New("Not found")
 
 var extVarKindRE = regexp.MustCompile("^<(?:extvar|top-level-arg):.+>$")
+
+// streamDir is http.Dir that also serves non-seekable files such as pipes,
+// so `import 'file:///dev/stdin'` works when stdin is piped.
+type streamDir struct{ http.Dir }
+
+func (d streamDir) Open(name string) (http.File, error) {
+	f, err := d.Dir.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err == nil && (fi.Mode().IsRegular() || fi.IsDir()) {
+		return f, nil
+	}
+	defer f.Close()
+	if err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	// MapFS serves the bytes seekable and with the buffered Size(), which http.FileServer trusts.
+	return http.FS(fstest.MapFS{"f": {Data: b}}).Open("f")
+}
 
 func newInternalFS() http.FileSystem {
 	return http.FS(libsonnet.Assets)
@@ -59,7 +86,7 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+	t.RegisterProtocol("file", http.NewFileTransport(streamDir{http.Dir("/")}))
 	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
 	t.RegisterProtocol("oci", newOCIImporter())
 	t.RegisterProtocol("kustomize+https", &kustomizeImporter{alpha: alpha})
