@@ -91,6 +91,8 @@ func Compile(src string) (string, error) {
 type span struct {
 	start, end int      // offsets of "${" and after "}"
 	local      bool     // a local declaration, rather than an expression
+	field      bool     // a local declaration in a mapping, rather than at the start of a document
+	semi       int      // offset of the ";" ending a field local declaration, -1 if none
 	doc        int      // index of the document a local declaration precedes
 	blocks     []*block // YAML blocks nested in the code
 }
@@ -372,11 +374,25 @@ func (l *lexer) expr() error {
 	}
 	eol := j == len(l.src) || l.src[j] == '\n' || l.commentAt(j)
 
-	if isDecl(withoutBlocks(l.src, start+2, end, blocks)) {
-		if l.flow > 0 || l.docContent || start-l.bol != max(l.base, 0) || !eol {
-			return errorAt(l.src, start, "a local declaration must be on its own lines, at the start of a YAML document")
+	if plain := withoutBlocks(l.src, start+2, end, blocks); isDecl(plain) {
+		// Only indentation, or the "- " of sequence items, may precede a declaration on its line.
+		before := l.src[l.bol:start]
+		if l.flow > 0 || !eol || strings.Trim(before, " -") != "" {
+			return errorAt(l.src, start, "a local declaration must be on its own lines")
 		}
-		l.spans = append(l.spans, span{start: start, end: l.i, local: true, doc: l.doc, blocks: blocks})
+		s := span{start: start, end: l.i, local: true, doc: l.doc, blocks: blocks, semi: -1}
+		// At the start of a document, it scopes over the rest of the file. Elsewhere it is a
+		// local of the mapping it is in, which the YAML parser finds by giving it a key.
+		if s.field = l.docContent || len(before) != max(l.base, 0); s.field {
+			var ok bool
+			if s.semi, ok = fieldSemi(l.src, plain, end, blocks); !ok {
+				return errorAt(l.src, start, "a local declaration in a mapping must declare a single variable, like ${local x = 1}")
+			}
+			l.docContent = true
+			l.startNode(start)
+			l.parent, l.node = l.nodeCol, true
+		}
+		l.spans = append(l.spans, s)
 		return nil
 	}
 	// Only a key indicator, flow punctuation, a comment or the end of the line may follow.
@@ -456,6 +472,25 @@ func isDecl(code string) bool {
 		return false
 	}
 	return !parses(code)
+}
+
+// fieldSemi checks that a declaration (src up to offset end, plain without YAML blocks) is valid
+// as a Jsonnet object local, which declares a single variable and has no ";". It returns the offset
+// of a trailing ";" to drop, or -1.
+func fieldSemi(src, plain string, end int, blocks []*block) (int, bool) {
+	if parses("{" + plain + "\n}") {
+		return -1, true
+	}
+	from := end - len(plain) // the ";" is after any YAML block, where src and plain match
+	if len(blocks) > 0 {
+		from = blocks[len(blocks)-1].end + 1
+	}
+	for i := end - 1; i >= from; i-- {
+		if p := len(plain) - (end - i); src[i] == ';' && parses("{"+plain[:p]+plain[p+1:]+"\n}") {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
 // parses reports whether code is syntactically valid Jsonnet. Unlike jsonnet.SnippetToAST, the
@@ -579,6 +614,8 @@ type expr struct {
 	blocks    []*block // YAML blocks nested in the code
 	line, col int      // source position of the code
 	doc       int      // for local declarations, see span.doc
+	field     bool     // a local declaration in a mapping
+	semi      int      // see span.semi
 }
 
 type output struct {
@@ -671,11 +708,14 @@ func (c *compiler) build(from, to int, spans []span) string {
 	}
 	for _, s := range spans {
 		advance(s.start, true)
-		e := expr{from: s.start + 2, to: s.end - 1, blocks: s.blocks, line: line, col: utf8.RuneCountInString(src[bol:s.start]) + 3, doc: s.doc}
-		if s.local {
+		e := expr{from: s.start + 2, to: s.end - 1, blocks: s.blocks, line: line, col: utf8.RuneCountInString(src[bol:s.start]) + 3, doc: s.doc, field: s.field, semi: s.semi}
+		if s.local && !s.field {
 			c.locals = append(c.locals, e)
 		} else {
 			fmt.Fprintf(&b, "%s%d%s", c.sentinel, len(c.exprs), c.sentinel)
+			if s.field {
+				b.WriteString(":") // the key of a placeholder field, which the mapping turns into a local
+			}
 			c.exprs = append(c.exprs, e)
 			c.used = append(c.used, false)
 		}
@@ -772,9 +812,17 @@ func (c *compiler) code(e expr, decl bool) error {
 		from = b.end + 1
 		c.padTo(position(c.src, from))
 	}
+	if e.field && e.semi >= 0 {
+		c.write(c.src[from:e.semi])
+		from = e.semi + 1
+	}
 	c.write(c.src[from:e.to])
 	if !decl {
 		c.write(")")
+		return nil
+	}
+	if e.field {
+		c.write(", ")
 		return nil
 	}
 	// A declaration needs a ";", unless its last token (maybe followed by comments) is one already.
@@ -866,11 +914,25 @@ func (c *compiler) node(n *yaml.Node) error {
 
 func (c *compiler) mapping(n *yaml.Node) error {
 	c.write("{")
+	// An anchor names the mapping in the Jsonnet code inside it. Other anchors, like
+	// &default-labels, are just YAML anchors.
+	if isIdentifier(n.Anchor) {
+		c.write("local " + n.Anchor + " = self, ")
+	}
 	for i := 0; i < len(n.Content); i += 2 {
 		k, v := n.Content[i], n.Content[i+1]
 		if k.Kind == yaml.AliasNode {
 			c.align(k) // the field is where the alias is
 			k = k.Alias
+		}
+		if e, ok := c.fieldLocal(k); ok {
+			if v.Kind != yaml.ScalarNode || v.Tag != "!!null" || v.Value != "" || v.Anchor != "" {
+				return c.errorf(v, "unexpected content after a local declaration, at deeper indentation")
+			}
+			if err := c.code(e, true); err != nil {
+				return err
+			}
+			continue
 		}
 		if k.Tag == "!!merge" {
 			return c.errorf(k, "merge keys (<<) are not supported")
@@ -890,6 +952,31 @@ func (c *compiler) mapping(n *yaml.Node) error {
 	c.write("}")
 	return nil
 }
+
+// fieldLocal returns the local declaration that a placeholder key stands for, if any.
+func (c *compiler) fieldLocal(k *yaml.Node) (expr, bool) {
+	parts := strings.Split(k.Value, c.sentinel)
+	if k.Kind != yaml.ScalarNode || k.Style != 0 || len(parts) != 3 || parts[0] != "" || parts[2] != "" {
+		return expr{}, false
+	}
+	i, err := strconv.Atoi(parts[1])
+	if err != nil || i >= len(c.exprs) || !c.exprs[i].field {
+		return expr{}, false
+	}
+	c.used[i] = true
+	return c.exprs[i], true
+}
+
+// keywords are the Jsonnet keywords, which can't name variables.
+var keywords = map[string]bool{
+	"assert": true, "else": true, "error": true, "false": true, "for": true, "function": true,
+	"if": true, "import": true, "importbin": true, "importstr": true, "in": true, "local": true,
+	"null": true, "self": true, "super": true, "tailstrict": true, "then": true, "true": true,
+}
+
+var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func isIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] }
 
 func (c *compiler) scalar(n *yaml.Node, key bool) error {
 	c.align(n)
