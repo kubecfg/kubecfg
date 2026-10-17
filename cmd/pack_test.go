@@ -3,6 +3,7 @@ package cmd
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -175,11 +176,9 @@ func TestPush(t *testing.T) {
 		t.Logf("blob: %q", key)
 	}
 
-	// these digests have been observed by running the test failing and obverving the logs
-	const (
-		blobDigest = "sha256:90847d8bd5ca990ebf777bf131130cdcf695ace2f8bb59dee0571129af855f00"
-		confDigest = "sha256:d5e1762d319a9de4f26f64420d485611ce6f1bdd4418e4d37d0b388ebc996fc0"
-	)
+	// observed by running the test failing and observing the logs.
+	// The layer digest is read from the manifest since gzip output varies across Go versions.
+	const confDigest = "sha256:d5e1762d319a9de4f26f64420d485611ce6f1bdd4418e4d37d0b388ebc996fc0"
 	getBlob := func(key string) []byte {
 		got, ok := blobs[key]
 		if !ok {
@@ -188,7 +187,16 @@ func TestPush(t *testing.T) {
 		return got
 	}
 
-	verifyBodyTarball(t, bytes.NewReader(getBlob(blobDigest)))
+	var manifest struct {
+		Layers []struct{ Digest string }
+	}
+	if err := json.Unmarshal(getBlob("manifest"), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(manifest.Layers), 1; got != want {
+		t.Fatalf("got %d layers, want: %d", got, want)
+	}
+	verifyBodyTarball(t, bytes.NewReader(getBlob(manifest.Layers[0].Digest)))
 
 	if got, want := string(getBlob(confDigest)), `{"entrypoint":"dir1/demo.jsonnet","metadata":{"pack.kubecfg.dev/v1alpha1":{"version":"(dev build)"}}}`; got != want {
 		t.Errorf("got: %q, want: %q", got, want)
