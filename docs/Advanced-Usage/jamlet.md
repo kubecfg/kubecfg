@@ -38,13 +38,15 @@ A jamlet file is compiled to Jsonnet and then evaluated like any other Jsonnet f
 1. **Lex.** A YAML-aware lexer finds every `${` that starts a YAML node and reads the
    Jsonnet expression up to the matching `}`. It skips comments, quoted scalars and block
    scalars. YAML blocks nested inside expressions are lexed the same way, recursively.
-   Expressions are replaced by opaque placeholders, and local declarations are set aside.
+   Expressions are replaced by opaque placeholders. Local declarations at the start of a
+   document are set aside, and those inside a mapping become placeholder keys.
 2. **Parse.** The result, now plain YAML, is parsed as a YAML stream. The parser also checks
    the lexer: every placeholder must come back as a whole plain scalar, and the documents
    must match. Any disagreement is an error, never silently wrong output.
 3. **Generate.** The YAML tree is translated to Jsonnet: mappings become objects, sequences
    become arrays, scalars become literals, placeholders become the original expressions,
-   and local declarations wrap the documents that follow them. YAML blocks inside
+   local declarations at the start of a document wrap the documents that follow them, and
+   placeholder keys and anchors of mappings become object locals. YAML blocks inside
    expressions are compiled in place.
 
 The generated code keeps every YAML node and expression on its original source line, so
@@ -127,8 +129,8 @@ config.ini: ${|||
 
 ### Local declarations
 
-A `${local ...}` *without a body*, on its own line(s) at the start of a YAML document,
-declares Jsonnet locals:
+A `${local ...}` *without a body*, on its own line(s), declares Jsonnet locals. At the start
+of a YAML document it declares locals for the rest of the file:
 
 ```yaml
 ${local params = import 'params.libsonnet'}
@@ -143,8 +145,51 @@ metadata:
 
 The trailing `;` is optional. Several locals can share a declaration (`local a = 1, b = 2`),
 and declarations can span lines. A `${local x = 1; x}` *with* a body is an ordinary
-expression. A local declaration anywhere else (after content, indented, inside a flow
-collection, or followed by text on its line) is an error.
+expression.
+
+Anywhere else in a block mapping, written where a key could be, it declares a local of that
+mapping, visible to every expression in the mapping, however deep:
+
+```yaml
+spec:
+  ${local labels = {app: 'web'}}
+  selector:
+    matchLabels: ${labels}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+      - ${local port = 8080}
+        name: web
+        args: [--port, ${std.toString(port)}]
+        ports: [{containerPort: ${port}}]
+```
+
+This compiles to a Jsonnet object local (`{ local labels = {app: 'web'}, selector: ... }`).
+Such a declaration declares a single variable (`local a = 1, b = 2` is an error, write two declarations), and
+the line after it can't be indented more than it. A mapping can consist of local declarations
+only, and then it is `{}`. A local declaration inside a flow collection, or with text before
+or after it on its line (other than the `- ` of a sequence item), is an error.
+
+### Anchors name mappings
+
+An anchor on a mapping also names the mapping in the expressions inside it:
+
+```yaml
+spec: &spec
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: web
+        env: [{name: REPLICAS, value: ${std.toString(spec.replicas)}}]
+```
+
+Only anchor names that are Jsonnet identifiers (`[A-Za-z_][A-Za-z0-9_]*`, not a keyword like
+`if` or `self`) are bound. Others, like `&default-labels`, stay plain YAML anchors, as do
+anchors on scalars and sequences. An alias `*spec` still copies the node, and the copy binds
+the name to itself.
 
 ### YAML inside expressions
 
@@ -214,7 +259,9 @@ Expressions are evaluated in the generated Jsonnet, so:
   mapping that contains the expression. Both are late-bound as usual in Jsonnet. Inside a
   YAML block nested in an expression, `self` is the block's innermost mapping, while `$`
   stays the document root, as `$` is always the outermost object in Jsonnet.
-- Locals declared earlier in the file are in scope (see below).
+- Locals declared earlier in the file are in scope (see below), and so are the locals and
+  anchors of enclosing mappings. These follow Jsonnet scoping: an inner declaration shadows
+  an outer one with the same name, and since they bind `self`, they are late-bound too.
 - `std` is available, and so are `std.extVar` (kubecfg `-V`, `--ext-code`, ...) and the
   kubecfg native functions.
 - `import`, `importstr` and `importbin` resolve relative to the `.jamlet` file, then the
@@ -282,6 +329,8 @@ Quote a scalar to keep it a string (`'yes'`, `'0777'`).
 
 ### Anchors and aliases
 
+An anchor on a mapping also names it in Jsonnet, see [Anchors name mappings](#anchors-name-mappings).
+
 An alias (`*x`) is a copy of the anchored node. Expressions in it are evaluated again at the
 alias position, so `self` and `$` refer to the alias's surroundings. An alias can't repeat a
 multi-line expression (that would shift the line numbers of later errors), so bind it with a
@@ -314,7 +363,7 @@ treats as line breaks, are rejected.
 | Expressions in keys | no | yes, and `null` drops the field |
 | Literal `${` | `${"${VAR}"}` | any quoted or block scalar |
 | `${` in comments | (YAML parser drops comments first) | ignored |
-| Variables | `schema`, resource ids | file-level `${local ...}` |
+| Variables | `schema`, resource ids | `${local ...}` in a file or a mapping, anchors of mappings |
 | YAML inside an expression | no | `\{` and a line break open a YAML block |
 | Unterminated `${` | error | error |
 
@@ -363,6 +412,4 @@ works with any location: `jamlet:https://...`, `jamlet:oci://...`.
   `schema.spec`), instead of `std.extVar` or importing a parameters file.
 - **Inline YAML blocks.** `\{a: 1}` on one line inside an expression is reserved (it is an
   error today). It adds little over a Jsonnet object literal.
-- **Mapping-level locals.** `${local ...}` inside a mapping could become a Jsonnet
-  object-level local (`{ local x = 1, ... }`), with access to `self`.
 - **Debugging.** A command to print the generated Jsonnet.

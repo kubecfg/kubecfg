@@ -79,6 +79,7 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 		"? script\n: |\n  echo ${HOME}\na:\n  ? k\n  :   |\n    x ${y}\n",
 		"&k name: value\ncopy: *k\nf: [&d -, &n 1]\ng: *d\n*n : x\n",
 		"&k -: item\ncopy: *k\n",
+		"labels: &default-labels\n  app: web\nselector: {matchLabels: *default-labels}\nself: &self {a: 1}\n",
 		"data:\n  run.sh: |\n    echo hello",
 		"{a: !<tag:yaml.org,2002:str> '${HOME}', b: !<tag:yaml.org,2002:str> 1}\n",
 		"html: <a href=\"x\">&amp;</a>\nunicode: héllo ✓ \U0001F600\n",
@@ -192,6 +193,22 @@ env: ${[
 		{"$ and self in a yaml block", "name: nm\nx: ${[\\{\n    ref: ${$.name}\n    me: ${self.ref}\n  }]}\n", `{"name":"nm","x":[{"me":"nm","ref":"nm"}]}`},
 		{"flow collection in a yaml block", "a: ${\\{\n    m: {x: 1,\n      }\n  }}\n", `{"a":{"m":{"x":1}}}`},
 		{"empty yaml block", "a: ${\\{\n  }}\n", `{"a":null}`},
+		{"anchor names a mapping", "spec: &spec\n  replicas: 3\n  template:\n    spec:\n      num: ${spec.replicas}\n", `{"spec":{"replicas":3,"template":{"spec":{"num":3}}}}`},
+		{"anchor on a flow mapping", "a: &a {x: 1, z: ${a.x + 1}}\n", `{"a":{"x":1,"z":2}}`},
+		{"anchor on the root mapping", "&root\nname: nm\nm:\n  v: ${root.name}\n", `{"m":{"v":"nm"},"name":"nm"}`},
+		{"anchors shadow", "a: &x\n  num: 1\n  b: &x\n    num: 2\n    v: ${x.num}\n  v: ${x.num}\n", `{"a":{"b":{"num":2,"v":2},"num":1,"v":1}}`},
+		{"aliased mapping binds its copy", "a: &m\n  num: 1\n  v: ${m.num}\nb: *m\n", `{"a":{"num":1,"v":1},"b":{"num":1,"v":1}}`},
+		{"anchors on scalars and sequences don't bind", "a: &my-x 1\nb: &if [1]\nc: [*my-x, *if]\n", `{"a":1,"b":[1],"c":[1,[1]]}`},
+		{"anchors that aren't identifiers don't bind", "a: &my-a\n  b: 1\nc: *my-a\nd: &if {e: ${self.f}, f: 2}\n", `{"a":{"b":1},"c":{"b":1},"d":{"e":2,"f":2}}`},
+		{"mapping local", "spec:\n  ${local labels = {app: 'web'}}\n  selector: ${labels}\n  template:\n    labels: ${labels}\n", `{"spec":{"selector":{"app":"web"},"template":{"labels":{"app":"web"}}}}`},
+		{"mapping local after fields", "a: 1\n${local x = 2}\nb: ${x}\n", `{"a":1,"b":2}`},
+		{"mapping local scope", "a:\n  ${local x = 1}\n  v: ${x}\nb:\n  ${local x = 2}\n  v: ${x}\n", `{"a":{"v":1},"b":{"v":2}}`},
+		{"mapping local shadows a file local", "${local x = 1}\na:\n  ${local x = 2}\n  v: ${x}\nb: ${x}\n", `{"a":{"v":2},"b":1}`},
+		{"mapping local in a sequence item", "- ${local x = 5}\n  v: ${x}\n- v: 1\n", `[{"v":5},{"v":1}]`},
+		{"mapping local with semicolon and comment", "a:\n  ${local f(n) = n * 2; // double\n  }\n  v: ${f(2)}\n", `{"a":{"v":4}}`},
+		{"mapping local with a yaml block", "a:\n  ${local l = \\{\n      x: 1\n    }}\n  v: ${l.x}\n", `{"a":{"v":1}}`},
+		{"mapping with only locals", "a:\n  ${local x = 1}\n", `{"a":{}}`},
+		{"mapping local in a yaml block", "a: ${[\\{\n    num: ${i}\n    ${local twice = i * 2}\n    m: {v: ${twice}}\n  } for i in [1]]}\n", `{"a":[{"m":{"v":2},"num":1}]}`},
 		{"jsonnet object extension", "a: ${ {x: 1} + {y: ${z: 1}.z} }\nz: 2\n", `{"a":{"x":1,"y":1},"z":2}`},
 	}
 	for _, tc := range cases {
@@ -220,8 +237,11 @@ func TestErrors(t *testing.T) {
 		{"a: ${x}-svc\n", "line 1, column 8: unexpected text after an expression"},
 		{"a: ${1} ${2}\n", "unexpected text after an expression"},
 		{"a: !!str ${1}\n", "an expression must be a whole, unquoted, untagged YAML value"},
-		{"a: 1\n${local x = 1}\n", "line 2, column 1: a local declaration must be on its own lines"},
-		{"a:\n  ${local x = 1}\n  b: 2\n", "a local declaration must be"},
+		{"a: ${local x = 1}\n", "line 1, column 4: a local declaration must be on its own lines"},
+		{"a:\n  ${local x = 1, y = 2}\n  b: 2\n", "line 2, column 3: a local declaration in a mapping must declare a single variable"},
+		{"a:\n  ${local x = 1}\n    b: 2\n", "line 3: unexpected content after a local declaration"},
+		{"a: &my-spec\n  b: 1\n  c: ${my-spec.b}\n", "test.jamlet:3:"},
+		{"a:\n  ${local x = {}}\n  b: ${x.c}\n", "test.jamlet:3:"},
 		{"${local x = 1} # ok\n${local y = 1} a: 1\n", "line 2, column 1: a local declaration must be"},
 		{"a: [${local x = 1}]\n", "a local declaration must be"},
 		{"a: !!int 3\n", "line 1: unsupported tag !!int"},
@@ -278,7 +298,7 @@ func laughs(levels int) string {
 }
 
 func FuzzCompile(f *testing.F) {
-	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "${local x = 1}\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n"} {
+	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "${local x = 1}\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "a: &x\n  ${local y = x}\n  - ${local z = 1;}\n    b: ${z}\n"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, src string) {
