@@ -85,14 +85,17 @@ func Compile(src string) (string, error) {
 // Lexing.
 //
 // The lexer knows just enough YAML to find the ${...} expressions that start a node, leaving alone
-// comments, quoted and block scalars. Its findings are double-checked against yaml.v3, which parses
+// comments, quoted and block scalars (except a block scalar holding an expression). Its findings are double-checked against yaml.v3, which parses
 // the result: any disagreement is reported as an error rather than silently producing wrong output.
 
 type span struct {
 	start, end int      // offsets of "${" and after "}"
 	local      bool     // a local declaration, rather than an expression
+	field      bool     // a local declaration in a mapping, rather than at the start of a document
+	semi       int      // offset of the ";" ending a field local declaration, -1 if none
 	doc        int      // index of the document a local declaration precedes
 	blocks     []*block // YAML blocks nested in the code
+	code       string   // for a quoted expression, its code after YAML unquoting; start is the quote
 }
 
 // A block is YAML nested in an expression: "\{" ending its line, then YAML lines, then a line
@@ -112,6 +115,7 @@ type lexer struct {
 	node      bool // a node can start at i, as opposed to being inside or after one
 	nodeCol   int  // column where the last node started
 	propCol   int  // column of the anchor or tag starting the next node, -1 if none
+	tagged    bool // the next node has a tag, maybe on an earlier line
 	parent    int  // column that continuation lines of a block or plain scalar must exceed
 	plainOpen bool // the previous line ended inside a plain scalar
 
@@ -230,9 +234,10 @@ func (l *lexer) nodeStart() error {
 		l.i = len(l.src) // unterminated: left for the YAML parser to report
 		if end := strEnd(l.src, start+1, c, c == '\''); end >= 0 {
 			l.i = end + 1
+			l.quoted(start)
 		}
 	case (c == '|' || c == '>') && l.flow == 0:
-		l.blockScalar()
+		return l.blockScalar()
 	case c == '&' || c == '!' || c == '*':
 		if c == '!' && sep {
 			return errorAt(l.src, l.i, "the non-specific tag ! is not supported, quote the value instead")
@@ -242,6 +247,7 @@ func (l *lexer) nodeStart() error {
 		} else if l.propCol < 0 {
 			l.propCol = l.i - l.bol
 		}
+		l.tagged = l.tagged || c == '!'
 		if strings.HasPrefix(rest, "!<") { // a verbatim tag, which may hold flow indicators
 			l.i += strings.IndexByte(rest, '>') + 1
 		}
@@ -249,12 +255,13 @@ func (l *lexer) nodeStart() error {
 			l.i++
 		}
 	case c == '-' && sep && l.flow == 0:
-		l.parent = l.i - l.bol
+		l.parent, l.tagged = l.i-l.bol, false // a tag before "- " is the sequence's
 		l.i++
 	case (c == '?' || c == ':') && (sep || l.flow > 0):
 		if l.flow == 0 { // an explicit key or value: the mapping's indentation
 			l.parent = l.i - l.bol
 		}
+		l.tagged = false
 		l.i++
 	case c == '[' || c == '{':
 		l.startNode(l.i)
@@ -276,7 +283,7 @@ func (l *lexer) nodeStart() error {
 
 // startNode records that a node starts at offset i, or at the anchor or tag before it.
 func (l *lexer) startNode(i int) {
-	l.nodeCol, l.node = i-l.bol, false
+	l.nodeCol, l.node, l.tagged = i-l.bol, false, false
 	if l.propCol >= 0 {
 		l.nodeCol, l.propCol = l.propCol, -1
 	}
@@ -326,9 +333,12 @@ func (l *lexer) plain() error {
 }
 
 // blockScalar skips a literal (|) or folded (>) block scalar: its header line and its content lines,
-// which are those indented more than the parent node.
-func (l *lexer) blockScalar() {
-	indent := -1
+// which are those indented more than the parent node. Unless tagged, a block scalar whose content
+// is a single expression, apart from white space around it, is that expression.
+func (l *lexer) blockScalar() error {
+	tagged := l.tagged
+	l.tagged = false
+	indent, first := -1, -1 // first: offset of the content, past the indentation of its first line
 	for l.i++; l.i < len(l.src) && strings.IndexByte("+-123456789", l.src[l.i]) >= 0; l.i++ {
 		if d := l.src[l.i]; d >= '1' && d <= '9' {
 			indent = max(l.parent, 0) + int(d-'0')
@@ -349,10 +359,31 @@ func (l *lexer) blockScalar() {
 			if indent < 0 || n < indent || n == 0 && (marker(l.src[bol:], "---") || marker(l.src[bol:], "...")) {
 				break
 			}
+			if first < 0 {
+				// White space after an explicit indentation doesn't matter either.
+				first = end - len(strings.TrimLeft(l.src[sp:end], " \t"))
+			}
 		}
 		l.i = end
 	}
 	l.node = false
+	if tagged || first < 0 || !strings.HasPrefix(l.src[first:], "${") {
+		return nil
+	}
+	// The expression can't run past the block, whatever follows it.
+	end, blocks, err := exprEnd(l.src[:l.i], first+2)
+	switch {
+	case err != nil && strings.HasSuffix(strings.TrimRight(l.src[first:l.i], " \t\n"), "}"):
+		return err // shaped like an expression, so most likely meant as one
+	case err != nil || strings.Trim(l.src[end+1:l.i], " \t\n") != "":
+		return nil
+	case strings.TrimSpace(l.src[first+2:end]) == "":
+		return errorAt(l.src, first, "empty expression")
+	case isDecl(withoutBlocks(l.src, first+2, end, blocks)):
+		return errorAt(l.src, first, "a local declaration cannot be a block scalar")
+	}
+	l.spans = append(l.spans, span{start: first, end: end + 1, blocks: blocks})
+	return nil
 }
 
 func (l *lexer) expr() error {
@@ -372,11 +403,25 @@ func (l *lexer) expr() error {
 	}
 	eol := j == len(l.src) || l.src[j] == '\n' || l.commentAt(j)
 
-	if isDecl(withoutBlocks(l.src, start+2, end, blocks)) {
-		if l.flow > 0 || l.docContent || start-l.bol != max(l.base, 0) || !eol {
-			return errorAt(l.src, start, "a local declaration must be on its own lines, at the start of a YAML document")
+	if plain := withoutBlocks(l.src, start+2, end, blocks); isDecl(plain) {
+		// Only indentation, or the "- " of sequence items, may precede a declaration on its line.
+		before := l.src[l.bol:start]
+		if l.flow > 0 || !eol || strings.Trim(before, " -") != "" {
+			return errorAt(l.src, start, "a local declaration must be on its own lines")
 		}
-		l.spans = append(l.spans, span{start: start, end: l.i, local: true, doc: l.doc, blocks: blocks})
+		s := span{start: start, end: l.i, local: true, doc: l.doc, blocks: blocks, semi: -1}
+		// At the start of a document, it scopes over the rest of the file. Elsewhere it is a
+		// local of the mapping it is in, which the YAML parser finds by giving it a key.
+		if s.field = l.docContent || len(before) != max(l.base, 0); s.field {
+			var ok bool
+			if s.semi, ok = fieldSemi(l.src, plain, end, blocks); !ok {
+				return errorAt(l.src, start, "a local declaration in a mapping must declare a single variable, like ${local x = 1}")
+			}
+			l.docContent = true
+			l.startNode(start)
+			l.parent, l.node = l.nodeCol, true
+		}
+		l.spans = append(l.spans, s)
 		return nil
 	}
 	// Only a key indicator, flow punctuation, a comment or the end of the line may follow.
@@ -390,6 +435,7 @@ func (l *lexer) expr() error {
 }
 
 func (l *lexer) endDoc() {
+	l.tagged = false
 	if l.docStarted || l.docContent {
 		l.doc++
 	}
@@ -456,6 +502,25 @@ func isDecl(code string) bool {
 		return false
 	}
 	return !parses(code)
+}
+
+// fieldSemi checks that a declaration (src up to offset end, plain without YAML blocks) is valid
+// as a Jsonnet object local, which declares a single variable and has no ";". It returns the offset
+// of a trailing ";" to drop, or -1.
+func fieldSemi(src, plain string, end int, blocks []*block) (int, bool) {
+	if parses("{" + plain + "\n}") {
+		return -1, true
+	}
+	from := end - len(plain) // the ";" is after any YAML block, where src and plain match
+	if len(blocks) > 0 {
+		from = blocks[len(blocks)-1].end + 1
+	}
+	for i := end - 1; i >= from; i-- {
+		if p := len(plain) - (end - i); src[i] == ';' && parses("{"+plain[:p]+plain[p+1:]+"\n}") {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
 // parses reports whether code is syntactically valid Jsonnet. Unlike jsonnet.SnippetToAST, the
@@ -579,6 +644,9 @@ type expr struct {
 	blocks    []*block // YAML blocks nested in the code
 	line, col int      // source position of the code
 	doc       int      // for local declarations, see span.doc
+	field     bool     // a local declaration in a mapping
+	semi      int      // see span.semi
+	code      string   // see span.code
 }
 
 type output struct {
@@ -671,11 +739,18 @@ func (c *compiler) build(from, to int, spans []span) string {
 	}
 	for _, s := range spans {
 		advance(s.start, true)
-		e := expr{from: s.start + 2, to: s.end - 1, blocks: s.blocks, line: line, col: utf8.RuneCountInString(src[bol:s.start]) + 3, doc: s.doc}
-		if s.local {
+		e := expr{from: s.start + 2, to: s.end - 1, blocks: s.blocks, line: line, col: utf8.RuneCountInString(src[bol:s.start]) + 3, doc: s.doc, field: s.field, semi: s.semi, code: s.code}
+		if s.code != "" {
+			e.col++ // past the quote
+		}
+		if s.local && !s.field {
 			c.locals = append(c.locals, e)
 		} else {
-			fmt.Fprintf(&b, "%s%d%s", c.sentinel, len(c.exprs), c.sentinel)
+			q := map[bool]string{true: `"`}[s.code != ""] // a quoted expression stays quoted, for YAML's tokens
+			fmt.Fprintf(&b, "%s%s%d%s%s", q, c.sentinel, len(c.exprs), c.sentinel, q)
+			if s.field {
+				b.WriteString(":") // the key of a placeholder field, which the mapping turns into a local
+			}
 			c.exprs = append(c.exprs, e)
 			c.used = append(c.used, false)
 		}
@@ -772,9 +847,21 @@ func (c *compiler) code(e expr, decl bool) error {
 		from = b.end + 1
 		c.padTo(position(c.src, from))
 	}
-	c.write(c.src[from:e.to])
+	if e.field && e.semi >= 0 {
+		c.write(c.src[from:e.semi])
+		from = e.semi + 1
+	}
+	if e.code != "" {
+		c.write(e.code)
+	} else {
+		c.write(c.src[from:e.to])
+	}
 	if !decl {
 		c.write(")")
+		return nil
+	}
+	if e.field {
+		c.write(", ")
 		return nil
 	}
 	// A declaration needs a ";", unless its last token (maybe followed by comments) is one already.
@@ -818,15 +905,23 @@ func (c *compiler) padTo(line, col int) {
 // tags are the explicit tags allowed on each kind of node; they don't change its meaning.
 var tags = map[yaml.Kind]string{yaml.ScalarNode: "!!str", yaml.MappingNode: "!!map", yaml.SequenceNode: "!!seq"}
 
+// copied counts a node copied by an alias, bounding them.
+func (c *compiler) copied() error {
+	if len(c.aliases) > 0 {
+		if c.copies++; c.copies > maxCopies {
+			return c.errorf(c.aliases[0], "aliases expand to more than %d nodes", maxCopies)
+		}
+	}
+	return nil
+}
+
 func (c *compiler) node(n *yaml.Node) error {
 	c.align(n)
 	if n.Style&yaml.TaggedStyle != 0 && n.Tag != tags[n.Kind] {
 		return c.errorf(n, "unsupported tag %s", n.Tag)
 	}
-	if len(c.aliases) > 0 {
-		if c.copies++; c.copies > maxCopies {
-			return c.errorf(c.aliases[0], "aliases expand to more than %d nodes", maxCopies)
-		}
+	if err := c.copied(); err != nil {
+		return err
 	}
 	switch n.Kind {
 	case yaml.DocumentNode:
@@ -866,11 +961,31 @@ func (c *compiler) node(n *yaml.Node) error {
 
 func (c *compiler) mapping(n *yaml.Node) error {
 	c.write("{")
+	// An anchor names the mapping in the Jsonnet code inside it. Other anchors, like
+	// &default-labels, are just YAML anchors.
+	if isIdentifier(n.Anchor) {
+		c.write("local " + n.Anchor + " = self, ")
+	}
 	for i := 0; i < len(n.Content); i += 2 {
 		k, v := n.Content[i], n.Content[i+1]
 		if k.Kind == yaml.AliasNode {
 			c.align(k) // the field is where the alias is
 			k = k.Alias
+		}
+		if e, ok := c.fieldLocal(k); ok {
+			if err := c.copied(); err != nil {
+				return err
+			}
+			if len(c.aliases) > 0 && strings.Contains(c.src[e.from:e.to], "\n") {
+				return c.errorf(k, "an alias cannot repeat a multi-line local declaration")
+			}
+			if v.Kind != yaml.ScalarNode || v.Tag != "!!null" || v.Value != "" || v.Anchor != "" {
+				return c.errorf(v, "unexpected content after a local declaration, at deeper indentation")
+			}
+			if err := c.code(e, true); err != nil {
+				return err
+			}
+			continue
 		}
 		if k.Tag == "!!merge" {
 			return c.errorf(k, "merge keys (<<) are not supported")
@@ -891,6 +1006,31 @@ func (c *compiler) mapping(n *yaml.Node) error {
 	return nil
 }
 
+// fieldLocal returns the local declaration that a placeholder key stands for, if any.
+func (c *compiler) fieldLocal(k *yaml.Node) (expr, bool) {
+	parts := strings.Split(k.Value, c.sentinel)
+	if k.Kind != yaml.ScalarNode || k.Style != 0 || len(parts) != 3 || parts[0] != "" || parts[2] != "" {
+		return expr{}, false
+	}
+	i, err := strconv.Atoi(parts[1])
+	if err != nil || i >= len(c.exprs) || !c.exprs[i].field {
+		return expr{}, false
+	}
+	c.used[i] = true
+	return c.exprs[i], true
+}
+
+// keywords are the Jsonnet keywords, which can't name variables.
+var keywords = map[string]bool{
+	"assert": true, "else": true, "error": true, "false": true, "for": true, "function": true,
+	"if": true, "import": true, "importbin": true, "importstr": true, "in": true, "local": true,
+	"null": true, "self": true, "super": true, "tailstrict": true, "then": true, "true": true,
+}
+
+var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func isIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] }
+
 func (c *compiler) scalar(n *yaml.Node, key bool) error {
 	c.align(n)
 	parts := strings.Split(n.Value, c.sentinel)
@@ -900,6 +1040,13 @@ func (c *compiler) scalar(n *yaml.Node, key bool) error {
 			return c.errorf(n, "${ inside a plain scalar: an expression must be a whole YAML value")
 		case n.Style&yaml.TaggedStyle != 0 && n.Tag != tags[n.Kind]:
 			return c.errorf(n, "unsupported tag %s", n.Tag)
+		case n.Style&yaml.TaggedStyle == 0 && n.Style&(yaml.SingleQuotedStyle|yaml.DoubleQuotedStyle) != 0:
+			// The lexer turns well-formed quoted expressions on one line into placeholders.
+			if _, ok, err := quotedExpr(n.Value); err != nil {
+				return c.errorf(n, "%v", err)
+			} else if ok {
+				return c.errorf(n, "%s", errMultiLineQuoted)
+			}
 		}
 		lit, err := literal(n, key, c.places[n])
 		if err != nil {
@@ -908,12 +1055,27 @@ func (c *compiler) scalar(n *yaml.Node, key bool) error {
 		c.write(lit)
 		return nil
 	}
-	if n.Style != 0 || len(parts) != 3 || parts[0] != "" || parts[2] != "" {
+	// In a block scalar, white space (which the lexer checked) may surround the expression.
+	if len(parts) != 3 || strings.Trim(parts[0], " \t\n") != "" || strings.Trim(parts[2], " \t\n") != "" {
 		return c.errorf(n, "an expression must be a whole, unquoted, untagged YAML value")
 	}
 	i, err := strconv.Atoi(parts[1])
 	if err != nil || i >= len(c.exprs) {
 		return c.errorf(n, "corrupted placeholder %q", parts[1])
+	}
+	code := c.exprs[i].code
+	switch quoted := n.Style&^yaml.TaggedStyle == yaml.DoubleQuotedStyle && code != ""; {
+	case quoted && n.Style&yaml.TaggedStyle != 0:
+		if n.Tag != tags[n.Kind] {
+			return c.errorf(n, "unsupported tag %s", n.Tag)
+		}
+		c.used[i] = true
+		c.write(quote("${" + code + "}")) // !!str keeps the string
+		return nil
+	case quoted && isDecl(code):
+		return c.errorf(n, "a local declaration cannot be quoted")
+	case !quoted && (code != "" || n.Style != 0 && n.Style != yaml.LiteralStyle && n.Style != yaml.FoldedStyle):
+		return c.errorf(n, "an expression must be a whole, unquoted, untagged YAML value")
 	}
 	// Re-emitting a multi-line expression would push the output past the source lines that follow,
 	// so later errors would report wrong lines.
@@ -931,6 +1093,48 @@ func (c *compiler) scalar(n *yaml.Node, key bool) error {
 	}
 	c.write("]")
 	return nil
+}
+
+// quoted turns a quoted scalar ending at l.i into an expression if its whole value is one, like
+// '${1 + 1}', on one line. The code is the value after YAML unquoting. The compiler reports the
+// rest: malformed expressions, and those spanning lines, whose code would lose its source lines.
+// It also knows which node a tag is on, so it handles !!str.
+func (l *lexer) quoted(start int) {
+	raw := l.src[start:l.i]
+	if !strings.Contains(raw, "${") && !strings.Contains(raw, `\`) || strings.Contains(raw, "\n") {
+		return
+	}
+	var v string
+	if yaml.Unmarshal([]byte(raw), &v) != nil {
+		return // left for the YAML parser to report
+	}
+	if code, ok, _ := quotedExpr(v); ok && !strings.Contains(code, "\n") {
+		l.spans = append(l.spans, span{start: start, end: l.i, code: code})
+	}
+}
+
+const errMultiLineQuoted = "a quoted expression must be on one line; use a block expression for multi-line code"
+
+// quotedExpr returns the code of a quoted scalar whose whole value is an expression, like '${1 + 1}'.
+// Other values, like 'echo ${HOME}' or an unterminated '${', are strings.
+func quotedExpr(v string) (string, bool, error) {
+	if !strings.HasPrefix(v, "${") {
+		return "", false, nil
+	}
+	end, blocks, err := exprEnd(v, 2)
+	switch {
+	case err != nil && strings.HasSuffix(v, "}"):
+		// Shaped like an expression, so most likely meant as one. Positions in err are within v.
+		msg := err.Error()
+		return "", false, errors.New(msg[strings.Index(msg, ": ")+2:])
+	case err != nil || end != len(v)-1:
+		return "", false, nil
+	case len(blocks) > 0:
+		return "", false, errors.New(`a quoted expression cannot contain a YAML block (\{)`)
+	case strings.TrimSpace(v[2:end]) == "":
+		return "", false, errors.New("empty expression")
+	}
+	return v[2:end], true, nil
 }
 
 // literal returns the JSON encoding of a scalar without expressions.

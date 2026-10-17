@@ -16,12 +16,19 @@
 package jamlet
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 func eval(t *testing.T, src string) (string, error) {
@@ -48,7 +55,7 @@ func compact(t *testing.T, s string) string {
 }
 
 // Without expressions, a jamlet file must mean exactly what std.parseYaml (and kubectl) make of it.
-// That includes ${ in strings, block scalars and comments, which are never expressions.
+// That includes ${ in strings and comments, which are never expressions.
 func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 	cases := []string{
 		"",
@@ -73,23 +80,24 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 		"a: &a name\n*a : value\n",
 		"a: !!map {b: !!seq [1]}\n",
 		"search: ?enabled\nbind: :8080\nflow: {k: http:, ?x: -, y: [?z, a:b]}\n",
-		"&key script: |\n  echo ${HOME}\n!!str other: |\n  ${x}\n",
-		"- &a k: |\n    ${y}\n  e: 1\n",
+		"&key script: |\n  echo ${HOME}\n!!str other: !!str |\n  ${x}\ntagged: !!str\n  |-\n  ${x}\nq: !!str \"${x\\n}\"\n",
+		"- &a k: !!str |\n    ${y}\n  e: 1\n",
 		"values: [# ${HOME} is literal here\n  1]\nb: {# ${c\n  d: 1}\ne: \"q\"# ${x\nf: [x, 'y']# ${z\ng: [1,# ${w\n  2]\n",
 		"? script\n: |\n  echo ${HOME}\na:\n  ? k\n  :   |\n    x ${y}\n",
 		"&k name: value\ncopy: *k\nf: [&d -, &n 1]\ng: *d\n*n : x\n",
 		"&k -: item\ncopy: *k\n",
+		"labels: &default-labels\n  app: web\nselector: {matchLabels: *default-labels}\nself: &self {a: 1}\n",
 		"data:\n  run.sh: |\n    echo hello",
 		"{a: !<tag:yaml.org,2002:str> '${HOME}', b: !<tag:yaml.org,2002:str> 1}\n",
 		"html: <a href=\"x\">&amp;</a>\nunicode: héllo ✓ \U0001F600\n",
 		"dollar: $foo $ {x} $(cmd) $$\n",
 		"weird: a,b [c] {d}\nurl: http://x:80/#frag\n",
 		// ${ is literal in strings and comments, balanced or not.
-		"a: '${x}'\nb: \"${y\"\nc: 'it''s ${'\nd: \"esc \\\" ${\"\n",
+		"a: !!str '${x}'\nb: \"${y\"\nc: 'it''s ${'\nd: \"esc \\\" ${\"\ne: '${a} ${b}'\nf: \"${x}-\"\n",
 		"# ${unbalanced\na: 1 # ${also {{\n",
 		"script: |\n  #!/bin/sh\n  echo ${HOME} ${\n  # ${comment-like content\nnext: 1\n",
 		"fold: >\n  ${a}\n   ${b}\n\nafter: x\n",
-		"- k: |\n    ${x}\n  e: 1\n",
+		"- k: !!str |\n    ${x}\n  e: 1\n",
 		"q: \"multi\n  line ${x}\n  }\"\nr: 'single\n  ${y'\n",
 		"top: |2\n   ${indented}\n  ${x}\n",
 		"text: it's ${ok} # quote in plain\n",
@@ -125,14 +133,23 @@ func TestExpressions(t *testing.T) {
 		{"indented ||| inside a text block", "a: ${|||\n  x\n  ||| literal\n|||}\n", `{"a":"x\n||| literal\n"}`},
 		{"text block", "a: ${|||\n  ${HOME} }}}\n|||}\n", `{"a":"${HOME} }}}\n"}`},
 		{"multi-line expression", "a: ${\n  local x = 2;\n  x * x\n}\nb: 1\n", `{"a":4,"b":1}`},
-		{"strings are literal", "a: '${x}'\nb: \"${x}\"\nc: |\n  ${x}\nd: ${1}\n", `{"a":"${x}","b":"${x}","c":"${x}\n","d":1}`},
+		{"strings are literal", "a: !!str '${x}'\nb: \"x${x}\"\nc: !!str |\n  ${x}\nd: ${1}\ne: '${x} ${y}'\nf: |\n  ${x} ${y}\n", `{"a":"${x}","b":"x${x}","c":"${x}\n","d":1,"e":"${x} ${y}","f":"${x} ${y}\n"}`},
+		{"quoted expressions", "foo: '${\"foo\"}'\nb: \"${1 + 1}\"\nc: '${''x'' + \"y\"}'\nd: ['${1}', '${\"a, b\"}']\ne: {k: '${ {x: \"y # z\"}.x }'}\n", `{"b":2,"c":"xy","d":[1,"a, b"],"e":{"k":"y # z"},"foo":"foo"}`},
+		{"quoted computed key", "'${\"a\" + \"b\"}': 1\n\"${if false then 'x'}\": 2\n", `{"ab":1}`},
+		{"quoted expressions keep YAML's tokens", "a: {'${\"k\"}':1}\nb: '${2}'# comment\n", `{"a":{"k":1},"b":2}`},
+		{"tags on quoted expressions", "!!map\n'${\"a\"}': [!!str , '${1}', !!str '${\"x}', !!str '${local y = 1}']\n", `{"a":["",1,"${\"x}","${local y = 1}"]}`},
+		{"anchored quoted expression", "a: &x '${1 + 1}'\nb: *x\n", `{"a":2,"b":2}`},
+		{"block expressions", "a: |-\n  ${[\n    x * 2  // a comment\n    for x in [1, 2]\n  ]}\nb: |\n  ${|||\n    text\n  |||}\nc: >+\n\n  ${1 +\n  1}  \n\nd:\n- &e |-\n  ${\"e\"}\n- *e\n? |\n  ${'k'}\n: v\n", `{"a":[2,4],"b":"text\n","c":2,"d":["e","e"],"k":"v"}`},
+		{"tags don't leak into the next document", "--- !!str |\n  ${x}\n--- |\n  ${1 + 1}\n", `["${x}\n",2]`},
+		{"block expression after explicit indentation", "a: |2\n    ${1 + 1}\nb: |2\n  \t${2}\n", `{"a":2,"b":2}`},
+		{"yaml block in a block expression", "env: |-\n  ${[\n    \\{\n      name: ${k}\n    }\n    for k in ['a', 'b']\n  ]}\n", `{"env":[{"name":"a"},{"name":"b"}]}`},
 		{"comments are ignored", "# ${broken\na: ${1} # ${broken\n", `{"a":1}`},
 		{"after a block scalar", "s: |\n  # not a comment ${x}\n    ${y}\nt: ${1}\n", `{"s":"# not a comment ${x}\n  ${y}\n","t":1}`},
-		{"after a nested block scalar", "- k: |\n    ${x}\n  e: ${1}\n", `[{"e":1,"k":"${x}\n"}]`},
+		{"after a nested block scalar", "- k: |\n    x ${x}\n  e: ${1}\n", `[{"e":1,"k":"x ${x}\n"}]`},
 		{"after an empty block scalar", "a:\n  - b: |\n    c: ${1}\n", `{"a":[{"b":"","c":1}]}`},
 		{"after a multi-line plain scalar", "a: it is\n  'not quoted\nb: ${1}\n", `{"a":"it is 'not quoted","b":1}`},
 		{"after a multi-line quoted scalar", "a: 'x\n  ${y'\nb: ${1}\n", `{"a":"x ${y","b":1}`},
-		{"computed keys", "${'a' + 'b'}: 1\n'${k}': 2\n", `{"${k}":2,"ab":1}`},
+		{"computed keys", "${'a' + 'b'}: 1\n!!str '${k}': 2\n", `{"${k}":2,"ab":1}`},
 		{"null key omits field", "${if false then 'x'}: 1\nz: 2\n", `{"z":2}`},
 		{"self and $", "name: foo\nspec:\n  i: 1\n  j: ${self.i + 1}\n  label: ${$.name}\n", `{"name":"foo","spec":{"i":1,"j":2,"label":"foo"}}`},
 		{"$ is per document", "a: 1\nb: ${$.a}\n---\na: 2\nb: ${$.a}\n", `[{"a":1,"b":1},{"a":2,"b":2}]`},
@@ -192,6 +209,22 @@ env: ${[
 		{"$ and self in a yaml block", "name: nm\nx: ${[\\{\n    ref: ${$.name}\n    me: ${self.ref}\n  }]}\n", `{"name":"nm","x":[{"me":"nm","ref":"nm"}]}`},
 		{"flow collection in a yaml block", "a: ${\\{\n    m: {x: 1,\n      }\n  }}\n", `{"a":{"m":{"x":1}}}`},
 		{"empty yaml block", "a: ${\\{\n  }}\n", `{"a":null}`},
+		{"anchor names a mapping", "spec: &spec\n  replicas: 3\n  template:\n    spec:\n      num: ${spec.replicas}\n", `{"spec":{"replicas":3,"template":{"spec":{"num":3}}}}`},
+		{"anchor on a flow mapping", "a: &a {x: 1, z: ${a.x + 1}}\n", `{"a":{"x":1,"z":2}}`},
+		{"anchor on the root mapping", "&root\nname: nm\nm:\n  v: ${root.name}\n", `{"m":{"v":"nm"},"name":"nm"}`},
+		{"anchors shadow", "a: &x\n  num: 1\n  b: &x\n    num: 2\n    v: ${x.num}\n  v: ${x.num}\n", `{"a":{"b":{"num":2,"v":2},"num":1,"v":1}}`},
+		{"aliased mapping binds its copy", "a: &m\n  num: 1\n  v: ${m.num}\nb: *m\n", `{"a":{"num":1,"v":1},"b":{"num":1,"v":1}}`},
+		{"anchors on scalars and sequences don't bind", "a: &my-x 1\nb: &if [1]\nc: [*my-x, *if]\n", `{"a":1,"b":[1],"c":[1,[1]]}`},
+		{"anchors that aren't identifiers don't bind", "a: &my-a\n  b: 1\nc: *my-a\nd: &if {e: ${self.f}, f: 2}\n", `{"a":{"b":1},"c":{"b":1},"d":{"e":2,"f":2}}`},
+		{"mapping local", "spec:\n  ${local labels = {app: 'web'}}\n  selector: ${labels}\n  template:\n    labels: ${labels}\n", `{"spec":{"selector":{"app":"web"},"template":{"labels":{"app":"web"}}}}`},
+		{"mapping local after fields", "a: 1\n${local x = 2}\nb: ${x}\n", `{"a":1,"b":2}`},
+		{"mapping local scope", "a:\n  ${local x = 1}\n  v: ${x}\nb:\n  ${local x = 2}\n  v: ${x}\n", `{"a":{"v":1},"b":{"v":2}}`},
+		{"mapping local shadows a file local", "${local x = 1}\na:\n  ${local x = 2}\n  v: ${x}\nb: ${x}\n", `{"a":{"v":2},"b":1}`},
+		{"mapping local in a sequence item", "- ${local x = 5}\n  v: ${x}\n- v: 1\n", `[{"v":5},{"v":1}]`},
+		{"mapping local with semicolon and comment", "a:\n  ${local f(n) = n * 2; // double\n  }\n  v: ${f(2)}\n", `{"a":{"v":4}}`},
+		{"mapping local with a yaml block", "a:\n  ${local l = \\{\n      x: 1\n    }}\n  v: ${l.x}\n", `{"a":{"v":1}}`},
+		{"mapping with only locals", "a:\n  ${local x = 1}\n", `{"a":{}}`},
+		{"mapping local in a yaml block", "a: ${[\\{\n    num: ${i}\n    ${local twice = i * 2}\n    m: {v: ${twice}}\n  } for i in [1]]}\n", `{"a":[{"m":{"v":2},"num":1}]}`},
 		{"jsonnet object extension", "a: ${ {x: 1} + {y: ${z: 1}.z} }\nz: 2\n", `{"a":{"x":1,"y":1},"z":2}`},
 	}
 	for _, tc := range cases {
@@ -220,8 +253,27 @@ func TestErrors(t *testing.T) {
 		{"a: ${x}-svc\n", "line 1, column 8: unexpected text after an expression"},
 		{"a: ${1} ${2}\n", "unexpected text after an expression"},
 		{"a: !!str ${1}\n", "an expression must be a whole, unquoted, untagged YAML value"},
-		{"a: 1\n${local x = 1}\n", "line 2, column 1: a local declaration must be on its own lines"},
-		{"a:\n  ${local x = 1}\n  b: 2\n", "a local declaration must be"},
+		{"a: ${local x = 1}\n", "line 1, column 4: a local declaration must be on its own lines"},
+		{"a: '${}'\n", "line 1: empty expression"},
+		{"a: '${[\\{\n  b: 1\n  }]}'\n", `line 1: inside an expression, \{ starts a YAML block`},
+		{"a: '${\n  1}'\n", "line 1: a quoted expression must be on one line"},
+		{"a: '${local x = 1}'\n", "line 1: a local declaration cannot be quoted"},
+		{"a: \"${[\\\\{\\n  b: 1\\n}]}\"\n", "line 1: a quoted expression cannot contain a YAML block"},
+		{"a: '${\"x}'\n", "line 1: unterminated ${"},
+		{"a: 1\nb: '${error \"boom\"}'\n", "test.jamlet:2:"},
+		{"a: |-\n  ${\"x}\n", "line 2, column 3: unterminated ${"},
+		{"a: |\n  ${ }\n\n", "line 2, column 3: empty expression"},
+		{"a: |-\n  ${local x = 1}\n", "line 2, column 3: a local declaration cannot be a block scalar"},
+		{"a: |-\n  ${\"x}\nb: '\"}'\n", "line 2, column 3: unterminated ${"},
+		{"a: &m\n  ${local x =\n    1}\n  v: ${x}\nb: *m\n", "line 2: an alias cannot repeat a multi-line local declaration"},
+		{"a: \"${1\\n\\n\\n}\"\n", "line 1: a quoted expression must be on one line"},
+		{"a: &v\n  '${error \"boom\"}'\n", "test.jamlet:2:"},
+		{"&k '${\"k\"}': 1\nx:\n  *k : 2\nc: ${error 'boom'}\n", "test.jamlet:4:"},
+		{"a: |-\n  ${\n    1 +\n    error 'deep'\n  }\n", "test.jamlet:4:"},
+		{"a:\n  ${local x = 1, y = 2}\n  b: 2\n", "line 2, column 3: a local declaration in a mapping must declare a single variable"},
+		{"a:\n  ${local x = 1}\n    b: 2\n", "line 3: unexpected content after a local declaration"},
+		{"a: &my-spec\n  b: 1\n  c: ${my-spec.b}\n", "test.jamlet:3:"},
+		{"a:\n  ${local x = {}}\n  b: ${x.c}\n", "test.jamlet:3:"},
 		{"${local x = 1} # ok\n${local y = 1} a: 1\n", "line 2, column 1: a local declaration must be"},
 		{"a: [${local x = 1}]\n", "a local declaration must be"},
 		{"a: !!int 3\n", "line 1: unsupported tag !!int"},
@@ -236,6 +288,7 @@ func TestErrors(t *testing.T) {
 		{"a: &a [*a]\n", `line 1: anchor "a" contains an alias to itself`},
 		{"a: &a {b: [1, {c: *a}]}\n", `anchor "a" contains an alias to itself`},
 		{laughs(7), "aliases expand to more than 100000 nodes"},
+		{"m: &m\n" + strings.Repeat("  ${local x = 1}\n", 500) + "l: [" + strings.Repeat("*m, ", 300) + "]\n", "aliases expand to more than 100000 nodes"},
 		{"a: &x ${\n  1\n}\nb: *x\n", "line 1: an alias cannot repeat a multi-line expression"},
 		// Jsonnet locations match the source for YAML literals too.
 		{"a: 1\nb:\n  c: [1, 2]\na: 3\n", "test.jamlet:4:"},
@@ -278,7 +331,7 @@ func laughs(levels int) string {
 }
 
 func FuzzCompile(f *testing.F) {
-	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "${local x = 1}\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n"} {
+	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "${local x = 1}\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "a: &x\n  ${local y = x}\n  - ${local z = 1;}\n    b: ${z}\n", "a: ['${1}', \"${'}'}\"]\n'${k}': !!str '${v}'\n", "a: |-\n  ${[\\{\n    b: 1\n  }]}\nc: !!str |\n  ${d}\n"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, src string) {
@@ -286,4 +339,66 @@ func FuzzCompile(f *testing.F) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// Jamlet files must be valid YAML, as read by kubectl, so that YAML tooling can process them.
+// That holds for the examples and for every YAML snippet in the spec.
+func TestFilesAreYAML(t *testing.T) {
+	files := map[string]string{}
+	for _, pattern := range []string{"../../examples/*.jamlet", "../../testdata/*.jamlet"} {
+		paths, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range paths {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[p] = string(b)
+		}
+	}
+	const spec = "../../docs/Advanced-Usage/jamlet.md"
+	doc, err := os.ReadFile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range regexp.MustCompile("(?ms)^```yaml\n(.*?)^```$").FindAllSubmatchIndex(doc, -1) {
+		files[fmt.Sprintf("%s:%d", spec, bytes.Count(doc[:m[2]], []byte("\n"))+1)] = string(doc[m[2]:m[3]])
+	}
+	if len(files) < 10 {
+		t.Fatalf("found only %d files", len(files))
+	}
+	for name, src := range files {
+		dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(src), 4096)
+		for {
+			var v any
+			err := dec.Decode(&v)
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				if why := notYAMLYet(src); why != "" {
+					t.Logf("%s: not valid YAML, as it uses %s: %v", name, why, err)
+				} else {
+					t.Errorf("%s: not valid YAML: %v", name, err)
+				}
+				break
+			}
+		}
+	}
+}
+
+// notYAMLYet returns which syntax without a YAML form yet src uses, if any.
+func notYAMLYet(src string) string {
+	l, err := lex(src, 0, false)
+	if err != nil {
+		return ""
+	}
+	for _, s := range l.spans {
+		if s.local {
+			return "local declarations"
+		}
+	}
+	return ""
 }
