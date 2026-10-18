@@ -18,20 +18,24 @@ kind: Deployment
 metadata:
   name: frontend
   labels: ${labels}
-spec:
+# An anchor on a mapping also names it in the expressions inside it.
+spec: &spec
   # An expression keeps its type: 3, not "3".
   replicas: ${params.replicas}
   selector:
     matchLabels: ${labels}
   template:
     metadata:
-      labels: ${labels}
+      # `spec` is the anchored mapping above: the pods must match the selector.
+      labels: ${spec.selector.matchLabels}
     spec:
       containers:
-        - name: php-redis
+        # A local declaration inside a mapping is a local of that mapping.
+        - ${local port = 80}
+          name: php-redis
           # Strings are built in Jsonnet; an expression is always a whole value.
           image: ${'gcr.io/google-samples/gb-frontend:' + params.version}
-          ports: [{containerPort: 80}]
+          ports: [{containerPort: '${port}'}]
           # Expressions may span lines and use any Jsonnet. Inside one, \{ followed
           # by a line break goes back to YAML, up to a } indented less than the YAML.
           env: ${[
@@ -40,7 +44,7 @@ spec:
               value: ${params.env[k]}
             }
             for k in std.objectFields(params.env)
-          ]}
+          ] + [{name: 'PORT', value: std.toString(port)}]}
           volumeMounts: [{name: config, mountPath: /etc/guestbook}]
       volumes:
         - name: config
