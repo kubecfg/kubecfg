@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestInternalFS(t *testing.T) {
@@ -53,4 +56,53 @@ func TestExpandImportToCandidateURLs(t *testing.T) {
 			t.Errorf("Expected %v, got %v", expected, urls)
 		}
 	})
+}
+
+func TestImportPath(t *testing.T) {
+	for path, want := range map[string]string{
+		"a.jamlet":                      "jamlet:a.jamlet",
+		"dir/a.jsonnet":                 "dir/a.jsonnet",
+		"jamlet:a.jamlet":               "jamlet:a.jamlet",
+		"file:///x/a.jamlet?raw=true":   "jamlet:file:///x/a.jamlet?raw=true",
+		"https://h/a.jamlet#fragment":   "jamlet:https://h/a.jamlet#fragment",
+		"https://h/a.jsonnet?x=.jamlet": "https://h/a.jsonnet?x=.jamlet",
+		"data:,{a: 1} // demo.jamlet":   "data:,{a: 1} // demo.jamlet",
+		`C:\x\a.jamlet`:                 `jamlet:C:\x\a.jamlet`,
+	} {
+		if got := ImportPath(path); got != want {
+			t.Errorf("ImportPath(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestImportFromPipe(t *testing.T) {
+	for name, tc := range map[string]struct {
+		data  string
+		delay time.Duration
+	}{
+		"delayed": {data: "{a: 1}", delay: 50 * time.Millisecond},
+		"large":   {data: strings.Repeat("x", 1<<20)}, // larger than the pipe buffer
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			go func() {
+				time.Sleep(tc.delay)
+				w.WriteString(tc.data)
+				w.Close()
+			}()
+
+			path := fmt.Sprintf("file:///dev/fd/%d", r.Fd())
+			contents, _, err := MakeUniversalImporter(nil, false).Import("", path)
+			if err != nil {
+				t.Fatalf("importing %s: %v", path, err)
+			}
+			if got := contents.String(); got != tc.data {
+				t.Errorf("got %d bytes, want %d", len(got), len(tc.data))
+			}
+		})
+	}
 }

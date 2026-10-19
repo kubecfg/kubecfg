@@ -3,22 +3,50 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"testing/fstest"
 	"time"
 
 	jsonnet "github.com/google/go-jsonnet"
 	libsonnet "github.com/kubecfg/kubecfg/lib"
+	"github.com/kubecfg/kubecfg/pkg/jamlet"
 	log "github.com/sirupsen/logrus"
 )
 
 var errNotFound = errors.New("Not found")
 
 var extVarKindRE = regexp.MustCompile("^<(?:extvar|top-level-arg):.+>$")
+
+// streamDir is http.Dir that also serves non-seekable files such as pipes,
+// so `import 'file:///dev/stdin'` works when stdin is piped.
+type streamDir struct{ http.Dir }
+
+func (d streamDir) Open(name string) (http.File, error) {
+	f, err := d.Dir.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err == nil && (fi.Mode().IsRegular() || fi.IsDir()) {
+		return f, nil
+	}
+	defer f.Close()
+	if err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	// MapFS serves the bytes seekable and with the buffered Size(), which http.FileServer trusts.
+	return http.FS(fstest.MapFS{"f": {Data: b}}).Open("f")
+}
 
 func newInternalFS() http.FileSystem {
 	return http.FS(libsonnet.Assets)
@@ -58,7 +86,7 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+	t.RegisterProtocol("file", http.NewFileTransport(streamDir{http.Dir("/")}))
 	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
 	t.RegisterProtocol("oci", newOCIImporter())
 	t.RegisterProtocol("kustomize+https", &kustomizeImporter{alpha: alpha})
@@ -71,6 +99,30 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 	}
 }
 
+// JamletScheme prefixes imports that compile a jamlet file to Jsonnet: `import 'jamlet:foo.jamlet'`.
+// Without it a .jamlet file is imported as is, which keeps importstr and importbin returning its source:
+// go-jsonnet caches contents by location for all three, so compiled code needs a location of its own.
+const JamletScheme = "jamlet:"
+
+// ImportPath returns what to import to evaluate the file at path: .jamlet files need the jamlet: scheme.
+func ImportPath(path string) string {
+	if strings.HasPrefix(path, "data:") { // inline code, not a file
+		return path
+	}
+	p := path
+	if u, err := url.Parse(path); err == nil && u.Opaque == "" {
+		p = u.Path // ignore a URL's query and fragment
+	}
+	if strings.HasSuffix(p, jamlet.Ext) && !strings.HasPrefix(path, JamletScheme) {
+		return JamletScheme + path
+	}
+	return path
+}
+
+// DocsScheme prefixes imports that wrap the imported value v in an object, {docs: v}, for tools
+// that need an object where a jamlet stream is an array.
+const DocsScheme = "kubecfg+docs:"
+
 type universalImporter struct {
 	BaseSearchURLs []*url.URL
 	HTTPClient     *http.Client
@@ -80,6 +132,21 @@ type universalImporter struct {
 
 func (importer *universalImporter) Import(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
 	log.Debugf("Importing %q from %q", importedPath, importedFrom)
+
+	if path, ok := strings.CutPrefix(importedPath, DocsScheme); ok {
+		if c, ok := importer.cache[importedPath]; ok {
+			return c, importedPath, nil
+		}
+		c := jsonnet.MakeContents(fmt.Sprintf("{docs: import %q}", path))
+		importer.cache[importedPath] = c
+		return c, importedPath, nil
+	}
+
+	// Code compiled from a jamlet file imports relative to the file itself.
+	importedFrom = strings.TrimPrefix(importedFrom, JamletScheme)
+	if path, ok := strings.CutPrefix(importedPath, JamletScheme); ok {
+		return importer.importJamlet(importedFrom, path)
+	}
 
 	binary := false
 	if strings.HasPrefix(importedPath, "binary://") {
@@ -126,6 +193,27 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		importedPath,
 		strings.Join(tried, ";"),
 	)
+}
+
+func (importer *universalImporter) importJamlet(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
+	if !importer.alpha {
+		return jsonnet.Contents{}, "", fmt.Errorf("%s: jamlet is an alpha feature, please use --alpha", importedPath)
+	}
+	src, foundAt, err := importer.Import(importedFrom, importedPath)
+	if err != nil {
+		return jsonnet.Contents{}, "", err
+	}
+	compiledAt := JamletScheme + foundAt
+	if c, ok := importer.cache[compiledAt]; ok {
+		return c, compiledAt, nil
+	}
+	code, err := jamlet.Compile(src.String())
+	if err != nil {
+		return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", foundAt, err)
+	}
+	c := jsonnet.MakeContents(code)
+	importer.cache[compiledAt] = c
+	return c, compiledAt, nil
 }
 
 func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.Contents, error) {

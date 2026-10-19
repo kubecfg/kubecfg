@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -102,7 +103,9 @@ func bundleConfigMetadata(vm *jsonnet.VM, rootURL *url.URL) (json.RawMessage, er
 		return nil, err
 	}
 
-	metadataExpr := fmt.Sprintf(`%s + std.get(import %q, %q, {})`, string(base), rootURL, packMetadataField)
+	// A jamlet stream evaluates to an array, which carries no metadata.
+	metadataExpr := fmt.Sprintf(`local root = import %q; %s + if std.isObject(root) then std.get(root, %q, {}) else {}`,
+		utils.ImportPath(rootURL.String()), string(base), packMetadataField)
 	metadata, err := vm.EvaluateAnonymousSnippet("", metadataExpr)
 	if err != nil {
 		return nil, err
@@ -235,14 +238,15 @@ func getSourceRevision(rootFile string) string {
 // returns rootFile parsed as a file URL along with a sorted list of files imported by rootFile
 // The url slice includes the rootFile itself.
 func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
-	deps, err := vm.FindDependencies(".", []string{rootURL.String()})
+	deps, err := vm.FindDependencies(".", []string{utils.ImportPath(rootURL.String())})
 	if err != nil {
 		return nil, err
 	}
 
 	var urls []*url.URL
 	for _, d := range deps {
-		u, err := url.Parse(d)
+		// jamlet files are packed as source, which the consumer compiles on import.
+		u, err := url.Parse(strings.TrimPrefix(d, utils.JamletScheme))
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +261,8 @@ func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
 
 	urls = append(urls, rootURL)
 	sort.Slice(urls, func(i, j int) bool { return urls[i].String() < urls[j].String() })
-	return urls, nil
+	// A jamlet file can be a dependency both compiled (import 'jamlet:x') and as is (importstr 'x').
+	return slices.CompactFunc(urls, func(a, b *url.URL) bool { return a.String() == b.String() }), nil
 
 }
 

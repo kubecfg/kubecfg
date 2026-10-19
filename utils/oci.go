@@ -100,7 +100,7 @@ func (o *ociImporter) RoundTrip(req *http.Request) (*http.Response, error) {
 	if path == "" {
 		// cannot just redirect via HTTP here because otherwise relative jsonnet imports
 		// won't be based on the entrypoint file location.
-		imp := fmt.Sprintf("import %q", bundle.config.Entrypoint)
+		imp := fmt.Sprintf("import %q", ImportPath(bundle.config.Entrypoint))
 
 		// this prevents infinite import recursion
 		if bundle.config.Entrypoint == "" {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -175,11 +176,9 @@ func TestPush(t *testing.T) {
 		t.Logf("blob: %q", key)
 	}
 
-	// these digests have been observed by running the test failing and obverving the logs
-	const (
-		blobDigest = "sha256:90847d8bd5ca990ebf777bf131130cdcf695ace2f8bb59dee0571129af855f00"
-		confDigest = "sha256:d5e1762d319a9de4f26f64420d485611ce6f1bdd4418e4d37d0b388ebc996fc0"
-	)
+	// observed by running the test failing and observing the logs.
+	// The layer digest is read from the manifest since gzip output varies across Go versions.
+	const confDigest = "sha256:d5e1762d319a9de4f26f64420d485611ce6f1bdd4418e4d37d0b388ebc996fc0"
 	getBlob := func(key string) []byte {
 		got, ok := blobs[key]
 		if !ok {
@@ -188,10 +187,64 @@ func TestPush(t *testing.T) {
 		return got
 	}
 
-	verifyBodyTarball(t, bytes.NewReader(getBlob(blobDigest)))
+	var manifest struct {
+		Layers []struct{ Digest string }
+	}
+	if err := json.Unmarshal(getBlob("manifest"), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(manifest.Layers), 1; got != want {
+		t.Fatalf("got %d layers, want: %d", got, want)
+	}
+	verifyBodyTarball(t, bytes.NewReader(getBlob(manifest.Layers[0].Digest)))
 
 	if got, want := string(getBlob(confDigest)), `{"entrypoint":"dir1/demo.jsonnet","metadata":{"pack.kubecfg.dev/v1alpha1":{"version":"(dev build)"}}}`; got != want {
 		t.Errorf("got: %q, want: %q", got, want)
 	}
 
+}
+
+// .jamlet files are compiled on import, but must be packed as source.
+func TestPackJamlet(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"demo.jamlet": "kind: Namespace\napiVersion: v1\nmetadata:\n  name: ${(import 'jamlet:lib.jamlet').name}\n" +
+			"  annotations: {src: ${importstr 'lib.jamlet'}}\n",
+		"lib.jamlet": "name: ${'demo'}\n",
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	output := filepath.Join(dir, "out.tar.gz")
+	cmdOutput(t, []string{"--alpha", "pack", testRef, filepath.Join(dir, "demo.jamlet"), "--output", output})
+
+	f, err := os.Open(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gr)
+	var names []string
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, hdr.Name)
+		if b, _ := io.ReadAll(tr); string(b) != files[hdr.Name] {
+			t.Errorf("%s: got %q, want %q", hdr.Name, b, files[hdr.Name])
+		}
+	}
+	if got, want := strings.Join(names, ","), "demo.jamlet,lib.jamlet"; got != want {
+		t.Errorf("got files %s, want %s", got, want)
+	}
 }
