@@ -38,13 +38,30 @@ func guessShell(path string) string {
 func init() {
 	cmd := completionCmd
 	RootCmd.AddCommand(cmd)
-	cmd.PersistentFlags().String(flagShell, "", "Shell variant for which to generate completions.  Supported values are bash,zsh")
+	cmd.PersistentFlags().String(flagShell, "", "Shell variant for which to generate completions.  Supported values are bash, zsh, fish")
 }
 
 var completionCmd = &cobra.Command{
 	Use:   "completion",
 	Short: "Generate shell completions for kubecfg",
-	Args:  cobra.NoArgs,
+	Long: `Generate shell completions for kubecfg, for the shell in $SHELL or --shell.
+
+Load them into the current bash or zsh with:
+
+  source <(kubecfg completion)
+
+In fish, which has no <(...), pipe them instead:
+
+  kubecfg completion --shell fish | source
+
+In bash or zsh you can also use eval, but quote the output:
+eval "$(kubecfg completion)". Without the quotes, the shell joins the script into
+one line, and the comment on its first line hides the rest.
+
+To load them in every zsh, write them to a directory in $fpath, before compinit runs:
+
+  kubecfg completion --shell zsh > ~/.zsh/functions/_kubecfg`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 
@@ -64,10 +81,6 @@ var completionCmd = &cobra.Command{
 				return err
 			}
 		case "zsh":
-			// See https://github.com/spf13/cobra/issues/1529
-			// using the same workaround as kubectl https://github.com/kubernetes/kubernetes/blob/bf8c918e0be340637e63520eb3b58df493a230f9/staging/src/k8s.io/kubectl/pkg/cmd/completion/completion.go#L174-L175
-			zshHead := "#compdef kubecfg\n#compdef _kubecfg kubecfg\n"
-			out.Write([]byte(zshHead))
 			if err := RootCmd.GenZshCompletion(out); err != nil {
 				return err
 			}
