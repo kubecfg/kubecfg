@@ -1239,8 +1239,9 @@ func (c *compiler) document(d doc) error {
 // anchored collects node n, at path from the document's root, and the nodes under it whose
 // anchors declare locals: those that are Jsonnet variable names. Others are plain YAML anchors.
 // Where nodes have no place of their own in the output, such anchors are errors, and where says
-// why. If n is a list that a + key combines with another, before and after say on which side the
-// other's items go. holders are the mappings and lists that hold n, outermost first.
+// why. before says that a + key adds n to a list before it, after that a + key may add to n: items
+// after a list's, or to the fields of a mapping. holders are the mappings and lists that hold n,
+// outermost first.
 func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool, holders []*yaml.Node, out *[]anchor) error {
 	if n.Kind == yaml.MappingNode || n.Kind == yaml.SequenceNode {
 		holders = append(holders, n)
@@ -1397,7 +1398,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 			default:
 				_, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
 				p = access(path, c.fieldName(k))
-				ext = !plus && extended[c.fieldName(k)]
+				ext = !plus && (after || extended[c.fieldName(k)])
 			}
 			if err := c.anchored(v, p, w, plus, ext, holders, out); err != nil {
 				return err

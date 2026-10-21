@@ -454,6 +454,7 @@ func TestErrors(t *testing.T) {
 		{"args:\n  - ${for x in [1]}: ${x}\n  - &f a\nargs+: [b]\n", "line 3: &f in a list item whose index depends on ${for} or ${if} items"},
 		{"x: &a {args+: [b]}\ny:\n  <<: *a\n  args:\n    - ${for x in [1]}: ${x}\n    - &f a\n", "line 6: &f in a list item whose index depends on ${for} or ${if} items"},
 		{"{'${': 1, value: &value 2}\n", "line 1: a string that starts with ${ must be exactly one expression"},
+		{"x: {args: [{'${if true}': a}, &l b]}\nx+: {args+: [c]}\n", "line 1: &l in a list item whose index depends on ${for} or ${if} items"},
 		{"'&std': 1\n", `"std" must be a Jsonnet variable name, not a keyword or std`},
 		{"a: ' ${a} ${b}'\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"a: &x 1\nb: &x 2\n", `line 2: the anchor &x is also on line 1: a local can't have two values`},
@@ -632,6 +633,7 @@ func TestFormat(t *testing.T) {
 		{"a: '${ {b:\"c\"} }'\nd: \"${ {e:'f'} }\"\n", "a: '${ { b: \"c\" } }'\nd: \"${ { e: 'f' } }\"\n"},
 		// Block expressions keep their lines in the block.
 		{"a: |-\n  ${[\n  {b:1}, # c\n      2]}\nd: 1\n", "a: |-\n  ${[\n    { b: 1 },  // c\n    2,\n  ]}\nd: 1\n"},
+		{"a: |-\n  ${1+2 # c\n  }\n", "a: |-\n  ${1 + 2  // c\n  }\n"},
 		// Left as they are: clauses, YAML blocks, ${ in strings and comments.
 		{"l:\n  - ${for x in  [1,2]}: ${x*2}\n", "l:\n  - ${for x in  [1,2]}: ${x * 2}\n"},
 		{"a: ${ [\\{\n    b:  1\n  }] }\n", "a: ${ [\\{\n    b:  1\n  }] }\n"},

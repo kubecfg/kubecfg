@@ -79,7 +79,12 @@ func formatCode(code, raw string) (string, bool) {
 	opts := formatter.DefaultOptions()
 	opts.StringStyle = formatter.StringStyleLeave // a string's quotes may be chosen to fit the YAML quotes
 	f, err := formatter.Format("", code, opts)
-	return strings.TrimSuffix(f, "\n"), err == nil
+	f = strings.TrimSuffix(f, "\n")
+	// A line comment at the end keeps its line break, or it would take the closing }.
+	if end, _, err := exprEnd("${"+f+"}", 2); err != nil || end != len(f)+2 {
+		f += "\n"
+	}
+	return f, err == nil
 }
 
 // spell returns how to write expression s in place of scalar n, which starts at offset start, or
