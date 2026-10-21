@@ -5,15 +5,15 @@
 #   kubecfg --alpha show shop.yakl --overlay-code-file prod.yakl
 
 # The library, plus a label for every shop object. It's a hidden field rather
-# than a local key, so an overlay can extend it ('&+': k8s) and change every
+# than a local key, so an overlay can extend it (!k8s+) and change every
 # object built from it. The name is also a local, k8s, that follows overlays.
-'&:': k8s
+!k8s::
 <<+: ${import 'k8s.libsonnet'}
 ObjectTemplateMeta+:
   labels+:
     app.kubernetes.io/part-of: shop
 ---
-'&:': config
+!config::
 registry: registry.example.com/shop
 version: 1.4.2
 domain: shop.example.com
@@ -24,7 +24,7 @@ replicas: {web: 2, api: 2}
 # <<+ starts from the library's Deployment. The + on metadata, spec and template
 # keeps what the library puts there, such as the namespace an overlay sets; a key
 # without + would replace it. &labels names the labels for the whole document.
-'&': web
+!web
 <<+: ${k8s.apps.v1.Deployment}
 metadata+:
   name: web
@@ -46,7 +46,7 @@ spec+:
           env_+:
             API_URL: {value: 'http://api'}
 ---
-'&': web-svc
+!web-svc
 <<+: ${k8s.v1.Service}
 metadata+:
   name: web
@@ -55,7 +55,7 @@ spec+:
   ports_+:
     http: {port: 80, targetPort: http}
 ---
-'&': api
+!api
 <<+: ${k8s.apps.v1.Deployment}
 metadata+:
   name: api
@@ -75,7 +75,7 @@ spec+:
           env_+:
             REDIS_URL: {value: 'redis://redis:6379'}
 ---
-'&': api-svc
+!api-svc
 <<+: ${k8s.v1.Service}
 metadata+:
   name: api
@@ -84,7 +84,7 @@ spec+:
   ports_+:
     http: {port: 80, targetPort: http}
 ---
-'&': worker
+!worker
 <<+: ${k8s.batch.v1.CronJob}
 metadata+:
   name: worker
@@ -102,7 +102,7 @@ spec+:
               # The API's variables, with an overlay's changes to them.
               env_+: ${api.spec.template.spec.containers_.api.env_}
 ---
-'&': ingress
+!ingress
 <<+: ${k8s['networking.k8s.io'].v1.Ingress}
 metadata+:
   name: shop
@@ -122,7 +122,7 @@ spec:
 ---
 # Redis as published upstream. adopt turns its objects into library objects, so
 # overlays reach them too. Keyed by kind, so an overlay can pick one.
-'&': redis
+!redis
 <<+: |-
   ${k8s.adopt({
     [std.asciiLower(o.kind)]: o

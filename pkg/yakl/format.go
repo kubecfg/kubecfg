@@ -17,6 +17,8 @@ package yakl
 
 import (
 	"errors"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/google/go-jsonnet/formatter"
@@ -27,14 +29,18 @@ import (
 // leaves the YAML around them as it is. A plain expression whose formatted code isn't a valid plain
 // YAML scalar any more, like ${ { a: 1 } } with its `: `, gets quoted. Expressions holding YAML
 // blocks, ${for} and ${if} clauses, and code that would take several lines outside a block
-// expression are left as they are.
+// expression are left as they are. What follows a "---" on its line, like the tag in --- !web, moves
+// to the next line, since kubectl's reader allows only a comment there.
 func Format(src string) (string, error) {
 	c, err := compiled(src, false, false)
 	if err != nil {
 		return "", err
 	}
-	var b strings.Builder
-	prev := 0
+	type edit struct {
+		start, end int
+		text       string
+	}
+	var edits []edit
 	for i, e := range c.exprs {
 		n := c.nodes[i]
 		if n == nil || len(e.blocks) > 0 || c.clause(n) != "" {
@@ -48,13 +54,23 @@ func Format(src string) (string, error) {
 		if strings.HasPrefix(f, "{") {
 			f = " " + f + " " // ${ {a: 1} }, rather than ${{ a: 1 }}
 		}
-		s, ok := c.spell(n, "${"+f+"}", start)
-		if !ok {
-			continue
+		if s, ok := c.spell(n, "${"+f+"}", start); ok {
+			edits = append(edits, edit{start, end, s})
 		}
-		b.WriteString(c.src[prev:start])
-		b.WriteString(s)
-		prev = end
+	}
+	// No expression holds a line starting with ---: YAML ends the document there.
+	for _, m := range afterDocStart.FindAllStringSubmatchIndex(c.src, -1) {
+		if rest := c.src[m[2]:]; !marker(rest, "---") && !marker(rest, "...") { // which would start a line
+			edits = append(edits, edit{m[0] + len("---"), m[2], "\n"})
+		}
+	}
+	slices.SortFunc(edits, func(a, b edit) int { return a.start - b.start })
+	var b strings.Builder
+	prev := 0
+	for _, e := range edits {
+		b.WriteString(c.src[prev:e.start])
+		b.WriteString(e.text)
+		prev = e.end
 	}
 	b.WriteString(c.src[prev:])
 	out := b.String()
@@ -69,6 +85,10 @@ func Format(src string) (string, error) {
 	}
 	return out, nil
 }
+
+// afterDocStart matches a "---" that starts a document with something other than a comment after
+// it on its line, which is the submatch.
+var afterDocStart = regexp.MustCompile(`(?m)^---[ \t]+([^#\s])`)
 
 // formatCode returns the code of an expression formatted, as jsonnetfmt does: code if the
 // expression was quoted, else raw. It returns false if the code doesn't parse on its own.

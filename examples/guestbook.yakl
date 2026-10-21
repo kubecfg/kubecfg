@@ -5,16 +5,16 @@
 #
 # See docs/Advanced-Usage/yakl.md for the full spec.
 
-# The key '&' names a document: this one is the field `params` of the file,
-# and every expression can read it as `params`. The colon hides it, like
-# `params::` in Jsonnet: it isn't output, but an overlay can change it with a
-# document starting with '&+': params
-'&:': params
+# A tag names a document: this one is the field `params` of the file, and
+# every expression can read it as `params`. The colons hide it, like `params::`
+# in Jsonnet: it isn't output, but an overlay can change it with a document
+# tagged !params+
+!params::
 replicas: 3
 version: v3
 env: {GET_HOSTS_FROM: dns, REDIS_HOST: redis-leader}
 ---
-'&': deployment
+!deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,7 +51,7 @@ spec:
           configMap:
             name: ${$['frontend-config'].metadata.name}
 ---
-'&': service
+!service
 apiVersion: v1
 kind: Service
 metadata:
@@ -63,7 +63,7 @@ spec:
 ---
 # frontend-config isn't a Jsonnet variable name, so expressions write
 # $['frontend-config'].
-'&': frontend-config
+!frontend-config
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -1,17 +1,17 @@
-'&+': config
+!config+
 replicas: 5
 image: nginx:1.29
 ---
-'&+': service
+!service+
 spec+:
   type: LoadBalancer
 ---
-'&+': web.conf
+!web.conf+
 data:
   default.conf: |
     server { listen 8080; gzip on; }
 ---
-'&': pdb
+!pdb
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

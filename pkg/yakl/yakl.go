@@ -820,7 +820,7 @@ func (c *compiler) build(from, to int, spans []span) string {
 
 // Documents and names.
 
-// A doc is a document of the file, and what its name key makes of it.
+// A doc is a document of the file, and what its name tag makes of it.
 type doc struct {
 	root   *yaml.Node // nil if empty
 	at     *yaml.Node // the node to report errors at
@@ -838,13 +838,13 @@ type docKind int
 const (
 	unnamedDoc    docKind = iota
 	fileLocalsDoc         // only local keys ('&x': ...), each a file local
-	fieldDoc              // a top-level key '&': a field of the file
+	fieldDoc              // with a name tag (!web): a field of the file
 )
 
 // unnamed is the field holding the documents without a name, in a file with names.
 const unnamed = "unnamed"
 
-// nameKey matches a document's name key: '&', and the + and colons of the field it gives.
+// nameKey matches the keys that named documents before tags did: '&', '&+', '&:' and the like.
 var nameKey = regexp.MustCompile(`^&\+?:{0,2}$`)
 
 // classify finds the kind and name of a document.
@@ -857,85 +857,95 @@ func (c *compiler) classify(d *yaml.Node) (doc, error) {
 	r.root, r.at = root, root
 	r.head = append(r.head, root.HeadComment, root.LineComment)
 	r.foot = append(r.foot, root.FootComment)
+	if root.Style&yaml.TaggedStyle != 0 && strings.HasPrefix(root.Tag, "!") && !strings.HasPrefix(root.Tag, "!!") {
+		// The tag is the name, not the node's type, so it's gone once read.
+		root.Style &^= yaml.TaggedStyle
+		if root.Kind == yaml.MappingNode && len(root.Content) > 0 {
+			c.liftComment(&r, root.Content[0])
+		}
+		return r, c.name(&r, root.Tag[1:])
+	}
 	if err := c.checkTag(root); err != nil { // a root mapping isn't written by value
 		return r, err
 	}
 	if root.Kind != yaml.MappingNode {
 		return r, nil
 	}
-	var key, value *yaml.Node // the name key
 	locals := 0
-	rest := root.Content[:0:0]
 	for i := 0; i < len(root.Content); i += 2 {
-		k, v := root.Content[i], root.Content[i+1]
-		switch {
-		case k.Kind != yaml.ScalarNode || !strings.HasPrefix(k.Value, "&"):
-		case !nameKey.MatchString(k.Value):
+		if k := root.Content[i]; k.Kind == yaml.ScalarNode && strings.HasPrefix(k.Value, "&") {
 			locals++
-		case key != nil:
-			return r, c.errorf(k, "a document has one name key, but this one has %q on line %d too", key.Value, c.srcLine(key))
-		default:
-			key, value = k, v
-			continue
 		}
-		rest = append(rest, k, v)
 	}
-	switch {
-	case key != nil:
-		stripped := *root
-		stripped.Content = rest
-		r.root, r.at = &stripped, key
-		r.head = append(r.head, key.HeadComment, key.LineComment, value.LineComment)
-		r.foot = append(r.foot, key.FootComment, value.FootComment)
-		return r, c.name(&r, key, value)
-	case locals > 0 && 2*locals == len(root.Content):
+	if locals > 0 && 2*locals == len(root.Content) {
 		r.kind = fileLocalsDoc
 	}
 	return r, nil
 }
 
-// name reads a document's name key k. The value is the field's name, as text, so that the file's
-// shape is known without evaluating it; the key adds the field's + and colons.
-func (c *compiler) name(d *doc, k, v *yaml.Node) error {
-	if v.Kind == yaml.ScalarNode && (strings.Contains(v.Value, c.sentinel) || strings.HasPrefix(v.Value, "${")) {
-		return c.errorf(v, "the key %q takes the document's name as text, not as an expression: the file's shape is known before evaluating it", k.Value)
+// liftComment gives document d the head comment of the first key k of its tagged root mapping, if
+// the comment is above the tag: yaml.v3 gives the key the comments above the tag too.
+func (c *compiler) liftComment(d *doc, k *yaml.Node) {
+	if k.HeadComment == "" || d.root.Line >= len(c.lines) || k.Line >= len(c.lines) {
+		return
 	}
-	var name string
-	if v.Kind == yaml.ScalarNode && !yaml11Bool(v) {
-		if lit, err := literal(v, false, c.places[v]); err == nil {
-			_ = json.Unmarshal([]byte(lit), &name) // not a string: no name
+	lines := strings.Split(c.src, "\n")
+	from, to := min(c.lines[d.root.Line], len(lines)), min(c.lines[k.Line]-1, len(lines)) // the lines between
+	for _, l := range lines[from:max(from, to)] {
+		if strings.HasPrefix(strings.TrimSpace(l), "#") {
+			return // a comment under the tag, which is the key's
 		}
 	}
-	trimmed := strings.TrimRight(name, "+:")
+	h := k.HeadComment
+	k.HeadComment = ""
+	// As yaml.v3 does, a comment that a blank line separates from the rest is the document's.
+	if i := strings.LastIndex(h, "\n\n"); i >= 0 && d.head[0] == "" {
+		d.head[0], h = h[:i], h[i+2:]
+	}
+	d.head = append(d.head, h)
+}
+
+// name reads the name of document d from the tag on its root, like !web: the name of the field
+// that d is, followed by the + and colons of that field, as in Jsonnet: !config:: is hidden.
+func (c *compiler) name(d *doc, tag string) error {
+	name := strings.TrimRight(tag, ":")
+	colons := len(tag) - len(name)
+	name, plus := strings.CutSuffix(name, "+")
 	switch {
 	case name == "":
-		return c.errorf(v, "the key %q takes the document's name, as a string (quote a number: '123')", k.Value)
-	case trimmed != name:
-		return c.errorf(v, "the name %q can't end in + or :; they go on the key, as in '&%s': %s", name, name[len(trimmed):], trimmed)
+		return c.errorf(d.at, "the tag !%s names no field: write the name, as in !web", tag)
+	case colons > 3:
+		return c.errorf(d.at, "the tag !%s ends in more than three colons", tag)
 	case name == unnamed:
-		return c.errorf(v, "the name %q is reserved for the documents without a name", unnamed)
+		return c.errorf(d.at, "the name %q is reserved for the documents without a name", unnamed)
 	}
-	d.kind, d.name = fieldDoc, name
-	d.plus = strings.Contains(k.Value, "+")
-	d.colons = 1 + strings.Count(k.Value, ":")
+	d.kind, d.name, d.plus, d.colons = fieldDoc, name, plus, max(colons, 1)
 	if isIdentifier(name) {
 		d.local = name
 	}
 	return nil
 }
 
+// errNameKey reports a key like '&': web, which named documents before tags did.
+func (c *compiler) errNameKey(k *yaml.Node) error {
+	return c.errorf(k, "the key %q doesn't name a document: a tag does, on a line of its own where the document "+
+		"starts, as in !web, !web+ or !web::; for a literal key, write ${'%[1]s'}", k.Value)
+}
+
 // localKey checks a local key, '&name': value.
 func (c *compiler) localKey(k, v *yaml.Node) error {
 	name := k.Value[1:]
 	switch {
+	case nameKey.MatchString(k.Value):
+		return c.errNameKey(k)
 	case !isIdentifier(name):
 		msg := fmt.Sprintf("the key %q declares a local, so %q must be a Jsonnet variable name, not a keyword or std", k.Value, name)
 		if trimmed := strings.TrimRight(name, "+:"); !strings.HasPrefix(name, "-") && trimmed != "" {
-			msg += fmt.Sprintf("; to name a document, write '&%s': %s among its top-level keys", name[len(trimmed):], trimmed)
+			msg += fmt.Sprintf("; to name a document, tag it: !%s%s", trimmed, name[len(trimmed):])
 		}
 		return c.errorf(k, "%s", msg)
 	case v.Kind == yaml.ScalarNode && v.Tag == "!!null" && v.Value == "" && v.Style == 0 && v.Anchor == "":
-		return c.errorf(k, "the local key %q has no value; to name the document, write '&': %s", k.Value, name)
+		return c.errorf(k, "the local key %q has no value; to name the document, tag it: !%s", k.Value, name)
 	}
 	return nil
 }
@@ -982,7 +992,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 			fields[d.name] = append(fields[d.name], i)
 		}
 	}
-	// One name may be given by two documents: a plain one and one extending it ('&+': name).
+	// One name may be given by two documents: a plain one and one extending it (!name+).
 	for name, idx := range fields {
 		if len(idx) == 1 {
 			continue
@@ -991,7 +1001,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		if len(idx) > 2 || a.plus == b.plus || a.plus && a.colons != 1 || b.plus && b.colons != 1 {
 			last := docs[idx[len(idx)-1]]
 			return c.errorf(last.at, "the name %q is already given on line %d: a name can be given twice only "+
-				"by a key without + and a plain '&+'", name, c.srcLine(docs[idx[0]].at))
+				"by a tag without + and a plain + one, as in !%[1]s and !%[1]s+", name, c.srcLine(docs[idx[0]].at))
 		}
 		docs[idx[1]].local = "" // the first declares it
 	}
@@ -1378,7 +1388,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 		for i := 0; i < len(n.Content); i += 2 {
 			k, v := n.Content[i], n.Content[i+1]
 			if k.Anchor != "" && k.Kind == yaml.ScalarNode && k.Tag == "!!null" && k.Value == "" && k.Style == 0 {
-				return c.errorf(k, "&%s: anchors an empty key: write '&%[1]s': for a local key, or '&': %[1]s to name the document", k.Anchor)
+				return c.errorf(k, "&%s: anchors an empty key: write '&%[1]s': for a local key, or tag the document to name it: !%[1]s", k.Anchor)
 			}
 			if isIdentifier(k.Anchor) {
 				return c.errorf(k, "&%s anchors the key %q, which has no place of its own in the output; an anchor for the whole document goes on its own line", k.Anchor, c.keyText(k))
@@ -1607,7 +1617,11 @@ var tags = map[yaml.Kind]string{yaml.ScalarNode: "!!str", yaml.MappingNode: "!!m
 
 // checkTag reports a tag other than the one a node has anyway, which would change its meaning.
 func (c *compiler) checkTag(n *yaml.Node) error {
-	if n.Style&yaml.TaggedStyle != 0 && n.Tag != tags[n.Kind] {
+	switch {
+	case n.Style&yaml.TaggedStyle == 0 || n.Tag == tags[n.Kind]:
+	case strings.HasPrefix(n.Tag, "!") && !strings.HasPrefix(n.Tag, "!!"):
+		return c.errorf(n, "unsupported tag %s: a tag like it names a document, on the document's root only", n.Tag)
+	default:
 		return c.errorf(n, "unsupported tag %s", n.Tag)
 	}
 	return nil
@@ -1860,8 +1874,7 @@ func (c *compiler) mapping(n *yaml.Node) error {
 				return c.errorf(k, "%s can only be a list item, as in \"- %[1]s:\"; to add fields to a mapping, use <<+: ${...}", c.keyText(k))
 			}
 		case nameKey.MatchString(k.Value):
-			return c.errorf(k, "the key %q names a document, so it goes among the top-level keys of a document; "+
-				"for a literal key, write ${%s}", k.Value, quote(k.Value))
+			return c.errNameKey(k)
 		case strings.HasPrefix(k.Value, "&"):
 			if err := c.localKey(k, e.v); err != nil {
 				return err

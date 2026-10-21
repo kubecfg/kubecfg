@@ -24,7 +24,7 @@ an overlay changes.
 
 ## How the shop uses the library
 
-- **`'&:': k8s` makes the library a hidden field of the file,** `k8s`, with a label added for
+- **`!k8s::` makes the library a hidden field of the file,** `k8s`, with a label added for
   every object. The name is also a local that is that field, so it follows overlays. Each
   object starts from a type in it: `<<+: ${k8s.apps.v1.Deployment}`. The type sets
   `apiVersion` and `kind`, and fills in defaults.
@@ -42,20 +42,20 @@ an overlay changes.
 
 | Overlay document | Reaches | Used for |
 | --- | --- | --- |
-| `'&+': k8s` with `ObjectMeta+:` | every object | the namespace (dev, prod) |
-| `'&+': k8s` with `v1+: PodTemplateSpec+:` | every pod: Deployments, the CronJob, Redis | node selector and tolerations (prod) |
-| `'&+': k8s` with `v1+: Container+:` | every container | `imagePullPolicy` and `LOG_LEVEL` (dev) |
-| `'&+': k8s` with `v1+: Service+:` | every Service | an annotation (prod) |
-| `'&+': config` | everything that reads the settings | image tag, replicas, domain |
-| `'&+': api` with `containers_+: api+:` | one container | resources (prod) |
-| `'&+': redis` | the adopted Redis | memory and disk size (prod) |
-| `'&': api-pdb` | a new object | a PodDisruptionBudget (prod) |
+| `!k8s+` with `ObjectMeta+:` | every object | the namespace (dev, prod) |
+| `!k8s+` with `v1+: PodTemplateSpec+:` | every pod: Deployments, the CronJob, Redis | node selector and tolerations (prod) |
+| `!k8s+` with `v1+: Container+:` | every container | `imagePullPolicy` and `LOG_LEVEL` (dev) |
+| `!k8s+` with `v1+: Service+:` | every Service | an annotation (prod) |
+| `!config+` | everything that reads the settings | image tag, replicas, domain |
+| `!api+` with `containers_+: api+:` | one container | resources (prod) |
+| `!redis+` | the adopted Redis | memory and disk size (prod) |
+| `!api-pdb` | a new object | a PodDisruptionBudget (prod) |
 
 The overlays reach the shop through names: `${k8s...}`, `${config...}` and `${api...}` in
 `shop.yakl` read the fields, not copies, so they see what an overlay changed. An overlay is a
 separate file, so it reads the shop through `$`, like `${$.api.spec.selector}`.
 
-The library's types are the bottom layer: a `'&+': k8s` overlay gives defaults, and a value
+The library's types are the bottom layer: a `!k8s+` overlay gives defaults, and a value
 that a document sets itself wins. dev's `LOG_LEVEL` reaches every container because none of
 them sets it.
 
@@ -67,7 +67,7 @@ them sets it.
 - **A `containers:` list instead of `containers_+:` works,** but overlays that change a
   container by name, or all containers, skip it without an error.
 - **A misspelled name in an overlay adds an item:** `containers_+: apii+:` adds a container
-  without an image. A misspelled document name fails, with an unclear error: `'&+': apii` in
+  without an image. A misspelled document name fails, with an unclear error: `!apii+` in
   `prod.yakl` gives "Looking for kubernetes object at
   "$.apii.spec.template.spec.containers_.api.resources.limits.memory", but instead found string".
 - **Lists without a name to key by,** like Redis's `volumeClaimTemplates`, take a loop to

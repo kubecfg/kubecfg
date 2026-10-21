@@ -46,8 +46,8 @@ in plain YAML:
 | `<<+: S` | `S + {the mapping's own fields}` |
 | `<<: *base` | YAML merge: copy fields, own keys win |
 | `&labels` on a node | `local labels = <the node>` for the whole document; the node stays where it is |
-| `'&': web` at the top of a document | field `web:` of the file, and a local `web` that is that field |
-| `'&:': config`, `'&+': service` | hidden `config::`, and `service+:` that extends `service` |
+| `!web` on its own line at the top of a document | field `web:` of the file, and a local `web` that is that field |
+| `!config::`, `!service+` | hidden `config::`, and `service+:` that extends `service` |
 | `'&port': 8080` in a mapping | `local port = 8080` for that mapping; not output |
 | a document made only of `'&name':` keys | locals of the whole file |
 | documents without a name, next to named ones | `unnamed+: [...]` |
@@ -57,14 +57,15 @@ Four ideas carry the design:
 
 - **`&name` always declares a local.** On a node, the node stays where it is and also gets a
   name. As a quoted key, `'&port': 8080`, the value is only a local.
-- **The key `'&'` names a document.** The document becomes the field with that name in the
-  file, and the name is also a local. Like any key, it takes `+` and colons: `'&+': service` extends `service`, and
-  `'&:': config` hides `config`.
+- **A tag names a document.** `!web` at the top of a document makes the document the field
+  `web` of the file, and the name is also a local. Like a Jsonnet field, it takes `+` and
+  colons: `!service+` extends `service`, and `!config::` hides `config`.
 - **A stream is a list until a document gets a name.** From then on the file is one object, as
   a Jsonnet file usually is.
-- **Meaning lives in data and anchors,** never in quoting, key order or custom tags. Tools like
-  kubectl, kustomize and prettier rewrite quoting, reorder keys and drop tags, so none of those
-  can carry meaning. No editor needs configuring.
+- **Meaning lives in data, anchors and name tags,** never in quoting or key order. Tools like
+  kubectl, kustomize and prettier rewrite quoting and reorder keys, so neither can carry
+  meaning. Name tags are the one place yakl reads a tag; kustomize drops them, see
+  [What tools do with it](#what-tools-do-with-it).
 
 ## YAML compatibility
 
@@ -72,8 +73,9 @@ Four ideas carry the design:
 kustomize), PyYAML and yamllint, eemeli/yaml (prettier and the VS Code YAML server),
 tree-sitter and VS Code's highlighter, so editors, linters and other YAML tools can work with
 it. To them, every expression is a single
-scalar node, anchors are anchors, and local keys, name keys and key modifiers like `spec+` are
-just keys.
+scalar node, anchors are anchors, names are tags, and local keys and key modifiers like `spec+`
+are just keys. PyYAML's safe loader is the exception: it rejects tags it doesn't know, names
+included.
 
 Most expressions are valid plain scalars as they are (`replicas: ${params.replicas}`). Those
 containing `: ` or ` #`, and those inside flow collections (`[...]`, `{...}`), are written as
@@ -88,8 +90,8 @@ The examples and the snippets in this document are checked with kubectl's YAML p
 ### What round trips keep
 
 kubectl and kustomize parse a file and write new YAML. Everything spelled as data survives
-that: expressions, `$${`, key modifiers, `<<+`, local keys (`'&port':`) and field names given
-with `'&':`. Anchors don't: both tools expand them. After a round trip, a `${name}` that used an
+that: expressions, `$${`, key modifiers, `<<+` and local keys (`'&port':`). Anchors don't: both
+tools expand them, and kustomize drops name tags. After a round trip, a `${name}` that used an
 anchor's local fails with "Unknown variable". kustomize
 also needs every document to be a Kubernetes resource, so a file with a document of local keys,
 or a hidden settings document, can't go through kustomize at all. A file meant for kustomize
@@ -110,7 +112,7 @@ A yakl file is compiled to Jsonnet and then evaluated like any other Jsonnet fil
    match. Any disagreement is an error, never silently wrong output.
 3. **Generate.** The YAML tree is translated to Jsonnet: mappings become objects, sequences
    become arrays, scalars become literals, placeholders become the original expressions.
-   Top-level `'&'` keys become fields of the file, anchors and `'&x':` keys become locals, key modifiers become Jsonnet's `+:`, `::` and
+   Name tags make fields of the file, anchors and `'&x':` keys become locals, key modifiers become Jsonnet's `+:`, `::` and
    `:::`, and `${for}` and `${if}` list items become comprehensions. YAML blocks inside expressions
    are compiled in place.
 
@@ -128,10 +130,10 @@ is the quickest way to see what names, locals and key modifiers mean. For this d
 ```yaml
 '&k': ${import 'k.libsonnet'}
 ---
-'&:': config
+!config::
 replicas: 2 # overlays change it
 ---
-'&': deployment
+!deployment
 kind: Deployment
 metadata:
   labels: &labels {app: web}
@@ -167,7 +169,7 @@ It's the same code kubecfg evaluates, laid out differently: kubecfg keeps each n
 source line instead. Internal names, like `yakl__root` for a document whose nodes have
 anchors and `yakl__unnamed3` for a document without a name, and the check that `<<+` extends
 an object, show up as they are. A comment stays next to the field or item it's written on; one
-above a document's `'&'` key goes above the document's field. Copies made by aliases have no
+above a document's name tag goes above the document's field. Copies made by aliases have no
 comments. Like other commands, `eval` reads URLs and `/dev/stdin` too. If the code doesn't
 parse, because of an expression's syntax, it prints the code unformatted, and the error with its
 line in the yakl file.
@@ -183,6 +185,8 @@ included, stays as it is: a YAML formatter such as prettier keeps a yakl file's 
   as `${ {a:1} }` becomes `'${ { a: 1 } }'` because of the `: `. A quoted expression keeps its
   quotes.
 - **A block expression keeps its lines inside the block.**
+- **What follows `---` moves to the next line,** like the tag in `--- !web`, since kubectl's
+  reader allows only a comment there.
 - **Left as they are:** `${for}` and `${if}` clauses, expressions holding YAML blocks, and plain
   or quoted expressions whose formatted code would take several lines.
 
@@ -325,8 +329,8 @@ The block compiles to a Jsonnet value in place, so expressions in it see the sur
 Jsonnet scope, like the comprehension variable `k` above. For a loop like this one, a
 [`${for}` item](#loops-and-conditions) is shorter and keeps the body YAML to every tool; blocks
 cover what it doesn't. A block is one value, not a file
-of documents: its anchors and its `'&x':` keys declare locals as in a document, and a `'&'`
-key is an error.
+of documents: its anchors and its `'&x':` keys declare locals as in a document, and a name tag
+is an error.
 
 Rules:
 
@@ -347,7 +351,7 @@ indented under it. The loop is YAML; only the clause is Jsonnet.
 '&params': ${import 'params.libsonnet'}
 '&port': 8080
 ---
-'&': deployment
+!deployment
 '&envs': ${std.objectKeysValues(params.env)}
 apiVersion: apps/v1
 kind: Deployment
@@ -444,7 +448,7 @@ the pieces of the list are joined with `+`.
 Changing every item of a list is a loop whose body extends the item. In an overlay:
 
 ```yaml
-'&+': redis
+!redis+
 statefulset+:
   spec+:
     volumeClaimTemplates:
@@ -566,9 +570,8 @@ object one document at a time.
 4. **Order doesn't matter.** Names and file locals belong to one object, so a document can use
    one defined further down.
 
-yakl takes the `'&'` key out of the document. Other YAML tools keep it, so to them a named
-document is an object with one more key. kubecfg finds the same Kubernetes objects in an object
-as in a list.
+To other YAML tools, a named document is the same object with a tag on it, which they ignore
+or keep. kubecfg finds the same Kubernetes objects in an object as in a list.
 
 ### Step by step from plain YAML
 
@@ -611,7 +614,7 @@ Naming one document makes the file an object, and the other document goes to `un
 ```yaml
 '&names': ${import 'names.libsonnet'}
 ---
-'&': a
+!a
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -640,7 +643,7 @@ where it matters: `kubecfg` finds the same objects; importers of the file get an
 of a list, so code that indexed it (`[0]`) fails; and `$` now means the file, so an expression
 that used `$` for its own document fails with "field does not exist".
 
-A document that should have had a name but lacks its `'&'` key lands in `unnamed` and is still
+A document that should have had a name but lacks its tag lands in `unnamed` and is still
 deployed, which is what a YAML user expects. Anything that uses the missing name fails:
 `${service}` gives "Unknown variable", `$.service` gives "field does not exist", and an overlay
 aimed at it leaves a fragment without `kind`, which kubecfg rejects ("Looking for kubernetes
@@ -648,15 +651,15 @@ object at … but instead found …").
 
 ## Names
 
-A key that is exactly `'&'`, among the top-level keys of a document, names the document. Its
-value is the name, and the document becomes the field with that name in the file.
+A tag on a document, on a line of its own where the document starts, names it: `!web`. The
+document becomes the field with that name in the file.
 
 ```yaml
-'&:': config
+!config::
 name: web
 replicas: 2
 ---
-'&': deployment
+!deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -677,39 +680,42 @@ spec:
 - **The name is also a local, and the local is the field.** They're one thing with one name, so
   an overlay that changes `config` changes what `${config.replicas}` reads. `$.config` gives the
   same value. That's the difference from an anchor, whose local is the node as written.
-- **Only a Jsonnet variable name gives a local.** `'&': web.conf` gives the field
-  `'web.conf':`, and expressions read it as `$['web.conf']`. Neither does `std`, which would
+- **Only a Jsonnet variable name gives a local.** `!web.conf` gives the field `'web.conf':`,
+  and expressions read it as `$['web.conf']`. Neither does `std`, which would
   hide Jsonnet's standard library.
 - **Scope: the whole file,** in any order.
-- **The key says how the field combines,** with the `+` and colons a mapping key has after its
-  name. `'&:'` is to `'&'` what `config::` is to `config:`.
+- **The tag says how the field combines,** with the `+` and colons a Jsonnet field has after
+  its name: `!config::` is hidden, as `config::` is.
 
-| Key | Field |
+| Tag | Field |
 | --- | --- |
-| `'&': web` | `web:`, and a local `web` |
-| `'&:': config` | `config::`, hidden |
-| `'&::': config` | `config:::`, forced visible |
-| `'&+': service` | `service+:`, extends `service` |
-| `'&+:': config` | `config+::` |
-| `'&': my-svc` | `'my-svc':`, and no local: `my-svc` isn't a variable name |
+| `!web` | `web:`, and a local `web` |
+| `!config::` | `config::`, hidden |
+| `!config:::` | `config:::`, forced visible |
+| `!service+` | `service+:`, extends `service` |
+| `!config+::` | `config+::` |
+| `!my-svc` | `'my-svc':`, and no local: `my-svc` isn't a variable name |
 
 - **Hiding a field doesn't rename it.** Add or remove the colon, and `config` and `$.config` keep
   working.
 - **Overlays keep the base's visibility.** In Jsonnet, `:` and `+:` keep the visibility the
   base gave a field: `{config:: {r: 1}} + {config+: {r: 2}}` outputs `{}`. An overlay writes
-  `'&+': config`, without the colon, and `'&+::'` makes a hidden base field visible.
-- **The value is text, never an expression,** so the file's shape is known without evaluating
-  it. It can't be empty, and it can't end in `+` or `:`, which belong on the key: `'&': web+`
-  is an error that suggests `'&+': web`. A number must be quoted: `'&': '123'`.
-- **The key's grammar:** `&`, an optional `+`, then up to two colons. Other keys starting with
-  `&` are [local keys](#locals-that-arent-output).
-- **Only a mapping can have a name,** since the name is one of its keys. An object that an
-  expression gives goes in `<<+`: `'&': redis` with `<<+: ${...}`. A string or a list goes in a
-  field of a hidden document.
-- **Anywhere among the top-level keys of the document,** with the first line as the convention.
-  A name key anywhere else is an error; literal data uses `${'&'}`.
-- **It survives round trips,** because it's a key. kustomize keeps it and moves it to the first
-  line, since `&` sorts before letters. prettier writes it as `"&"`, which means the same.
+  `!config+`, without colons, and `!config+:::` makes a hidden base field visible.
+- **The name is text, never an expression,** so the file's shape is known without evaluating
+  it: `!` and the name, in the characters a YAML tag allows, which are letters, digits and most
+  punctuation but not spaces or `,[]{}`. `!123` and `!web.conf` are names.
+- **Any document can have a name:** a mapping, a list, or an expression. `!lib::` above
+  `${import 'lib.libsonnet'}` makes the library a hidden field.
+- **Only on a document's root.** A tag like it anywhere else is an error. YAML's own tags,
+  like `!!str`, are still allowed where they don't change the meaning.
+- **On a line of its own.** `--- !web` is the same YAML, but kubectl's reader allows only a
+  comment after `---`, and fails with "invalid Yaml document separator: !web". `yaklfmt` and
+  prettier both move the tag to its own line.
+- **Some tools don't keep it.** kustomize drops tags, so a named document comes back without
+  its name. PyYAML's safe loader fails with "could not determine a constructor for the tag
+  '!web'". eemeli/yaml, and with it the VS Code YAML server, warns "Unresolved tag: !web";
+  VS Code's `yaml.customTags` setting silences one name at a time. kubectl, go-yaml v3,
+  `std.parseYaml`, yq and prettier read the same object and ignore or keep the tag.
 
 ## Anchors are locals
 
@@ -717,7 +723,7 @@ An anchor names a node, as in YAML, and that name is also a Jsonnet local: `&nam
 local wherever it appears.
 
 ```yaml
-'&': deployment
+!deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -780,7 +786,7 @@ as a quoted key: `'&name': value`. It reads as "an anchor named `name`, holding 
 it declares a local of the mapping it's in.
 
 ```yaml
-'&': deployment
+!deployment
 '&labels': {app: guestbook, tier: frontend}
 apiVersion: apps/v1
 kind: Deployment
@@ -829,7 +835,7 @@ deployment: {
 
 ### File locals: a document of local keys
 
-A document made only of local keys, with no `'&'` key, holds locals of the whole file. That's where
+A document made only of local keys, with no name tag, holds locals of the whole file. That's where
 imports go:
 
 ```yaml
@@ -838,7 +844,7 @@ imports go:
 '&image': nginx:1.27
 '&webName': ${function(suffix) 'web-' + suffix}
 ---
-'&': deployment
+!deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -860,14 +866,14 @@ In a file without names, the same locals become `local k = ..., names = ...;` in
 document or list.
 
 - **What counts:** a document whose root is a non-empty mapping in which every key is a local
-  key. A `'&'` key makes it a named document instead. An anchor on it is an error, since the
+  key. A name tag makes it a named document instead. An anchor on it is an error, since the
   document isn't output.
 - **Not output, and not a list element.** Adding one never changes the file's shape.
 - **Not tied to position.** It can go anywhere, and there can be several. The convention is to
   put it first, like Jsonnet imports, but nothing depends on it.
 - **Seen by every document, in any order.** File locals can use each other in any order too.
 - **One name space per file.** File locals and the locals of document names must all differ.
-- **Private.** Importers and overlays can't see file locals. A hidden field (`'&:': config`) is the
+- **Private.** Importers and overlays can't see file locals. A hidden field (`!config::`) is the
   overlay-friendly alternative: Jsonnet's `local x = ...` versus `x:: ...`.
 - **`$` inside a file local** is the file in an object file. A file without names has no file
   object: there Jsonnet would read `$` as the local's own outermost object, so yakl reports it
@@ -880,8 +886,8 @@ document or list.
 | a name for a node that stays in the output | `&labels` on the node | its document | yes, where it's written |
 | a value used only by expressions | `'&port': 8080` in a mapping | that mapping | no |
 | imports and helpers for the whole file | a document of `'&k':` keys | the file | no |
-| a document with a name | `'&': web` in the document | the file | yes, as the field `web` |
-| settings an overlay can change | `'&:': config` in a document | the file | no, it's a hidden field |
+| a document with a name | `!web` at the top of the document | the file | yes, as the field `web` |
+| settings an overlay can change | `!config::` at the top of a document | the file | no, it's a hidden field |
 
 ## Overlays
 
@@ -905,10 +911,10 @@ document:
 
 | Overlay document | Jsonnet | Effect |
 | --- | --- | --- |
-| `'&+': service` with some fields | `service+: {...}` | extends `service` |
-| `'&+': config` with some fields | `config+: {...}` | extends hidden `config`, which stays hidden |
-| `'&+': web.conf` with some fields | `'web.conf'+: {...}` | extends a field whose name has a dot |
-| `'&': pdb` with a whole object | `pdb: {...}` | adds a document, or replaces one with that name |
+| `!service+` with some fields | `service+: {...}` | extends `service` |
+| `!config+` with some fields | `config+: {...}` | extends hidden `config`, which stays hidden |
+| `!web.conf+` with some fields | `'web.conf'+: {...}` | extends a field whose name has a dot |
+| `!pdb` with a whole object | `pdb: {...}` | adds a document, or replaces one with that name |
 | a document without a name, in an overlay that has names | `unnamed+: [...]` | appended after the base's unnamed documents |
 
 - **The overlay is a separate file.** The base's locals aren't in scope there, so the overlay
@@ -948,12 +954,12 @@ A base file and a prod overlay, both yakl streams. They are also checked by the 
 '&lib': ${import 'lib.libsonnet'}
 '&port': 8080
 ---
-'&:': config
+!config::
 name: web
 image: nginx:1.27
 replicas: 2
 ---
-'&': deployment
+!deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -982,7 +988,7 @@ spec:
           configMap:
             name: ${$['web.conf'].metadata.name}
 ---
-'&': service
+!service
 apiVersion: v1
 kind: Service
 metadata:
@@ -995,7 +1001,7 @@ spec:
       port: 80
       targetPort: ${target.ports[0].containerPort}
 ---
-'&': web.conf
+!web.conf
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1083,20 +1089,20 @@ It means:
 `prod.yakl`:
 
 ```yaml
-'&+': config
+!config+
 replicas: 5
 image: nginx:1.29
 ---
-'&+': service
+!service+
 spec+:
   type: LoadBalancer
 ---
-'&+': web.conf
+!web.conf+
 data:
   default.conf: |
     server { listen 8080; gzip on; }
 ---
-'&': pdb
+!pdb
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -1143,18 +1149,18 @@ It means:
 - **The document of local keys** holds the import and the port. Neither is output.
 - **`config` is a hidden document and a local.** The overlay only touches the `config` field,
   yet the Deployment gets 5 replicas and the new image through `${config.replicas}` and
-  `${config.image}`, because a document name's local is the field. `'&+': config` keeps `config`
-  hidden without repeating the colon.
+  `${config.image}`, because a document name's local is the field. `!config+` keeps `config`
+  hidden without repeating the colons.
 - **`&labels` is a nested anchor:** the labels stay in `metadata`, and the same value fills the
   selector. An overlay that added a label to `metadata.labels` would leave the selector as it is.
 - **`'&target'` is a local key** in the Service's `spec`. It names the container once and isn't
   output.
-- **`'&': web.conf`** gives a field with a dot in its name. That isn't a variable name, so there's
+- **`!web.conf`** gives a field with a dot in its name. That isn't a variable name, so there's
   no local, and the Deployment reads it as `$['web.conf']`.
 - **`<<+` starts the container from the library's probe** and adds its own fields.
 - **The overlay is a separate file,** so it reaches the base through `$`, and its PDB takes the
   Deployment's selector.
-- **`'&+': web.conf` with a plain `data:`** replaces all of `data`; `data+:` would merge it.
+- **`!web.conf+` with a plain `data:`** replaces all of `data`; `data+:` would merge it.
 
 A larger example, a shop built on [k8s-libsonnet](https://github.com/kubecfg/k8s-libsonnet)
 with dev and prod overlays that change every object, every pod, or one container, is in
@@ -1252,17 +1258,18 @@ line:
 | a `+` key with colons (`x+::`) next to a key without `+` | the field's visibility comes from the other key |
 | `<<` that isn't the very first key, or a second `<<` | kubectl and kustomize give different results |
 | `<<+` with an expression that isn't an object or `null`, including a list | `+` would silently join strings, arrays or numbers |
-| two documents with the same name, unless one is plain and the other `+` (`'&': web` and `'&+': web`) | ambiguous |
+| two documents with the same name, unless one is plain and the other `+` (`!web` and `!web+`) | ambiguous |
 | one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or a file local and a document name | a local can't have two values |
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
 | a key expression, `${for}` or `${if}` that uses the local of an anchor in the same mapping or list, or below it | Jsonnet needs it to build the mapping or list that the local reads |
 | an anchor inside the value of a local key, or on or inside a document of local keys | that value isn't in the output, so there's no node to name |
-| a local key whose name isn't a Jsonnet variable name, is a keyword or `std`, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is `'&': web.conf` |
-| a local key without a value, such as `'&web':` | most likely meant as a name: `'&': web` |
-| a name key (`'&'`, `'&+'`, `'&:'`, ...) below the top level of a document, or two in one document | it only names documents, once |
-| a name that is an expression, empty, or ends in `+` or `:`, such as `'&': web+` | names are known before evaluation, and `+` and `:` go on the key: `'&+': web` |
+| a local key whose name isn't a Jsonnet variable name, is a keyword or `std`, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is a tag: `!web.conf` |
+| a local key without a value, such as `'&web':` | most likely meant as a name: `!web` |
+| a key `'&'`, `'&+'`, `'&:'` and the like | it named documents before tags did; a tag does now |
+| a tag like `!web` on a node that isn't a document's root | only documents have names |
+| a name tag without a name, like `!+`, or with more than three colons | there's no field to name |
 | `$` in a file local of a file without names | there is no file object; Jsonnet would read it as the local's own object |
-| `'&': unnamed` | `unnamed` is reserved for unnamed documents |
+| `!unnamed` | `unnamed` is reserved for unnamed documents |
 | `&labels: value`, a local key without quotes | YAML reads an empty key carrying the anchor `labels`; yakl says to quote it |
 | `&web.conf:` without quotes | a YAML syntax error in kubectl, go-yaml v3, PyYAML and yamllint |
 | `&a &b` on one node | YAML allows one anchor per node |
@@ -1277,23 +1284,24 @@ silently reads it as a `null` document and skips the rest. Every other tool repo
 
 Allowed, with a note:
 
-- **`'&': web` and `'&+': web` in one file** combine as `web: A + B`, by the same rule as two
-  keys in a mapping; `'&:': web` with `'&+': web` gives a hidden `web`. It allows a vendored
+- **`!web` and `!web+` in one file** combine as `web: A + B`, by the same rule as two keys in
+  a mapping; `!web::` with `!web+` gives a hidden `web`. It allows a vendored
   document followed by a local patch.
-- **A document with only a name** gives `name: {}`, and kubecfg skips empty objects.
+- **A document with only a name** gives `name: null`, as an empty document does, and kubecfg
+  skips it.
 - **Nested anchors whose names aren't Jsonnet variable names,** like `&default-labels`, stay
   plain YAML anchors.
 - **A file with only documents of local keys** has no output. A file imported for its helpers
-  should export them as hidden fields (`'&:': helpers`), which importers can reach.
+  should export them as hidden fields (`!helpers::`), which importers can reach.
 - **`<<+` at the top of a document using the document's own name or root anchor** is a loop,
   since the document is inside what `<<+` extends. Jsonnet stops with "max stack frames exceeded".
 
 ### Settings in a visible document
 
-A visible document that isn't a Kubernetes object makes kubecfg fail. `'&': settings` with
+A visible document that isn't a Kubernetes object makes kubecfg fail. `!settings` with
 `replicas: 3` puts a bare `3` where kubecfg looks for objects, and it stops with "Looking for
 kubernetes object … but instead found float64". The same happens to a plain value without a
-name, which lands in `unnamed`. Settings belong in a hidden document (`'&:': settings`), which
+name, which lands in `unnamed`. Settings belong in a hidden document (`!settings::`), which
 overlays can change, or in a document of local keys, which they can't.
 
 ## Corner cases
@@ -1324,14 +1332,14 @@ are in round trips, and in tools that need each document to be a Kubernetes obje
 
 **Rewriting.** kubectl and kustomize parse a file and write new YAML, and so does prettier:
 
-- **Expressions, `$${`, key modifiers, `<<+`, local keys and `'&'` names survive** as strings
-  and keys.
+- **Expressions, `$${`, key modifiers, `<<+` and local keys survive** as strings and keys.
+  Name tags survive kubectl and prettier, but kustomize drops them.
   The spelling doesn't: both tools unquote `"nginx:${version}"`, and write a block expression
   as a plain or quoted string. That's why an expression means the same in every style.
 - **Anchors don't survive kubectl or kustomize.** Both expand them, so locals written as
   anchors are gone after a round trip.
-- **Keys are sorted.** kubectl and kustomize sort keys, and `&` sorts before letters, so a
-  `'&'` name and local keys move to the top of their mapping.
+- **Keys are sorted.** kubectl and kustomize sort keys, and `&` sorts before letters, so local
+  keys move to the top of their mapping.
 - **Quote style changes, meaning doesn't.** kubectl and kustomize write `"&x"` as `'&x'`, and
   `_config::` as `'_config:':`. prettier writes `'&x'` as `"&x"`. On the worked example,
   prettier changes only spacing and quote style.
@@ -1352,7 +1360,7 @@ are in round trips, and in tools that need each document to be a Kubernetes obje
 **kustomize** needs more:
 
 - **Every document must be a resource,** with `apiVersion`, `kind` and `metadata.name`. A file
-  with a document of local keys or a `'&:': config` document fails with "missing Resource
+  with a document of local keys or a `!config::` document fails with "missing Resource
   metadata".
 - **Documents are reordered** by kind.
 - **Transformers that write into a field holding an expression stop with an error.**
@@ -1420,7 +1428,7 @@ old files fail loudly where their meaning changed.
 | `yes`, `no`, `on`, `off`, `y`, `n` unquoted | an error | `true`, `false`, or quotes |
 | `<<: *base` | a YAML merge | nothing, or `<<+` for Jsonnet inheritance |
 | keys ending in `+` or `:`, such as `a::` or `c++:` | field modifiers | `${'a:'}` for a literal key |
-| a key starting with `&` | a local key; at the top of a document, `'&'`, `'&+'`, `'&:'` and the like name it | `${'&x'}` for a literal key |
+| a key starting with `&` | a local key | `${'&x'}` for a literal key |
 | a `.jamlet` overlay, deep-merged by `toOverlay` | `base + overlay`, as written | add `+` to every key that should merge: `spec+:`, `_config+::` |
 
 Three of these change meaning without an error:

@@ -3,7 +3,7 @@
 #
 #   kubecfg --alpha show shop.yakl --overlay-code-file prod.yakl
 
-'&+': k8s
+!k8s+
 ObjectMeta+:
   namespace: shop-prod
 v1+:
@@ -18,11 +18,11 @@ v1+:
       annotations+:
         prometheus.io/scrape: 'true'
 ---
-'&+': config
+!config+
 replicas: {web: 3, api: 6}
 ---
 # One container, by name.
-'&+': api
+!api+
 spec+:
   template+:
     spec+:
@@ -32,7 +32,7 @@ spec+:
             requests: {cpu: 500m, memory: 512Mi}
             limits: {memory: 1Gi}
 ---
-'&': api-pdb
+!api-pdb
 <<+: ${$.k8s.policy.v1.PodDisruptionBudget}
 metadata+:
   name: api
@@ -40,7 +40,7 @@ spec:
   maxUnavailable: 1
   selector: ${$.api.spec.selector}
 ---
-'&+': redis
+!redis+
 statefulset+:
   spec+:
     template+:

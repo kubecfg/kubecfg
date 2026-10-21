@@ -5,7 +5,7 @@
 # Every object gets the namespace, and every container, Redis's included, gets
 # the pull policy and LOG_LEVEL. A container that sets one of these itself keeps
 # its own value: the library's types are the bottom layer.
-'&+': k8s
+!k8s+
 ObjectMeta+:
   namespace: shop-dev
 v1+:
@@ -14,7 +14,7 @@ v1+:
     env_+:
       LOG_LEVEL: {value: debug}
 ---
-'&+': config
+!config+
 version: 1.5.0-rc.1
 domain: shop.dev.example.com
 replicas: {web: 1, api: 1}
