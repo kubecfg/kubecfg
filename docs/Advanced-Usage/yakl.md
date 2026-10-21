@@ -746,9 +746,9 @@ The node stays where it's written, and the local reads it there.
   `&default-labels`, `&if` or `&std`, stay plain YAML anchors. The same name twice in one document is an error: YAML lets a
   later anchor replace an earlier one, but a local can't have two values. An anchor may hide a
   file local or a document name with the same name, as Jsonnet locals do.
-- **Not in a key of a mapping that holds the node.** Jsonnet needs a mapping's keys to build it,
-  and the local reads the node from the mapping, so `${name}: 1` next to `name: &name web` is an
-  error. Declare the value with a local key, `'&name': web`, and use `${name}` in both places.
+- **Not in a key of a mapping that holds the node, or a `${for}` or `${if}` of such a list.**
+  Jsonnet needs them to build the mapping or list, and the local reads the node from it, so
+  `${name}: 1` next to `name: &name web` is an error. Declare the value with a local key, `'&name': web`, and use `${name}` in both places.
 - **Only on nodes that have a place in the output.** An anchor on a key, on the value of `<<`
   or `<<+`, inside a merge source, or under a key expression is an error. A common slip:
   `&web apiVersion: v1` on one line anchors the key `apiVersion`; an anchor for the whole
@@ -1241,7 +1241,7 @@ line:
 | two documents with the same name, unless one is plain and the other `+` (`'&': web` and `'&+': web`) | ambiguous |
 | one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or a file local and a document name | a local can't have two values |
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
-| a key expression that uses the local of an anchor in the same mapping, or below it | Jsonnet needs the key to build the mapping that the local reads |
+| a key expression, `${for}` or `${if}` that uses the local of an anchor in the same mapping or list, or below it | Jsonnet needs it to build the mapping or list that the local reads |
 | an anchor inside the value of a local key, or on or inside a document of local keys | that value isn't in the output, so there's no node to name |
 | a local key whose name isn't a Jsonnet variable name, is a keyword or `std`, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is `'&': web.conf` |
 | a local key without a value, such as `'&web':` | most likely meant as a name: `'&': web` |
