@@ -29,6 +29,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	jsonnet "github.com/google/go-jsonnet"
 	"github.com/google/go-jsonnet/formatter"
 	"go.yaml.in/yaml/v3"
 	k8syaml "sigs.k8s.io/yaml"
@@ -703,14 +704,15 @@ type compiler struct {
 
 	exprs    []expr
 	used     []bool
-	dropped  map[int]bool           // expressions left out on purpose: in merged entries that own keys override
-	merged   map[*yaml.Node][]entry // the entries of each mapping, see entries
-	lines    []int                  // lines[n] is the source line of line n of the placeholder-substituted YAML
-	aliases  []*yaml.Node           // aliases being expanded
-	places   map[*yaml.Node]place   // where each node's text is, to resolve scalars in the same syntax
-	copies   int                    // nodes copied by aliases
-	noDollar bool                   // compiling a file local where there is no file object: $ is an error
-	readable bool                   // see Desugar
+	dropped  map[int]bool                   // expressions left out on purpose: in merged entries that own keys override
+	merged   map[*yaml.Node][]entry         // the entries of each mapping, see entries
+	vars     map[*yaml.Node]map[string]bool // the variables that each key expression reads, see keyVars
+	lines    []int                          // lines[n] is the source line of line n of the placeholder-substituted YAML
+	aliases  []*yaml.Node                   // aliases being expanded
+	places   map[*yaml.Node]place           // where each node's text is, to resolve scalars in the same syntax
+	copies   int                            // nodes copied by aliases
+	noDollar bool                           // compiling a file local where there is no file object: $ is an error
+	readable bool                           // see Desugar
 }
 
 // unit compiles the YAML in src[from:to], as lexed by l.
@@ -735,6 +737,7 @@ func (c *compiler) unit(l *lexer, from, to int) error {
 	c.places = map[*yaml.Node]place{}
 	c.dropped = map[int]bool{}
 	c.merged = map[*yaml.Node][]entry{}
+	c.vars = map[*yaml.Node]map[string]bool{}
 	for _, d := range docs {
 		c.place(d, false)
 	}
@@ -1243,16 +1246,38 @@ func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, keys []
 		}
 		// Jsonnet needs the keys of a mapping to build it, and the local reads the mapping.
 		for _, k := range keys {
-			text, uses := c.keyText(k), false
-			words(text[2:len(text)-1], func(w string) { uses = uses || w == n.Anchor })
-			if uses {
+			if c.keyVars(k)[n.Anchor] {
 				return c.errorf(k, "%s uses the local %s, which reads line %d from what %[1]s builds; "+
-					"to use the value in both places, declare it with a local key, as '&%[2]s': value", text, n.Anchor, c.srcLine(n))
+					"to use the value in both places, declare it with a local key, as '&%[2]s': value", c.keyText(k), n.Anchor, c.srcLine(n))
 			}
 		}
 		*out = append(*out, anchor{n, path})
 	}
 	return c.anchors(n, path, where, plus, keys, out)
+}
+
+var unknownVar = regexp.MustCompile(`Unknown variable: ([A-Za-z_][A-Za-z0-9_]*)`)
+
+// keyVars returns the variables that key expression k reads from around it, as opposed to fields
+// and variables that it binds itself. It returns none if the code doesn't parse on its own.
+func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
+	if vars, ok := c.vars[k]; ok {
+		return vars
+	}
+	text, vars, bind := c.keyText(k), map[string]bool{}, ""
+	for {
+		// Jsonnet reports the first unbound variable, so bind each in turn. The key is in an
+		// object, where self and $ are valid.
+		_, err := jsonnet.SnippetToAST("", bind+"{f: ("+text[2:len(text)-1]+"\n)}")
+		m := unknownVar.FindStringSubmatch(fmt.Sprint(err))
+		if m == nil || vars[m[1]] {
+			break
+		}
+		vars[m[1]] = true
+		bind += "local " + m[1] + " = null; "
+	}
+	c.vars[k] = vars
+	return vars
 }
 
 // anchors collects the nodes under n whose anchors declare locals, like anchored, but not n.
@@ -1308,12 +1333,8 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, keys []*
 			case strings.HasPrefix(text, "${"):
 				w = "under a key expression" + noPlace
 			default:
-				var name string
-				name, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
-				if name == text {
-					name = c.keyName(k)
-				}
-				p = access(path, unescape(name))
+				_, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
+				p = access(path, c.fieldName(k))
 			}
 			if err := c.anchored(v, p, w, plus, keys, out); err != nil {
 				return err
@@ -1399,8 +1420,8 @@ func (c *compiler) checkScope(e expr) error {
 	return err
 }
 
-// words calls f with each identifier and $ in Jsonnet code, but not with member names after a dot.
-// Like exprEnd, it skips strings and comments.
+// words calls f with each identifier and $ in Jsonnet code. Like exprEnd, it skips strings and
+// comments.
 func words(code string, f func(w string)) {
 	isWord := func(c byte) bool {
 		return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
@@ -1427,9 +1448,7 @@ func words(code string, f func(w string)) {
 			for n < len(rest) && isWord(rest[n]) {
 				n++
 			}
-			if i == 0 || code[i-1] != '.' {
-				f(rest[:n])
-			}
+			f(rest[:n])
 			n--
 		}
 		if n < 0 {
@@ -1704,6 +1723,17 @@ func (c *compiler) keyText(k *yaml.Node) string {
 	return k.Value
 }
 
+// fieldName returns the name of the field that literal key k gives, without modifiers. A key
+// without them is resolved like kubectl does, as 0x1F gives 31; a key with them gives a string.
+func (c *compiler) fieldName(k *yaml.Node) string {
+	text := c.keyText(k)
+	name, _ := strings.CutSuffix(strings.TrimRight(text, ":"), "+")
+	if name == text {
+		name = c.keyName(k)
+	}
+	return unescape(name)
+}
+
 // placeholder returns the index of the expression that the text of a scalar is the placeholder of.
 func (c *compiler) placeholder(v string) (int, bool) {
 	parts := strings.Split(strings.Trim(v, " \t\n"), c.sentinel)
@@ -1778,7 +1808,7 @@ func (c *compiler) mapping(n *yaml.Node) error {
 				f.colons += colons
 			}
 			f.name, f.plus = strings.CutSuffix(f.name, "+")
-			byName[f.name] = append(byName[f.name], len(fields))
+			byName[c.fieldName(k)] = append(byName[c.fieldName(k)], len(fields))
 		}
 		fields = append(fields, f)
 	}

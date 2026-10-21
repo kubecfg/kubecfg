@@ -201,7 +201,7 @@ func TestExpressions(t *testing.T) {
 		{"anchor in a list document", "- &x 1\n- ${x + 1}\n", `[1,2]`},
 		{"anchor hides a file local", "'&x': 1\n---\na: &x 2\nb: ${x}\n", `{"a":2,"b":2}`},
 		{"a key outside the anchor's mapping", "m: {a: &n x}\no:\n  ${n}: 1\n", `{"m":{"a":"x"},"o":{"x":1}}`},
-		{"a member name in a key isn't the local", "m:\n  name: &name foo\n  ${'k' + $.l.name}: 1\nl: {name: v}\n", `{"l":{"name":"v"},"m":{"kv":1,"name":"foo"}}`},
+		{"a field name in a key isn't the local", "m:\n  name: &name foo\n  ${'k' + $.l.name + {name: 1}.name}: 1\nl: {name: v}\n", `{"l":{"name":"v"},"m":{"kv1":1,"name":"foo"}}`},
 		{"anchor in a sequence item", "- name: &n web\n  v: ${n}\n", `[{"name":"web","v":"web"}]`},
 		{"anchors through hidden and quoted keys", "my.cfg::\n  v: &v 1\n0x1F: {a: &k 2}\nw: ${[v, k]}\n", `{"31":{"a":2},"w":[1,2]}`},
 		{"an anchor under + is the combined value", "<<+: ${ {labels: {a: '1'}} }\nlabels+: &l {b: '2'}\ncopy: ${l}\n", `{"copy":{"a":"1","b":"2"},"labels":{"a":"1","b":"2"}}`},
@@ -296,6 +296,7 @@ env: ${[
 `, `{"containers":[{"image":"registry.example.com/app:1.4","name":"app","resources":{"limits":{"memory":"512Mi"}}},` +
 			`{"args":["--worker"],"image":"registry.example.com/app:1.4","name":"worker","resources":{"limits":{"cpu":"2","memory":"512Mi"}}}]}`},
 		{"merged expressions that own keys override", "a:\n  <<: [{x: '${1}', w: '${2}'}, {w: '${3}'}]\n  x: 0\n", `{"a":{"w":2,"x":0}}`},
+		{"keys name fields as YAML reads them", "a: {0777: p, '0777': q}\nb: {0777: p, 0777+: q, 511+: r}\n", `{"a":{"0777":"q","511":"p"},"b":{"0777":"q","511":"pr"}}`},
 		{"merged keys compare as YAML reads them", "a:\n  <<: {0x1F: a}\n  31: b\n", `{"a":{"31":"b"}}`},
 		{"merged expression keys compare as text", "a:\n  <<: {'${\"x\"}': 1}\n  ${\"x\"}: 2\n", `{"a":{"x":2}}`},
 		{"<<+ of a local key", "a:\n  '&base': ${ {x: 1} }\n  b:\n    <<+: ${base}\n    w: ${super.x + 1}\n", `{"a":{"b":{"w":2,"x":1}}}`},
