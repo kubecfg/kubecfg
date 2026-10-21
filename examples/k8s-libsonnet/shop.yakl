@@ -6,7 +6,7 @@
 
 # The library, plus a label for every shop object. It's a hidden field rather
 # than a local key, so an overlay can extend it (!k8s+) and change every
-# object built from it. The name is also a local, k8s, that follows overlays.
+# object built from it. Expressions read it as $.k8s, which follows overlays.
 !k8s::
 <<+: ${import 'k8s.libsonnet'}
 ObjectTemplateMeta+:
@@ -19,17 +19,17 @@ version: 1.4.2
 domain: shop.example.com
 replicas: {web: 2, api: 2}
 ---
-'&image': ${function(name) config.registry + '/' + name + ':' + config.version}
+'&image': ${function(name) $.config.registry + '/' + name + ':' + $.config.version}
 ---
 # <<+ starts from the library's Deployment. The + on metadata, spec and template
 # keeps what the library puts there, such as the namespace an overlay sets; a key
 # without + would replace it. &labels names the labels for the whole document.
 !web
-<<+: ${k8s.apps.v1.Deployment}
+<<+: ${$.k8s.apps.v1.Deployment}
 metadata+:
   name: web
 spec+:
-  replicas: ${config.replicas.web}
+  replicas: ${$.config.replicas.web}
   selector:
     matchLabels: &labels {app.kubernetes.io/name: web}
   template+:
@@ -47,20 +47,20 @@ spec+:
             API_URL: {value: 'http://api'}
 ---
 !web-svc
-<<+: ${k8s.v1.Service}
+<<+: ${$.k8s.v1.Service}
 metadata+:
   name: web
 spec+:
-  selector: ${web.spec.selector.matchLabels}
+  selector: ${$.web.spec.selector.matchLabels}
   ports_+:
     http: {port: 80, targetPort: http}
 ---
 !api
-<<+: ${k8s.apps.v1.Deployment}
+<<+: ${$.k8s.apps.v1.Deployment}
 metadata+:
   name: api
 spec+:
-  replicas: ${config.replicas.api}
+  replicas: ${$.config.replicas.api}
   selector:
     matchLabels: &labels {app.kubernetes.io/name: api}
   template+:
@@ -76,16 +76,16 @@ spec+:
             REDIS_URL: {value: 'redis://redis:6379'}
 ---
 !api-svc
-<<+: ${k8s.v1.Service}
+<<+: ${$.k8s.v1.Service}
 metadata+:
   name: api
 spec+:
-  selector: ${api.spec.selector.matchLabels}
+  selector: ${$.api.spec.selector.matchLabels}
   ports_+:
     http: {port: 80, targetPort: http}
 ---
 !worker
-<<+: ${k8s.batch.v1.CronJob}
+<<+: ${$.k8s.batch.v1.CronJob}
 metadata+:
   name: worker
 spec+:
@@ -100,15 +100,15 @@ spec+:
               image: ${image('api')}
               args: [reindex]
               # The API's variables, with an overlay's changes to them.
-              env_+: ${api.spec.template.spec.containers_.api.env_}
+              env_+: ${$.api.spec.template.spec.containers_.api.env_}
 ---
 !ingress
-<<+: ${k8s['networking.k8s.io'].v1.Ingress}
+<<+: ${$.k8s['networking.k8s.io'].v1.Ingress}
 metadata+:
   name: shop
 spec:
   rules:
-    - host: ${config.domain}
+    - host: ${$.config.domain}
       http:
         paths:
           - path: /
@@ -124,7 +124,7 @@ spec:
 # overlays reach them too. Keyed by kind, so an overlay can pick one.
 !redis
 <<+: |-
-  ${k8s.adopt({
+  ${$.k8s.adopt({
     [std.asciiLower(o.kind)]: o
     for o in std.parseYaml(importstr 'redis.yaml')
   })}

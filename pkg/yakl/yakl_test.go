@@ -307,28 +307,29 @@ env: ${[
 		{"literal key ending in a colon", "${'a:'}: 1\n${'b+'}: 2\n${'&'}: 3\n", `{"&":3,"a:":1,"b+":2}`},
 
 		// Names.
-		{"a name makes an object", "'&names': {prefix: p-}\n--- !a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\nmetadata:\n  name: ${a.metadata.name + '-copy'}\n",
+		{"a name makes an object", "'&names': {prefix: p-}\n--- !a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\nmetadata:\n  name: ${$.a.metadata.name + '-copy'}\n",
 			`{"a":{"metadata":{"name":"p-a"}},"unnamed":[{"metadata":{"name":"p-a-copy"}}]}`},
-		{"hidden name", "--- !config::\nnum: 1\n--- !a\nv: ${config.num}\nw: ${$.config.num}\n", `{"a":{"v":1,"w":1}}`},
+		{"hidden name", "--- !config::\nnum: 1\n--- !a\nv: ${$.config.num}\n", `{"a":{"v":1}}`},
 		{"forced visible name", "--- !a:::\nnum: 1\n", `{"a":{"num":1}}`},
 		{"name tag", "--- !web.conf\nkind: ConfigMap\n--- !b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"},"web.conf":{"kind":"ConfigMap"}}`},
 		{"name tag with colons", "--- !web.conf::\nkind: ConfigMap\n--- !b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"}}`},
 		{"name tag on its own line", "!cm\nkind: ConfigMap\n", `{"cm":{"kind":"ConfigMap"}}`},
-		{"named list and expression", "--- !l\n- 1\n--- !lib::\n${ {f: 2} }\n--- !v\nx: ${lib.f}\n", `{"l":[1],"v":{"x":2}}`},
+		{"named list and expression", "--- !l\n- 1\n--- !lib::\n${ {f: 2} }\n--- !v\nx: ${$.lib.f}\n", `{"l":[1],"v":{"x":2}}`},
 		{"an anchor on a named document", "--- !web.conf &wc\nkind: ConfigMap\nv: ${wc.kind}\n", `{"web.conf":{"kind":"ConfigMap","v":"ConfigMap"}}`},
 		{"a number as a name", "--- !123\na: 1\n", `{"123":{"a":1}}`},
 		{"name with dashes", "--- !my-svc\na: 1\n", `{"my-svc":{"a":1}}`},
 		{"plain and + documents combine", "--- !web\na: 1\nb: {c: 1}\n--- !web+\nb+: {d: 2}\n", `{"web":{"a":1,"b":{"c":1,"d":2}}}`},
-		{"+ document first, hidden plain one", "--- !web+\nb+: {d: 2}\n--- !web::\nb: {c: 1}\n--- !v\nx: ${web.b}\n", `{"v":{"x":{"c":1,"d":2}}}`},
+		{"+ document first, hidden plain one", "--- !web+\nb+: {d: 2}\n--- !web::\nb: {c: 1}\n--- !v\nx: ${$.web.b}\n", `{"v":{"x":{"c":1,"d":2}}}`},
 		{"+ document alone", "--- !web+\nb: 1\n", `{"web":{"b":1}}`},
-		{"hidden + document", "--- !c+::\nx: 1\n--- !v\nw: ${c.x}\n", `{"v":{"w":1}}`},
-		{"unnamed documents", "--- !a\nx: 1\n---\nw: ${a.x}\n---\nz: 3\n", `{"a":{"x":1},"unnamed":[{"w":1},{"z":3}]}`},
-		{"file locals see the file", "'&num': ${a.x}\n--- !a\nx: 1\n--- !b\nv: ${num}\n", `{"a":{"x":1},"b":{"v":1}}`},
+		{"hidden + document", "--- !c+::\nx: 1\n--- !v\nw: ${$.c.x}\n", `{"v":{"w":1}}`},
+		{"unnamed documents", "--- !a\nx: 1\n---\nw: ${$.a.x}\n---\nz: 3\n", `{"a":{"x":1},"unnamed":[{"w":1},{"z":3}]}`},
+		{"file locals see the file", "'&num': ${$.a.x}\n--- !a\nx: 1\n--- !b\nv: ${num}\n", `{"a":{"x":1},"b":{"v":1}}`},
 		{"a document with only a name", "--- !a\n", `{"a":null}`},
 		{"named document with <<+", "'&base': {x: 1}\n--- !d\n<<+: ${base}\nw: &w 2\nz: ${w}\n", `{"d":{"w":2,"x":1,"z":2}}`},
-		{"a document's name in itself", "--- !root\nname: nm\nm:\n  v: ${root.name}\n", `{"root":{"m":{"v":"nm"},"name":"nm"}}`},
+		{"a document's name in itself", "--- !root\nname: nm\nm:\n  v: ${$.root.name}\n", `{"root":{"m":{"v":"nm"},"name":"nm"}}`},
 		{"an anchor on a document's root", "&r\nname: nm\nm:\n  v: ${r.name}\n", `{"m":{"v":"nm"},"name":"nm"}`},
-		{"an anchor hides a document's name", "--- !labels\nx: 1\n--- !d\nm: &labels {z: 2}\nv: ${labels}\n", `{"d":{"m":{"z":2},"v":{"z":2}},"labels":{"x":1}}`},
+		{"a name isn't a local", "--- !labels\nx: 1\n--- !d\nm: &labels {z: 2}\nv: ${[labels, $.labels]}\n", `{"d":{"m":{"z":2},"v":[{"z":2},{"x":1}]},"labels":{"x":1}}`},
+		{"a file local named like a document", "'&x': 1\n--- !x\nv: ${[x, $.x.w]}\nw: 2\n", `{"x":{"v":[1,2],"w":2}}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -447,7 +448,6 @@ func TestErrors(t *testing.T) {
 		{"--- !a\nx: 1\n--- !a\ny: 2\n", `line 3: the name "a" is already given on line 1`},
 		{"--- !a+\n--- !a+\n", `the name "a" is already given`},
 		{"--- !a\n--- !a+::\n", `the name "a" is already given`},
-		{"'&x': 1\n--- !x\n", `line 2: the local "x" is also declared on line 1`},
 		{"name: &name foo\n${name}: 1\n", "line 2: ${name} uses the local name, which reads line 1 from what ${name} builds"},
 		{"- &count 2\n- ${for i in std.range(1, count)}: ${i}\n", "line 2: ${for i in std.range(1, count)} uses the local count, which reads line 1"},
 		{"l:\n  - ${if n > 1}: 1\n  - [&n 2]\n", "line 2: ${if n > 1} uses the local n, which reads line 3"},
@@ -676,7 +676,7 @@ replicas: 2 # the default
 --- !deployment
 spec:
   # Scaled by config.
-  replicas: ${config.replicas}
+  replicas: ${$.config.replicas}
   args:
     # Verbose first.
     - --verbose
@@ -687,16 +687,14 @@ spec:
 
 {
   // The settings.
-  local config = self.config,
   config:: {
     replicas: 2,  // the default
   },
   // The deployment.
-  local deployment = self.deployment,
   deployment: {
     spec: {
       // Scaled by config.
-      replicas: config.replicas,
+      replicas: $.config.replicas,
       args: [
               // Verbose first.
               '--verbose',
@@ -715,11 +713,11 @@ spec:
 	}
 }
 
-// A document name's local is the field, so it follows overlays; a nested anchor's local is the node
-// as the document writes it, so it doesn't.
+// A document read through $ is the field, so it follows overlays; a nested anchor's local is the
+// node as the document writes it, so it doesn't.
 func TestBinding(t *testing.T) {
 	const src = "--- !config::\nreplicas: 2\n--- !deployment\nmetadata:\n  labels: &labels {app: web}\n" +
-		"spec:\n  replicas: ${config.replicas}\n  selector: {matchLabels: '${labels}'}\n"
+		"spec:\n  replicas: ${$.config.replicas}\n  selector: {matchLabels: '${labels}'}\n"
 	const overlay = "{config+: {replicas: 5}, deployment+: {metadata+: {labels+: {canary: 'true'}}}}"
 	const want = `{"deployment":{"metadata":{"labels":{"app":"web","canary":"true"}},"spec":{"replicas":5,"selector":{"matchLabels":{"app":"web"}}}}}`
 	for _, compile := range []func(string) (string, error){Compile, Desugar} {

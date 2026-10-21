@@ -826,7 +826,6 @@ type doc struct {
 	at     *yaml.Node // the node to report errors at
 	kind   docKind
 	name   string // the field name
-	local  string // the local that is the field, if any
 	plus   bool   // the field extends the inherited one: name+:
 	colons int    // 1 to 3, as after a Jsonnet field name
 
@@ -920,9 +919,6 @@ func (c *compiler) name(d *doc, tag string) error {
 		return c.errorf(d.at, "the name %q is reserved for the documents without a name", unnamed)
 	}
 	d.kind, d.name, d.plus, d.colons = fieldDoc, name, plus, max(colons, 1)
-	if isIdentifier(name) {
-		d.local = name
-	}
 	return nil
 }
 
@@ -956,7 +952,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 	docs := make([]doc, len(yamlDocs))
 	var fileLocals, objectFile bool
 	fields := map[string][]int{}
-	locals := map[string]*yaml.Node{} // file locals and the locals of document names share one name space
+	locals := map[string]*yaml.Node{} // file locals
 	addLocal := func(name string, at *yaml.Node) error {
 		if prev := locals[name]; prev != nil {
 			return c.errorf(at, "the local %q is also declared on line %d", name, c.srcLine(prev))
@@ -1002,14 +998,6 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 			last := docs[idx[len(idx)-1]]
 			return c.errorf(last.at, "the name %q is already given on line %d: a name can be given twice only "+
 				"by a tag without + and a plain + one, as in !%[1]s and !%[1]s+", name, c.srcLine(docs[idx[0]].at))
-		}
-		docs[idx[1]].local = "" // the first declares it
-	}
-	for _, d := range docs {
-		if d.local != "" {
-			if err := addLocal(d.local, d.at); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -1099,8 +1087,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 }
 
 // objectFile writes a file with names as an object: a field per name, object locals for file
-// locals and for the names that are Jsonnet variable names, and the documents without a name in
-// the field unnamed. Everything stays in file order, so that the code keeps its source lines.
+// locals, and the documents without a name in the field unnamed. Everything stays in file order, so that the code keeps its source lines.
 func (c *compiler) objectFile(docs []doc, fields map[string][]int) error {
 	c.write("{")
 	c.br(nil)
@@ -1132,11 +1119,6 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int) error {
 			c.write("local " + tmp + " = ")
 		case fieldDoc:
 			c.align(d.at)
-			if d.local != "" {
-				// The field itself, so that the local follows overlays.
-				c.write("local " + d.local + " = " + access("self", d.name) + ", ")
-				c.br(nil)
-			}
 			idx := fields[d.name]
 			switch {
 			case len(idx) == 2 && idx[0] == i:

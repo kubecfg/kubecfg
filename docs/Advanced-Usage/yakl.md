@@ -46,7 +46,7 @@ in plain YAML:
 | `<<+: S` | `S + {the mapping's own fields}` |
 | `<<: *base` | YAML merge: copy fields, own keys win |
 | `&labels` on a node | `local labels = <the node>` for the whole document; the node stays where it is |
-| `!web` on its own line at the top of a document | field `web:` of the file, and a local `web` that is that field |
+| `!web` on its own line at the top of a document | field `web:` of the file, read as `$.web` |
 | `!config::`, `!service+` | hidden `config::`, and `service+:` that extends `service` |
 | `'&port': 8080` in a mapping | `local port = 8080` for that mapping; not output |
 | a document made only of `'&name':` keys | locals of the whole file |
@@ -58,7 +58,7 @@ Four ideas carry the design:
 - **`&name` always declares a local.** On a node, the node stays where it is and also gets a
   name. As a quoted key, `'&port': 8080`, the value is only a local.
 - **A tag names a document.** `!web` at the top of a document makes the document the field
-  `web` of the file, and the name is also a local. Like a Jsonnet field, it takes `+` and
+  `web` of the file, which expressions read as `$.web`. Like a Jsonnet field, it takes `+` and
   colons: `!service+` extends `service`, and `!config::` hides `config`.
 - **A stream is a list until a document gets a name.** From then on the file is one object, as
   a Jsonnet file usually is.
@@ -138,7 +138,7 @@ kind: Deployment
 metadata:
   labels: &labels {app: web}
 spec:
-  replicas: ${config.replicas}
+  replicas: ${$.config.replicas}
   selector: {matchLabels: '${labels}'}
 ```
 
@@ -147,18 +147,16 @@ it prints:
 ```jsonnet
 {
   local k = import 'k.libsonnet',
-  local config = self.config,
   config:: {
     replicas: 2,  // overlays change it
   },
-  local deployment = self.deployment,
   deployment: local yakl__root = {
     kind: 'Deployment',
     metadata: {
       labels: { app: 'web' },
     },
     spec: {
-      replicas: config.replicas,
+      replicas: $.config.replicas,
       selector: { matchLabels: labels },
     },
   }, labels = yakl__root.metadata.labels; yakl__root,
@@ -565,8 +563,8 @@ object one document at a time.
    overlay's unnamed documents are appended rather than swapped in. When there are none, the
    field is left out. `unnamed` is reserved as a name.
 3. **`$` follows Jsonnet: it's the outermost object.** In an object file, `$` is the file, in
-   every document, named or not. In a file without names, each document is its own `$`.
-   Document names are usually shorter: `config` instead of `$.config`.
+   every document, named or not, so `$.config` reads the document named `config`. In a file
+   without names, each document is its own `$`.
 4. **Order doesn't matter.** Names and file locals belong to one object, so a document can use
    one defined further down.
 
@@ -623,15 +621,14 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ${a.metadata.name + '-copy'}
+  name: ${$.a.metadata.name + '-copy'}
 ```
 
 ```jsonnet
 {
   local names = import 'names.libsonnet',
-  local a = self.a,
   a: {..., metadata: {name: names.prefix + 'a'}},
-  unnamed+: [{..., metadata: {name: a.metadata.name + '-copy'}}],
+  unnamed+: [{..., metadata: {name: $.a.metadata.name + '-copy'}}],
 }
 ```
 
@@ -645,7 +642,7 @@ that used `$` for its own document fails with "field does not exist".
 
 A document that should have had a name but lacks its tag lands in `unnamed` and is still
 deployed, which is what a YAML user expects. Anything that uses the missing name fails:
-`${service}` gives "Unknown variable", `$.service` gives "field does not exist", and an overlay
+`$.service` gives "field does not exist", and an overlay
 aimed at it leaves a fragment without `kind`, which kubecfg rejects ("Looking for kubernetes
 object at … but instead found …").
 
@@ -663,38 +660,37 @@ replicas: 2
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${config.name}
+  name: ${$.config.name}
 spec:
-  replicas: ${config.replicas}
+  replicas: ${$.config.replicas}
 ```
 
 ```jsonnet
 {
-  local config = self.config,
   config:: { name: 'web', replicas: 2 },
-  local deployment = self.deployment,
-  deployment: { /* ... */ spec: { replicas: config.replicas } },
+  deployment: { /* ... */ spec: { replicas: $.config.replicas } },
 }
 ```
 
-- **The name is also a local, and the local is the field.** They're one thing with one name, so
-  an overlay that changes `config` changes what `${config.replicas}` reads. `$.config` gives the
-  same value. That's the difference from an anchor, whose local is the node as written.
-- **Only a Jsonnet variable name gives a local.** `!web.conf` gives the field `'web.conf':`,
-  and expressions read it as `$['web.conf']`. Neither does `std`, which would
-  hide Jsonnet's standard library.
+- **Expressions read it through `$`, which is the file:** `${$.config.replicas}`, and
+  `${$['web.conf']}` for a name that isn't a Jsonnet variable name. That's the field itself, so
+  an overlay that changes `config` changes what `${$.config.replicas}` reads, and overlays read
+  the base the same way. That's the difference from an anchor, whose local is the node as
+  written.
+- **A name isn't a local.** `$` already reaches every document, and a name of any spelling,
+  like `web.conf`, works the same way.
 - **Scope: the whole file,** in any order.
 - **The tag says how the field combines,** with the `+` and colons a Jsonnet field has after
   its name: `!config::` is hidden, as `config::` is.
 
 | Tag | Field |
 | --- | --- |
-| `!web` | `web:`, and a local `web` |
+| `!web` | `web:` |
 | `!config::` | `config::`, hidden |
 | `!config:::` | `config:::`, forced visible |
 | `!service+` | `service+:`, extends `service` |
 | `!config+::` | `config+::` |
-| `!my-svc` | `'my-svc':`, and no local: `my-svc` isn't a variable name |
+| `!my-svc` | `'my-svc':`, read as `$['my-svc']` |
 
 - **Hiding a field doesn't rename it.** Add or remove the colon, and `config` and `$.config` keep
   working.
@@ -765,7 +761,7 @@ The node stays where it's written, and the local reads it there.
 - **Names:** a Jsonnet variable name, not a keyword or `std`. Other anchors, like
   `&default-labels`, `&if` or `&std`, stay plain YAML anchors. The same name twice in one document is an error: YAML lets a
   later anchor replace an earlier one, but a local can't have two values. An anchor may hide a
-  file local or a document name with the same name, as Jsonnet locals do.
+  file local with the same name, as Jsonnet locals do.
 - **Not in a key of a mapping that holds the node, or a `${for}` or `${if}` of such a list.**
   Jsonnet needs them to build the mapping or list, and the local reads the node from it, so
   `${name}: 1` next to `name: &name web` is an error. Declare the value with a local key, `'&name': web`, and use `${name}` in both places.
@@ -857,7 +853,6 @@ metadata:
   local names = import 'names.libsonnet',
   local image = 'nginx:1.27',
   local webName = function(suffix) 'web-' + suffix,
-  local deployment = self.deployment,
   deployment: { /* ... */ },
 }
 ```
@@ -872,7 +867,7 @@ document or list.
 - **Not tied to position.** It can go anywhere, and there can be several. The convention is to
   put it first, like Jsonnet imports, but nothing depends on it.
 - **Seen by every document, in any order.** File locals can use each other in any order too.
-- **One name space per file.** File locals and the locals of document names must all differ.
+- **One name space per file.** File locals must all differ.
 - **Private.** Importers and overlays can't see file locals. A hidden field (`!config::`) is the
   overlay-friendly alternative: Jsonnet's `local x = ...` versus `x:: ...`.
 - **`$` inside a file local** is the file in an object file. A file without names has no file
@@ -917,11 +912,11 @@ document:
 | `!pdb` with a whole object | `pdb: {...}` | adds a document, or replaces one with that name |
 | a document without a name, in an overlay that has names | `unnamed+: [...]` | appended after the base's unnamed documents |
 
-- **The overlay is a separate file.** The base's locals aren't in scope there, so the overlay
-  reaches the base through `$`: `$.config.name`. `$` in the overlay is the combined file, so it
-  sees the base's fields and the overlay's changes.
-- **The base sees the overlay's changes too,** through document names and `$`: a
-  `${config.replicas}` in the base reads the overlaid value.
+- **The overlay reaches the base through `$`,** as the base does: `$.config.name`. `$` in the
+  overlay is the combined file, so it sees the base's fields and the overlay's changes. The
+  base's file locals aren't in scope there.
+- **The base sees the overlay's changes too,** through `$`: a `${$.config.replicas}` in the base
+  reads the overlaid value.
 - **`unnamed+:` keeps both lists.** With a plain `unnamed:`, an overlay's ServiceAccount would
   replace the base's NetworkPolicy, which would silently disappear.
 - **An overlay without names follows the same file rules.** One document is merged into the
@@ -963,11 +958,11 @@ replicas: 2
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${config.name}
+  name: ${$.config.name}
   labels: &labels
-    app: ${config.name}
+    app: ${$.config.name}
 spec:
-  replicas: ${config.replicas}
+  replicas: ${$.config.replicas}
   selector:
     matchLabels: ${labels}
   template:
@@ -977,7 +972,7 @@ spec:
       containers:
         - <<+: ${lib.probes(port)}
           name: web
-          image: ${config.image}
+          image: ${$.config.image}
           ports:
             - containerPort: ${port}
           volumeMounts:
@@ -992,10 +987,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ${config.name}
+  name: ${$.config.name}
 spec:
-  '&target': ${deployment.spec.template.spec.containers[0]}
-  selector: ${deployment.spec.selector.matchLabels}
+  '&target': ${$.deployment.spec.template.spec.containers[0]}
+  selector: ${$.deployment.spec.selector.matchLabels}
   ports:
     - name: ${target.name}
       port: 80
@@ -1005,7 +1000,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ${lib.conf(config.name)}
+  name: ${lib.conf($.config.name)}
 data:
   default.conf: |
     server { listen 8080; }
@@ -1016,7 +1011,7 @@ metadata:
   name: web-ingress
 spec:
   podSelector:
-    matchLabels: ${deployment.spec.selector.matchLabels}
+    matchLabels: ${$.deployment.spec.selector.matchLabels}
   ingress:
     - {}
 ```
@@ -1028,10 +1023,6 @@ It means:
   // the document of local keys
   local lib = import 'lib.libsonnet',
   local port = 8080,
-  // document names: each local is the field itself
-  local config = self.config,
-  local deployment = self.deployment,
-  local service = self.service,
 
   config:: { name: 'web', image: 'nginx:1.27', replicas: 2 },
 
@@ -1039,16 +1030,16 @@ It means:
     local yakl__root = {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
-      metadata: { name: config.name, labels: { app: config.name } },
+      metadata: { name: $.config.name, labels: { app: $.config.name } },
       spec: {
-        replicas: config.replicas,
+        replicas: $.config.replicas,
         selector: { matchLabels: labels },
         template: {
           metadata: { labels: labels },
           spec: {
             containers: [lib.probes(port) + {
               name: 'web',
-              image: config.image,
+              image: $.config.image,
               ports: [{ containerPort: port }],
               volumeMounts: [{ name: 'conf', mountPath: '/etc/nginx/conf.d' }],
             }],
@@ -1062,10 +1053,10 @@ It means:
   service: {
     apiVersion: 'v1',
     kind: 'Service',
-    metadata: { name: config.name },
+    metadata: { name: $.config.name },
     spec: {
-      local target = deployment.spec.template.spec.containers[0],
-      selector: deployment.spec.selector.matchLabels,
+      local target = $.deployment.spec.template.spec.containers[0],
+      selector: $.deployment.spec.selector.matchLabels,
       ports: [{ name: target.name, port: 80, targetPort: target.ports[0].containerPort }],
     },
   },
@@ -1073,7 +1064,7 @@ It means:
   'web.conf': {
     apiVersion: 'v1',
     kind: 'ConfigMap',
-    metadata: { name: lib.conf(config.name) },
+    metadata: { name: lib.conf($.config.name) },
     data: { 'default.conf': 'server { listen 8080; }\n' },
   },
 
@@ -1081,7 +1072,7 @@ It means:
     apiVersion: 'networking.k8s.io/v1',
     kind: 'NetworkPolicy',
     metadata: { name: 'web-ingress' },
-    spec: { podSelector: { matchLabels: deployment.spec.selector.matchLabels }, ingress: [{}] },
+    spec: { podSelector: { matchLabels: $.deployment.spec.selector.matchLabels }, ingress: [{}] },
   }],
 }
 ```
@@ -1121,7 +1112,6 @@ It means:
 
 ```jsonnet
 {
-  local pdb = self.pdb,
   config+: { replicas: 5, image: 'nginx:1.29' },
   service+: { spec+: { type: 'LoadBalancer' } },
   'web.conf'+: { data: { 'default.conf': 'server { listen 8080; gzip on; }\n' } },
@@ -1147,10 +1137,10 @@ It means:
 | `$['web.conf']` | ConfigMap web-conf | `default.conf` with `gzip on` |
 
 - **The document of local keys** holds the import and the port. Neither is output.
-- **`config` is a hidden document and a local.** The overlay only touches the `config` field,
-  yet the Deployment gets 5 replicas and the new image through `${config.replicas}` and
-  `${config.image}`, because a document name's local is the field. `!config+` keeps `config`
-  hidden without repeating the colons.
+- **`config` is a hidden document.** The overlay only touches the `config` field, yet the
+  Deployment gets 5 replicas and the new image through `${$.config.replicas}` and
+  `${$.config.image}`, because `$` reads the field. `!config+` keeps `config` hidden without
+  repeating the colons.
 - **`&labels` is a nested anchor:** the labels stay in `metadata`, and the same value fills the
   selector. An overlay that added a label to `metadata.labels` would leave the selector as it is.
 - **`'&target'` is a local key** in the Service's `spec`. It names the container once and isn't
@@ -1197,7 +1187,7 @@ Expressions are evaluated in the generated Jsonnet, so:
   of the current YAML document. `self` is the innermost mapping that contains the expression.
   Both are late-bound as usual in Jsonnet. Inside a YAML block nested in an expression,
   `self` is the block's innermost mapping, while `$` stays the same.
-- File locals, the locals of document names, the anchors of the current document, the
+- File locals, the anchors of the current document, the
   local keys of the mappings around the expression and the variables of the `${for}` items
   around it are in scope. An inner one hides an outer one with the same name, as in Jsonnet.
 - `std` is available, and so are `std.extVar` (kubecfg `-V`, `--ext-code`, ...) and the
@@ -1259,7 +1249,7 @@ line:
 | `<<` that isn't the very first key, or a second `<<` | kubectl and kustomize give different results |
 | `<<+` with an expression that isn't an object or `null`, including a list | `+` would silently join strings, arrays or numbers |
 | two documents with the same name, unless one is plain and the other `+` (`!web` and `!web+`) | ambiguous |
-| one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or a file local and a document name | a local can't have two values |
+| one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or two file locals | a local can't have two values |
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
 | a key expression, `${for}` or `${if}` that uses the local of an anchor in the same mapping or list, or below it | Jsonnet needs it to build the mapping or list that the local reads |
 | an anchor inside the value of a local key, or on or inside a document of local keys | that value isn't in the output, so there's no node to name |

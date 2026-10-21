@@ -6,7 +6,7 @@
 # See docs/Advanced-Usage/yakl.md for the full spec.
 
 # A tag names a document: this one is the field `params` of the file, and
-# every expression can read it as `params`. The colons hide it, like `params::`
+# every expression can read it as `$.params`. The colons hide it, like `params::`
 # in Jsonnet: it isn't output, but an overlay can change it with a document
 # tagged !params+
 !params::
@@ -23,7 +23,7 @@ metadata:
   labels: &labels {app: guestbook, tier: frontend}
 spec:
   # An expression keeps its type: 3, not "3".
-  replicas: ${params.replicas}
+  replicas: ${$.params.replicas}
   selector:
     matchLabels: ${labels}
   template:
@@ -35,14 +35,14 @@ spec:
           # A key starting with & declares a local, which isn't output.
           '&port': 80
           # Strings are built in Jsonnet; an expression is always a whole value.
-          image: ${'gcr.io/google-samples/gb-frontend:' + params.version}
+          image: ${'gcr.io/google-samples/gb-frontend:' + $.params.version}
           ports: [{containerPort: '${port}'}]
           # A ${for} item is a loop: its body, indented under it, is an item per k.
           # A ${if cond} item adds its body only if cond holds.
           env:
-            - ${for k in std.objectFields(params.env)}:
+            - ${for k in std.objectFields($.params.env)}:
                 name: ${k}
-                value: ${params.env[k]}
+                value: ${$.params.env[k]}
             - name: PORT
               value: ${std.toString(port)}
           volumeMounts: [{name: config, mountPath: /etc/guestbook}]
@@ -59,7 +59,7 @@ metadata:
 spec:
   type: LoadBalancer
   ports: [{port: 80}]
-  selector: ${deployment.spec.selector.matchLabels}
+  selector: ${$.deployment.spec.selector.matchLabels}
 ---
 # frontend-config isn't a Jsonnet variable name, so expressions write
 # $['frontend-config'].
@@ -74,10 +74,10 @@ data:
     #!/bin/sh
     echo "starting on ${HOSTNAME}"
     exec apache2-foreground
-  version: ${params.version}
+  version: ${$.params.version}
   # A computed key; a key that evaluates to null drops the field.
-  ${if params.replicas > 1 then 'ha.conf'}: |-
+  ${if $.params.replicas > 1 then 'ha.conf'}: |-
     ${|||
       sessions = redis
       replicas = %d
-    ||| % params.replicas}
+    ||| % $.params.replicas}

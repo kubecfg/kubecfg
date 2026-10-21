@@ -10,11 +10,11 @@ replicas: 2
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${config.name}
+  name: ${$.config.name}
   labels: &labels
-    app: ${config.name}
+    app: ${$.config.name}
 spec:
-  replicas: ${config.replicas}
+  replicas: ${$.config.replicas}
   selector:
     matchLabels: ${labels}
   template:
@@ -24,7 +24,7 @@ spec:
       containers:
         - <<+: ${lib.probes(port)}
           name: web
-          image: ${config.image}
+          image: ${$.config.image}
           ports:
             - containerPort: ${port}
           volumeMounts:
@@ -39,10 +39,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ${config.name}
+  name: ${$.config.name}
 spec:
-  '&target': ${deployment.spec.template.spec.containers[0]}
-  selector: ${deployment.spec.selector.matchLabels}
+  '&target': ${$.deployment.spec.template.spec.containers[0]}
+  selector: ${$.deployment.spec.selector.matchLabels}
   ports:
     - name: ${target.name}
       port: 80
@@ -52,7 +52,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ${lib.conf(config.name)}
+  name: ${lib.conf($.config.name)}
 data:
   default.conf: |
     server { listen 8080; }
@@ -63,6 +63,6 @@ metadata:
   name: web-ingress
 spec:
   podSelector:
-    matchLabels: ${deployment.spec.selector.matchLabels}
+    matchLabels: ${$.deployment.spec.selector.matchLabels}
   ingress:
     - {}

@@ -25,8 +25,8 @@ an overlay changes.
 ## How the shop uses the library
 
 - **`!k8s::` makes the library a hidden field of the file,** `k8s`, with a label added for
-  every object. The name is also a local that is that field, so it follows overlays. Each
-  object starts from a type in it: `<<+: ${k8s.apps.v1.Deployment}`. The type sets
+  every object. Expressions read it as `$.k8s`, so they follow overlays. Each
+  object starts from a type in it: `<<+: ${$.k8s.apps.v1.Deployment}`. The type sets
   `apiVersion` and `kind`, and fills in defaults.
 - **Keys that the library also sets take a `+`:** `metadata+:`, `spec+:`, `template+:`. The
   `+` adds the document's fields to the library's. Without it, the document's value replaces
@@ -51,9 +51,9 @@ an overlay changes.
 | `!redis+` | the adopted Redis | memory and disk size (prod) |
 | `!api-pdb` | a new object | a PodDisruptionBudget (prod) |
 
-The overlays reach the shop through names: `${k8s...}`, `${config...}` and `${api...}` in
-`shop.yakl` read the fields, not copies, so they see what an overlay changed. An overlay is a
-separate file, so it reads the shop through `$`, like `${$.api.spec.selector}`.
+The overlays reach the shop through names: `${$.k8s...}`, `${$.config...}` and `${$.api...}`
+in `shop.yakl` read the fields, not copies, so they see what an overlay changed. The overlays
+read the shop the same way, like `${$.api.spec.selector}`, since `$` is the combined file.
 
 The library's types are the bottom layer: a `!k8s+` overlay gives defaults, and a value
 that a document sets itself wins. dev's `LOG_LEVEL` reaches every container because none of

@@ -337,7 +337,7 @@ func (f overlayFormat) parse(src string, root bool) string {
 			// base with names.
 			return fmt.Sprintf(`(local o = import %q; if !std.isObject(o) then o else {`+
 				`assert !(std.objectHas(o, 'apiVersion') && std.objectHas(o, 'kind') && !('kind' in super)) : %q} + o)`,
-				utils.ImportPath(src), src+": a whole object without a name, overlaid on a file with names; name it (&name) to add it as a document")
+				utils.ImportPath(src), src+": a whole object without a name, overlaid on a file with names; tag it (!name) to add it as a document")
 		default:
 			return fmt.Sprintf("import %q", src)
 		}
