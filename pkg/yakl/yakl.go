@@ -462,7 +462,7 @@ func (l *lexer) quoted(start int) {
 	if yaml.Unmarshal([]byte(raw), &v) != nil {
 		return // left for the YAML parser to report
 	}
-	if code, ok, _ := quotedExpr(v); ok {
+	if code, ok, _ := quotedExpr(strings.Trim(v, " \t\n")); ok {
 		l.spans = append(l.spans, span{start: start, end: l.i, code: code})
 	}
 }
@@ -703,13 +703,14 @@ type compiler struct {
 
 	exprs    []expr
 	used     []bool
-	dropped  map[int]bool         // expressions left out on purpose: in merged entries that own keys override
-	lines    []int                // lines[n] is the source line of line n of the placeholder-substituted YAML
-	aliases  []*yaml.Node         // aliases being expanded
-	places   map[*yaml.Node]place // where each node's text is, to resolve scalars in the same syntax
-	copies   int                  // nodes copied by aliases
-	noDollar bool                 // compiling a file local where there is no file object: $ is an error
-	readable bool                 // see Desugar
+	dropped  map[int]bool           // expressions left out on purpose: in merged entries that own keys override
+	merged   map[*yaml.Node][]entry // the entries of each mapping, see entries
+	lines    []int                  // lines[n] is the source line of line n of the placeholder-substituted YAML
+	aliases  []*yaml.Node           // aliases being expanded
+	places   map[*yaml.Node]place   // where each node's text is, to resolve scalars in the same syntax
+	copies   int                    // nodes copied by aliases
+	noDollar bool                   // compiling a file local where there is no file object: $ is an error
+	readable bool                   // see Desugar
 }
 
 // unit compiles the YAML in src[from:to], as lexed by l.
@@ -733,6 +734,7 @@ func (c *compiler) unit(l *lexer, from, to int) error {
 	}
 	c.places = map[*yaml.Node]place{}
 	c.dropped = map[int]bool{}
+	c.merged = map[*yaml.Node][]entry{}
 	for _, d := range docs {
 		c.place(d, false)
 	}
@@ -951,7 +953,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 				if err := c.localKey(k, v); err != nil {
 					return err
 				}
-				if err := c.anchored(v, "", "in a document of local keys"+noPlace, false, nil); err != nil {
+				if err := c.anchored(v, "", "in a document of local keys"+noPlace, false, nil, nil); err != nil {
 					return err
 				}
 				if err := addLocal(k.Value[1:], k); err != nil {
@@ -1200,7 +1202,7 @@ func (c *compiler) document(d doc) error {
 		return nil
 	}
 	var as []anchor
-	if err := c.anchored(d.root, "", "", false, &as); err != nil {
+	if err := c.anchored(d.root, "", "", false, nil, &as); err != nil {
 		return err
 	}
 	if len(as) == 0 {
@@ -1220,8 +1222,16 @@ func (c *compiler) document(d doc) error {
 // anchored collects node n, at path from the document's root, and the nodes under it whose
 // anchors declare locals: those that are Jsonnet variable names. Others are plain YAML anchors.
 // Where nodes have no place of their own in the output, such anchors are errors, and where says
-// why. In a list that a + key extends (plus), the items are counted from the end.
-func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, out *[]anchor) error {
+// why. In a list that a + key extends (plus), the items are counted from the end. keys are the
+// computed keys of the mappings that hold n.
+func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, keys []*yaml.Node, out *[]anchor) error {
+	if n.Kind == yaml.MappingNode {
+		for i := 0; i < len(n.Content); i += 2 {
+			if k := n.Content[i]; strings.HasPrefix(c.keyText(k), "${") {
+				keys = append(keys, k)
+			}
+		}
+	}
 	if isIdentifier(n.Anchor) {
 		if where != "" {
 			return c.errorf(n, "&%s %s, so its anchor can't declare a local", n.Anchor, where)
@@ -1231,13 +1241,22 @@ func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, out *[]
 				return c.errorf(n, "the anchor &%s is also on line %d: a local can't have two values", n.Anchor, c.srcLine(a.n))
 			}
 		}
+		// Jsonnet needs the keys of a mapping to build it, and the local reads the mapping.
+		for _, k := range keys {
+			text, uses := c.keyText(k), false
+			words(text[2:len(text)-1], func(w string) { uses = uses || w == n.Anchor })
+			if uses {
+				return c.errorf(k, "%s uses the local %s, which reads line %d from what %[1]s builds; "+
+					"to use the value in both places, declare it with a local key, as '&%[2]s': value", text, n.Anchor, c.srcLine(n))
+			}
+		}
 		*out = append(*out, anchor{n, path})
 	}
-	return c.anchors(n, path, where, plus, out)
+	return c.anchors(n, path, where, plus, keys, out)
 }
 
 // anchors collects the nodes under n whose anchors declare locals, like anchored, but not n.
-func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, out *[]anchor) error {
+func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, keys []*yaml.Node, out *[]anchor) error {
 	switch n.Kind {
 	case yaml.SequenceNode:
 		// Past a ${for} or ${if} item, or in a list that a + key extends, items are counted from the
@@ -1251,7 +1270,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, out *[]a
 		for i, m := range n.Content {
 			if k, _, _ := c.clauseItem(m); k != nil {
 				before, after = before+1, after-1
-				if err := c.anchored(m, "", cmp.Or(where, inBody), false, out); err != nil {
+				if err := c.anchored(m, "", cmp.Or(where, inBody), false, keys, out); err != nil {
 					return err
 				}
 				continue
@@ -1263,7 +1282,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, out *[]a
 					w = "in a list item whose index depends on ${for} or ${if} items"
 				}
 			}
-			if err := c.anchored(m, item, w, false, out); err != nil {
+			if err := c.anchored(m, item, w, false, keys, out); err != nil {
 				return err
 			}
 		}
@@ -1292,16 +1311,11 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, out *[]a
 				var name string
 				name, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
 				if name == text {
-					if k.Kind == yaml.AliasNode {
-						k = k.Alias
-					}
-					if lit, err := literal(k, true, c.places[k]); err == nil {
-						_ = json.Unmarshal([]byte(lit), &name) // a key is resolved as YAML 1.1, like 0x1F: 31
-					}
+					name = c.keyName(k)
 				}
-				p = access(path, strings.Replace(name, "$${", "${", 1))
+				p = access(path, unescape(name))
 			}
-			if err := c.anchored(v, p, w, plus, out); err != nil {
+			if err := c.anchored(v, p, w, plus, keys, out); err != nil {
 				return err
 			}
 		}
@@ -1385,8 +1399,8 @@ func (c *compiler) checkScope(e expr) error {
 	return err
 }
 
-// words calls f with each identifier and $ in Jsonnet code. Like exprEnd, it skips strings and
-// comments.
+// words calls f with each identifier and $ in Jsonnet code, but not with member names after a dot.
+// Like exprEnd, it skips strings and comments.
 func words(code string, f func(w string)) {
 	isWord := func(c byte) bool {
 		return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
@@ -1413,7 +1427,9 @@ func words(code string, f func(w string)) {
 			for n < len(rest) && isWord(rest[n]) {
 				n++
 			}
-			f(rest[:n])
+			if i == 0 || code[i-1] != '.' {
+				f(rest[:n])
+			}
 			n--
 		}
 		if n < 0 {
@@ -1582,22 +1598,19 @@ type field struct {
 }
 
 // entries returns the entries of mapping n, with those copied in by a merge key (<<) as in YAML:
-// own keys win over copied ones, and an earlier source wins over a later one.
+// own keys win over copied ones, and an earlier source wins over a later one. Aliases can make a
+// mapping a merge source many times over, so each mapping's entries are found once.
 func (c *compiler) entries(n *yaml.Node, seen map[*yaml.Node]bool) ([]entry, error) {
+	if es, ok := c.merged[n]; ok {
+		return es, nil
+	}
 	if seen[n] {
 		return nil, c.errorf(n, "a merge key (<<) copies a mapping into itself")
 	}
 	seen[n] = true
 	defer delete(seen, n)
 	var own, merged []entry
-	has := func(es []entry, k *yaml.Node) bool {
-		for _, e := range es {
-			if c.keyText(e.k) == c.keyText(k) {
-				return true
-			}
-		}
-		return false
-	}
+	keys := map[string]bool{} // of merged
 	drop := func(e entry) {
 		c.drop(e.k)
 		c.drop(e.v)
@@ -1632,23 +1645,47 @@ func (c *compiler) entries(n *yaml.Node, seen map[*yaml.Node]bool) ([]entry, err
 				if e.alias == nil {
 					e.alias = alias
 				}
-				if has(merged, e.k) {
+				if k := c.keyName(e.k); keys[k] {
 					drop(e)
 				} else {
+					keys[k] = true
 					merged = append(merged, e)
 				}
 			}
 		}
 	}
 	var all []entry
-	for _, e := range merged {
-		if has(own, e.k) {
-			drop(e)
-		} else {
-			all = append(all, e)
+	if len(merged) > 0 {
+		owned := map[string]bool{}
+		for _, e := range own {
+			owned[c.keyName(e.k)] = true
+		}
+		for _, e := range merged {
+			if owned[c.keyName(e.k)] {
+				drop(e)
+			} else {
+				all = append(all, e)
+			}
 		}
 	}
-	return append(all, own...), nil
+	all = append(all, own...)
+	c.merged[n] = all
+	return all, nil
+}
+
+// keyName returns the field name that key k gives to YAML tools, to compare keys: resolved like
+// kubectl does, as 0x1F gives 31, and for an expression, its code.
+func (c *compiler) keyName(k *yaml.Node) string {
+	text := c.keyText(k)
+	if k.Kind == yaml.AliasNode {
+		k = k.Alias
+	}
+	if _, ok := c.placeholder(k.Value); !ok {
+		if lit, err := literal(k, true, c.places[k]); err == nil {
+			_ = json.Unmarshal([]byte(lit), &text)
+		}
+	}
+	return text
 }
 
 // keyText returns the text of a key as YAML tools see it: through an alias, and with the code of
@@ -1715,7 +1752,7 @@ func (c *compiler) mapping(n *yaml.Node) error {
 			continue
 		}
 		f := field{entry: e, text: k.Value, colons: 1}
-		f.computed = strings.Contains(k.Value, c.sentinel) || strings.HasPrefix(k.Value, "${")
+		f.computed = strings.Contains(k.Value, c.sentinel) || strings.HasPrefix(strings.TrimLeft(k.Value, " \t\n"), "${")
 		switch {
 		case f.computed:
 			if c.clause(k) != "" {
@@ -1849,7 +1886,7 @@ func (c *compiler) key(f field) error {
 		}
 	} else {
 		c.align(k)
-		c.write(quote(strings.Replace(f.name, "$${", "${", 1)))
+		c.write(quote(unescape(f.name)))
 	}
 	if f.plus {
 		c.write("+")
@@ -2080,8 +2117,8 @@ func (c *compiler) scalar(n *yaml.Node, key bool) error {
 		return nil
 	case ok:
 		return c.code(e, false)
-	case strings.HasPrefix(n.Value, "$${"):
-		c.write(quote(n.Value[1:]))
+	case unescape(n.Value) != n.Value:
+		c.write(quote(unescape(n.Value)))
 		return nil
 	case yaml11Bool(n):
 		return c.errorf(n, "unquoted %q is a boolean to kubectl, but a string to kustomize: write true or false, or quote it", n.Value)
@@ -2094,15 +2131,12 @@ func (c *compiler) scalar(n *yaml.Node, key bool) error {
 	return nil
 }
 
-// expr returns the expression that scalar n is, if any: a placeholder, or a quoted string whose
-// whole value is ${...}. Other strings starting with ${ are errors.
+// expr returns the expression that scalar n is, if any: a placeholder, for a string whose whole
+// value, apart from white space around it, is ${...}. Other strings starting with ${ are errors.
 func (c *compiler) expr(n *yaml.Node) (expr, bool, error) {
 	parts := strings.Split(n.Value, c.sentinel)
 	if len(parts) == 1 {
-		v := n.Value
-		if n.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
-			v = strings.Trim(v, " \t\n")
-		}
+		v := strings.Trim(n.Value, " \t\n")
 		if !strings.HasPrefix(v, "${") {
 			return expr{}, false, nil
 		}
@@ -2114,7 +2148,7 @@ func (c *compiler) expr(n *yaml.Node) (expr, bool, error) {
 		}
 		return expr{}, false, c.errorf(n, "%s", errNotWhole)
 	}
-	// In a block scalar, white space (which the lexer checked) may surround the expression.
+	// White space (which the lexer checked) may surround the expression.
 	i, ok := c.placeholder(n.Value)
 	if !ok {
 		return expr{}, false, c.errorf(n, "%s", errNotWhole)
@@ -2149,6 +2183,15 @@ func quotedExpr(v string) (string, bool, error) {
 		return "", false, errors.New(errDecl)
 	}
 	return v[2:end], true, nil
+}
+
+// unescape turns a $${ starting s, after any white space, into the literal ${ that it stands for.
+func unescape(s string) string {
+	t := strings.TrimLeft(s, " \t\n")
+	if !strings.HasPrefix(t, "$${") {
+		return s
+	}
+	return s[:len(s)-len(t)] + t[1:]
 }
 
 // yaml11Bools are the YAML 1.1 booleans that YAML 1.2 reads as strings.

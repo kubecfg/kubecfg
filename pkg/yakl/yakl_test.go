@@ -95,7 +95,7 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 		"dollar: $foo $ {x} $(cmd) $$\n",
 		"weird: a,b [c] {d}\nurl: http://x:80/#frag\n",
 		// ${ after the start of a string, and in comments, is literal text, balanced or not.
-		"b: \"x${y\"\nc: 'it''s ${'\nd: \"esc \\\" ${\"\ne: ' ${a} ${b}'\n",
+		"b: \"x${y\"\nc: 'it''s ${'\nd: \"esc \\\" ${\"\ne: ' x ${a} ${b}'\n",
 		"# ${unbalanced\na: 1 # ${also {{\n",
 		"script: |\n  #!/bin/sh\n  echo ${HOME} ${\n  # ${comment-like content\nnext: 1\n",
 		"q: \"multi\n  line ${x}\n  }\"\nr: 'single\n  ${y'\n",
@@ -133,6 +133,7 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 
 func TestExpressions(t *testing.T) {
 	cases := []struct{ name, src, want string }{
+		{"white space around an expression", "a: \"${1 + 2}\\n\"\nb: ' ${3} '\nc: |\n  ${4}\nd: \" $${x}\"\n", `{"a":3,"b":3,"c":4,"d":" ${x}"}`},
 		{"user example", "foo:\n  bar: ${{some: \"jsonnet\"}.some}\n", `{"foo":{"bar":"jsonnet"}}`},
 		{"keeps type", "a: ${1 + 2}\nb: ${[1, {c: true}]}\nc: ${null}\nd: ${'s'}\n", `{"a":3,"b":[1,{"c":true}],"c":null,"d":"s"}`},
 		{"strings are built in jsonnet", "name: ${'app-%s-%d' % ['x', 2]}\n", `{"name":"app-x-2"}`},
@@ -199,6 +200,8 @@ func TestExpressions(t *testing.T) {
 		{"an alias copies an anchored node", "a: &l {x: 1}\nb: *l\nc: ${l}\n", `{"a":{"x":1},"b":{"x":1},"c":{"x":1}}`},
 		{"anchor in a list document", "- &x 1\n- ${x + 1}\n", `[1,2]`},
 		{"anchor hides a file local", "'&x': 1\n---\na: &x 2\nb: ${x}\n", `{"a":2,"b":2}`},
+		{"a key outside the anchor's mapping", "m: {a: &n x}\no:\n  ${n}: 1\n", `{"m":{"a":"x"},"o":{"x":1}}`},
+		{"a member name in a key isn't the local", "m:\n  name: &name foo\n  ${'k' + $.l.name}: 1\nl: {name: v}\n", `{"l":{"name":"v"},"m":{"kv":1,"name":"foo"}}`},
 		{"anchor in a sequence item", "- name: &n web\n  v: ${n}\n", `[{"name":"web","v":"web"}]`},
 		{"anchors through hidden and quoted keys", "my.cfg::\n  v: &v 1\n0x1F: {a: &k 2}\nw: ${[v, k]}\n", `{"31":{"a":2},"w":[1,2]}`},
 		{"an anchor under + is the combined value", "<<+: ${ {labels: {a: '1'}} }\nlabels+: &l {b: '2'}\ncopy: ${l}\n", `{"copy":{"a":"1","b":"2"},"labels":{"a":"1","b":"2"}}`},
@@ -293,6 +296,7 @@ env: ${[
 `, `{"containers":[{"image":"registry.example.com/app:1.4","name":"app","resources":{"limits":{"memory":"512Mi"}}},` +
 			`{"args":["--worker"],"image":"registry.example.com/app:1.4","name":"worker","resources":{"limits":{"cpu":"2","memory":"512Mi"}}}]}`},
 		{"merged expressions that own keys override", "a:\n  <<: [{x: '${1}', w: '${2}'}, {w: '${3}'}]\n  x: 0\n", `{"a":{"w":2,"x":0}}`},
+		{"merged keys compare as YAML reads them", "a:\n  <<: {0x1F: a}\n  31: b\n", `{"a":{"31":"b"}}`},
 		{"merged expression keys compare as text", "a:\n  <<: {'${\"x\"}': 1}\n  ${\"x\"}: 2\n", `{"a":{"x":2}}`},
 		{"<<+ of a local key", "a:\n  '&base': ${ {x: 1} }\n  b:\n    <<+: ${base}\n    w: ${super.x + 1}\n", `{"a":{"b":{"w":2,"x":1}}}`},
 		{"x:: and x+: make a hidden field", "c:\n  r::\n    m: 1\n  r+: {c: 2}\n  v: ${self.r}\n", `{"c":{"v":{"c":2,"m":1}}}`},
@@ -439,6 +443,9 @@ func TestErrors(t *testing.T) {
 		{"'&+': a\n---\n'&+': a\n", `the name "a" is already given`},
 		{"'&': a\n---\n'&+:': a\n", `the name "a" is already given`},
 		{"'&x': 1\n---\n'&': x\n", `line 3: the local "x" is also declared on line 1`},
+		{"name: &name foo\n${name}: 1\n", "line 2: ${name} uses the local name, which reads line 1 from what ${name} builds"},
+		{"m: {a: &n x}\n${n}: 1\n", "line 2: ${n} uses the local n, which reads line 1"},
+		{"a: ' ${a} ${b}'\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"a: &x 1\nb: &x 2\n", `line 2: the anchor &x is also on line 1: a local can't have two values`},
 		{"a:\n  '&x': 1\n  '&x': 2\n", `line 3: duplicate key "&x"`},
 		{"'&': a\n'&+': b\n", `line 2: a document has one name key, but this one has "&" on line 1 too`},
@@ -497,6 +504,17 @@ func TestErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%q: got error %v, want %q", tc.src, err, tc.want)
 		}
+	}
+}
+
+// Each mapping merges the one before ten times, so expanding every merge would take 10^30 steps.
+func TestMergeChain(t *testing.T) {
+	src := "a0: &a0 {x: 1}\n"
+	for i := 1; i <= 30; i++ {
+		src += fmt.Sprintf("a%d: &a%d {<<: [%s]}\n", i, i, strings.TrimSuffix(strings.Repeat(fmt.Sprintf("*a%d, ", i-1), 10), ", "))
+	}
+	if _, err := Compile(src); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -197,9 +197,11 @@ image: ${'nginx:' + version}            # build strings in Jsonnet
 ```
 
 - **A string whose whole value is `${...}` is an expression,** in any YAML style: plain,
-  single-quoted, double-quoted, literal or folded block.
+  single-quoted, double-quoted, literal or folded block. White space at the start or end of a
+  string doesn't count, here and below, so a tool that rewrites a block as `"${...}\n"` keeps
+  it an expression.
 - **`$${` at the start of a string is a literal `${`.** `$${HOME}` is the string `${HOME}`.
-- **`${` after the start of a string is literal text,** in any style: `echo ${HOME}`,
+- **`${` after other text is literal text,** in any style: `echo ${HOME}`,
   `nginx:${version}`. A tool may unquote a literal string, so it has to stay literal either way.
 - **A string that starts with `${` must be exactly one expression,** in any style.
   `${version}-alpine` and `'${a} ${b}'` are errors. Start such text with `$${`, or build the
@@ -743,6 +745,9 @@ The node stays where it's written, and the local reads it there.
   `&if`, stay plain YAML anchors. The same name twice in one document is an error: YAML lets a
   later anchor replace an earlier one, but a local can't have two values. An anchor may hide a
   file local or a document name with the same name, as Jsonnet locals do.
+- **Not in a key of a mapping that holds the node.** Jsonnet needs a mapping's keys to build it,
+  and the local reads the node from the mapping, so `${name}: 1` next to `name: &name web` is an
+  error. Declare the value with a local key, `'&name': web`, and use `${name}` in both places.
 - **Only on nodes that have a place in the output.** An anchor on a key, on the value of `<<`
   or `<<+`, inside a merge source, or under a key expression is an error. A common slip:
   `&web apiVersion: v1` on one line anchors the key `apiVersion`; an anchor for the whole
@@ -1234,6 +1239,7 @@ line:
 | two documents with the same name, unless one is plain and the other `+` (`'&': web` and `'&+': web`) | ambiguous |
 | one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or a file local and a document name | a local can't have two values |
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
+| a key expression that uses the local of an anchor in the same mapping, or below it | Jsonnet needs the key to build the mapping that the local reads |
 | an anchor inside the value of a local key, or on or inside a document of local keys | that value isn't in the output, so there's no node to name |
 | a local key whose name isn't a Jsonnet variable name, is a keyword, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is `'&': web.conf` |
 | a local key without a value, such as `'&web':` | most likely meant as a name: `'&': web` |
@@ -1394,6 +1400,7 @@ old files fail loudly where their meaning changed.
 | `'${v}-alpine'`: a quoted or block string that starts with `${` and has more text | an error | `$${v}-alpine` |
 | unquoted `image: nginx:${version}` | literal text | `${'nginx:' + version}` if an expression was meant |
 | quoted expressions only on one line | any number of lines, folded | nothing |
+| white space around `${...}` in a quoted string, like `' ${HOME}'` | an expression, as in a block | `' $${HOME}'` for the text |
 | `yes`, `no`, `on`, `off`, `y`, `n` unquoted | an error | `true`, `false`, or quotes |
 | `<<: *base` | a YAML merge | nothing, or `<<+` for Jsonnet inheritance |
 | keys ending in `+` or `:`, such as `a::` or `c++:` | field modifiers | `${'a:'}` for a literal key |
