@@ -172,6 +172,20 @@ comments. Like other commands, `eval` reads URLs and `/dev/stdin` too. If the co
 parse, because of an expression's syntax, it prints the code unformatted, and the error with its
 line in the yakl file.
 
+### Formatting
+
+`kubecfg --alpha yaklfmt app.yakl` formats the Jsonnet code of the expressions, as jsonnetfmt
+does, and prints the file; `-i` rewrites it instead. The YAML around the expressions, comments
+included, stays as it is: a YAML formatter such as prettier keeps a yakl file's meaning (see
+[What tools do with it](#what-tools-do-with-it)).
+
+- **A plain expression gets quoted where its formatted code isn't a plain YAML scalar,**
+  as `${ {a:1} }` becomes `'${ { a: 1 } }'` because of the `: `. A quoted expression keeps its
+  quotes.
+- **A block expression keeps its lines inside the block.**
+- **Left as they are:** `${for}` and `${if}` clauses, expressions holding YAML blocks, and plain
+  or quoted expressions whose formatted code would take several lines.
+
 ## Expressions
 
 `${` at the start of a YAML node begins an expression, which runs to the matching `}`. The
@@ -1447,7 +1461,8 @@ file, and in each document of a list. It becomes the file only in files with nam
 `validate`, `eval`, overlays (`--overlay-code-file x.yakl` is applied as
 `base + overlay`, see [Overlays](#overlays); `.yaml` and `.json` overlays are still
 deep-merged), OCI bundles, and `pack` (which ships the yakl source). `eval -o jsonnet` prints
-the Jsonnet of a yakl file, see [Seeing the generated Jsonnet](#seeing-the-generated-jsonnet).
+the Jsonnet of a yakl file, see [Seeing the generated Jsonnet](#seeing-the-generated-jsonnet),
+and `yaklfmt` formats its expressions, see [Formatting](#formatting).
 
 From Jsonnet, or from an expression in another yakl file, import a yakl file with the
 `yakl:` scheme:

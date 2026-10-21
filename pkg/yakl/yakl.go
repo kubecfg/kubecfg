@@ -80,39 +80,48 @@ func Desugar(src string) (string, error) {
 }
 
 func compile(src string, readable bool) (string, error) {
+	c, err := compiled(src, readable, false)
+	if err != nil {
+		return "", err
+	}
+	return c.String(), nil
+}
+
+// compiled returns the compiler that has compiled src.
+func compiled(src string, readable, canonical bool) (*compiler, error) {
 	if !utf8.ValidString(src) {
-		return "", errors.New("not valid UTF-8")
+		return nil, errors.New("not valid UTF-8")
 	}
 	// yaml.v3 skips a byte order mark in its reader and another at the start of a line.
 	src = strings.TrimLeft(src, "\uFEFF")
 	// YAML also breaks lines at a lone \r; normalize so that the lexer only deals with \n.
 	src = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(src)
 	if i := strings.IndexAny(src, "\u0085\u2028\u2029"); i >= 0 {
-		return "", fmt.Errorf("line %d: unsupported Unicode line separator", strings.Count(src[:i], "\n")+1)
+		return nil, fmt.Errorf("line %d: unsupported Unicode line separator", strings.Count(src[:i], "\n")+1)
 	}
 	// Like std.parseYaml and kubecfg's YAML reader, which keep the final line break of a block
 	// scalar ending the file.
 	if src != "" && !strings.HasSuffix(src, "\n") {
 		src += "\n"
 	}
-	c := &compiler{output: &output{line: 1, col: 1}, src: src, readable: readable}
+	c := &compiler{output: &output{line: 1, col: 1}, src: src, readable: readable, canonical: canonical}
 	for r := rune(0xE000); r <= 0xF8FF && c.sentinel == ""; r++ {
 		if !strings.ContainsRune(src, r) {
 			c.sentinel = string(r)
 		}
 	}
 	if c.sentinel == "" {
-		return "", errors.New("source uses every private-use character, cannot pick a placeholder")
+		return nil, errors.New("source uses every private-use character, cannot pick a placeholder")
 	}
 
 	l, err := lex(src, 0, false)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := c.unit(l, 0, len(src)); err != nil {
-		return "", err
+		return nil, err
 	}
-	return c.String(), nil
+	return c, nil
 }
 
 // Lexing.
@@ -706,17 +715,18 @@ type compiler struct {
 	*output
 	src, sentinel string // sentinel delimits placeholders; a character absent from the source
 
-	exprs    []expr
-	used     []bool
-	dropped  map[int]bool                   // expressions left out on purpose: in merged entries that own keys override
-	merged   map[*yaml.Node][]entry         // the entries of each mapping, see entries
-	vars     map[*yaml.Node]map[string]bool // the variables that each key expression reads, see keyVars
-	lines    []int                          // lines[n] is the source line of line n of the placeholder-substituted YAML
-	aliases  []*yaml.Node                   // aliases being expanded
-	places   map[*yaml.Node]place           // where each node's text is, to resolve scalars in the same syntax
-	copies   int                            // nodes copied by aliases
-	noDollar bool                           // compiling a file local where there is no file object: $ is an error
-	readable bool                           // see Desugar
+	exprs     []expr
+	nodes     []*yaml.Node                   // the scalar that each expression is, once written
+	dropped   map[int]bool                   // expressions left out on purpose: in merged entries that own keys override
+	merged    map[*yaml.Node][]entry         // the entries of each mapping, see entries
+	vars      map[*yaml.Node]map[string]bool // the variables that each key expression reads, see keyVars
+	lines     []int                          // lines[n] is the source line of line n of the placeholder-substituted YAML
+	aliases   []*yaml.Node                   // aliases being expanded
+	places    map[*yaml.Node]place           // where each node's text is, to resolve scalars in the same syntax
+	copies    int                            // nodes copied by aliases
+	noDollar  bool                           // compiling a file local where there is no file object: $ is an error
+	readable  bool                           // see Desugar
+	canonical bool                           // writes expressions as Format formats them, to compare meanings
 }
 
 // unit compiles the YAML in src[from:to], as lexed by l.
@@ -763,8 +773,8 @@ func (c *compiler) unit(l *lexer, from, to int) error {
 	if paren {
 		c.write(")")
 	}
-	for i, used := range c.used {
-		if !used && !c.dropped[i] {
+	for i, n := range c.nodes {
+		if n == nil && !c.dropped[i] {
 			return fmt.Errorf("line %d: internal error: the YAML parser dropped this expression", c.exprs[i].line)
 		}
 	}
@@ -801,7 +811,7 @@ func (c *compiler) build(from, to int, spans []span) string {
 		q := map[bool]string{true: `"`}[s.code != ""] // a quoted expression stays quoted, for YAML's tokens
 		fmt.Fprintf(&b, "%s%s%d%s%s", q, c.sentinel, len(c.exprs), c.sentinel, q)
 		c.exprs = append(c.exprs, e)
-		c.used = append(c.used, false)
+		c.nodes = append(c.nodes, nil)
 		advance(s.end, false)
 	}
 	advance(to, true)
@@ -1434,6 +1444,13 @@ func (c *compiler) code(e expr, bare bool) error {
 		open, close = "", ""
 	}
 	c.write(open)
+	if c.canonical && len(e.blocks) == 0 {
+		if f, ok := formatCode(e.code, c.src[e.from:e.to]); ok {
+			c.write(f)
+			c.write(close)
+			return nil
+		}
+	}
 	if e.code != "" {
 		c.write(e.code)
 		c.write(close)
@@ -1442,7 +1459,7 @@ func (c *compiler) code(e expr, bare bool) error {
 	from := e.from
 	for _, b := range e.blocks {
 		c.write(c.src[from:b.start])
-		nested := &compiler{output: c.output, src: c.src, sentinel: c.sentinel, noDollar: c.noDollar, readable: c.readable}
+		nested := &compiler{output: c.output, src: c.src, sentinel: c.sentinel, noDollar: c.noDollar, readable: c.readable, canonical: c.canonical}
 		if err := nested.unit(b.lx, b.start+2, b.end); err != nil {
 			return err
 		}
@@ -2239,10 +2256,10 @@ func (c *compiler) expr(n *yaml.Node) (expr, bool, error) {
 	}
 	// Re-emitting a multi-line expression would push the output past the source lines that follow,
 	// so later errors would report wrong lines.
-	if c.used[i] && c.exprs[i].code == "" && strings.Contains(c.src[c.exprs[i].from:c.exprs[i].to], "\n") {
+	if c.nodes[i] != nil && c.exprs[i].code == "" && strings.Contains(c.src[c.exprs[i].from:c.exprs[i].to], "\n") {
 		return expr{}, false, c.errorf(n, "an alias cannot repeat a multi-line expression; use the anchor's local instead, as an expression like ${name}")
 	}
-	c.used[i] = true
+	c.nodes[i] = n
 	return c.exprs[i], true, nil
 }
 

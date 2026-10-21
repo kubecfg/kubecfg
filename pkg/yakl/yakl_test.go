@@ -559,12 +559,16 @@ func FuzzCompile(f *testing.F) {
 				t.Fatalf("%v\ncompiled:\n%s", err, code)
 			}
 		}
+		// Formatting checks that it keeps the meaning.
+		if _, err := Format(src); err != nil && strings.Contains(err.Error(), "internal error") {
+			t.Fatal(err)
+		}
 	})
 }
 
-// YAKL files must be valid YAML, as read by kubectl, so that YAML tooling can process them.
-// That holds for the examples and for every YAML snippet in the spec.
-func TestFilesAreYAML(t *testing.T) {
+// yaklFiles returns the examples, and every YAML snippet in the spec, by name.
+func yaklFiles(t *testing.T) map[string]string {
+	t.Helper()
 	files := map[string]string{}
 	for _, pattern := range []string{"../../examples/*.yakl", "../../examples/*/*.yakl", "../../testdata/*.yakl", "testdata/*/*.yakl"} {
 		paths, err := filepath.Glob(pattern)
@@ -590,18 +594,69 @@ func TestFilesAreYAML(t *testing.T) {
 	if len(files) < 10 {
 		t.Fatalf("found only %d files", len(files))
 	}
-	for name, src := range files {
-		dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(src), 4096)
-		for {
-			var v any
-			err := dec.Decode(&v)
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				t.Errorf("%s: not valid YAML: %v", name, err)
-				break
-			}
+	return files
+}
+
+// notYAML returns why src isn't valid YAML, as read by kubectl, if it isn't.
+func notYAML(src string) error {
+	dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(src), 4096)
+	for {
+		var v any
+		if err := dec.Decode(&v); errors.Is(err, io.EOF) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+	}
+}
+
+// YAKL files must be valid YAML, as read by kubectl, so that YAML tooling can process them.
+// That holds for the examples and for every YAML snippet in the spec.
+func TestFilesAreYAML(t *testing.T) {
+	for name, src := range yaklFiles(t) {
+		if err := notYAML(src); err != nil {
+			t.Errorf("%s: not valid YAML: %v", name, err)
+		}
+	}
+}
+
+func TestFormat(t *testing.T) {
+	cases := []struct{ src, want string }{
+		{"a: ${1+2} # c\n", "a: ${1 + 2} # c\n"},
+		{"${'k'+'x'}: ${std.length( [1] )}\n", "${'k' + 'x'}: ${std.length([1])}\n"},
+		// Quoted where a plain scalar can't hold the code, as before otherwise.
+		{"a: ${ {b:1} }\n", "a: '${ { b: 1 } }'\n"},
+		{"a: ${ {b:'x'} }\n", "a: \"${ { b: 'x' } }\"\n"},
+		{"a: ${ {b:'it'+\"'s\"} }\n", "a: '${ { b: ''it'' + \"''s\" } }'\n"},
+		{"a: [${1+1}, ${2}]\n", "a: ['${1 + 1}', '${2}']\n"},
+		{"a: '${ {b:\"c\"} }'\nd: \"${ {e:'f'} }\"\n", "a: '${ { b: \"c\" } }'\nd: \"${ { e: 'f' } }\"\n"},
+		// Block expressions keep their lines in the block.
+		{"a: |-\n  ${[\n  {b:1}, # c\n      2]}\nd: 1\n", "a: |-\n  ${[\n    { b: 1 },  // c\n    2,\n  ]}\nd: 1\n"},
+		// Left as they are: clauses, YAML blocks, ${ in strings and comments.
+		{"l:\n  - ${for x in  [1,2]}: ${x*2}\n", "l:\n  - ${for x in  [1,2]}: ${x * 2}\n"},
+		{"a: ${ [\\{\n    b:  1\n  }] }\n", "a: ${ [\\{\n    b:  1\n  }] }\n"},
+		{"# ${1+1}\na: echo ${b+1}\n", "# ${1+1}\na: echo ${b+1}\n"},
+	}
+	for _, tc := range cases {
+		got, err := Format(tc.src)
+		if err != nil || got != tc.want {
+			t.Errorf("%q: got %q, %v, want %q", tc.src, got, err, tc.want)
+		}
+		if again, err := Format(got); err != nil || again != got {
+			t.Errorf("%q: formatted again: %q, %v", got, again, err)
+		}
+	}
+	// The examples are formatted, and formatting keeps every snippet of the spec valid YAML.
+	for name, src := range yaklFiles(t) {
+		got, err := Format(src)
+		if err != nil {
+			continue // a snippet that shows an error
+		}
+		if err := notYAML(got); err != nil {
+			t.Errorf("%s: formatted, not valid YAML: %v\n%s", name, err, got)
+		}
+		if got != src && !strings.Contains(name, ".md:") {
+			t.Errorf("%s: not formatted, yaklfmt gives:\n%s", name, got)
 		}
 	}
 }
