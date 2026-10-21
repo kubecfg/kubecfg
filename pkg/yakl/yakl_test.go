@@ -206,6 +206,7 @@ func TestExpressions(t *testing.T) {
 		{"anchors through hidden and quoted keys", "my.cfg::\n  v: &v 1\n0x1F: {a: &k 2}\nw: ${[v, k]}\n", `{"31":{"a":2},"w":[1,2]}`},
 		{"an anchor under + is the combined value", "<<+: ${ {labels: {a: '1'}} }\nlabels+: &l {b: '2'}\ncopy: ${l}\n", `{"copy":{"a":"1","b":"2"},"labels":{"a":"1","b":"2"}}`},
 		{"items of a list under + count from the end", "<<+: ${ {args: ['x', 'y']} }\nargs+: [&a z]\nv: ${a}\n", `{"args":["x","y","z"],"v":"z"}`},
+		{"std is no name for a local", "'&': std\na: &std {x: 1}\nb: *std\nc: ${std.length([1, 2])}\nd:\n  <<+: ${ {} }\n", `{"std":{"a":{"x":1},"b":{"x":1},"c":2,"d":{}}}`},
 		{"items of x and x+", "args: [&f a]\nargs+: [b, &l c]\nv: ${[f, l]}\n", `{"args":["a","b","c"],"v":["a","c"]}`},
 		{"<<+ sees the document's anchors", "a:\n  <<+: ${l}\n  x: 1\nl: &l {z: 2}\n", `{"a":{"x":1,"z":2},"l":{"z":2}}`},
 		{"plain anchors don't bind", "a: &my-a\n  b: 1\nc: *my-a\nd: &if {e: '${self.f}', f: 2}\n", `{"a":{"b":1},"c":{"b":1},"d":{"e":2,"f":2}}`},
@@ -446,6 +447,8 @@ func TestErrors(t *testing.T) {
 		{"'&x': 1\n---\n'&': x\n", `line 3: the local "x" is also declared on line 1`},
 		{"name: &name foo\n${name}: 1\n", "line 2: ${name} uses the local name, which reads line 1 from what ${name} builds"},
 		{"m: {a: &n x}\n${n}: 1\n", "line 2: ${n} uses the local n, which reads line 1"},
+		{"args:\n  - ${for x in [1]}: ${x}\n  - &f a\nargs+: [b]\n", "line 3: &f in a list item whose index depends on ${for} or ${if} items"},
+		{"'&std': 1\n", `"std" must be a Jsonnet variable name, not a keyword or std`},
 		{"a: ' ${a} ${b}'\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"a: &x 1\nb: &x 2\n", `line 2: the anchor &x is also on line 1: a local can't have two values`},
 		{"a:\n  '&x': 1\n  '&x': 2\n", `line 3: duplicate key "&x"`},
@@ -456,8 +459,8 @@ func TestErrors(t *testing.T) {
 		{"'&': web+\n", `line 1: the name "web+" can't end in + or :; they go on the key, as in '&+': web`},
 		{"a:\n  '&': x\n", `line 2: the key "&" names a document`},
 		{"a:\n  '&+': x\n", `line 2: the key "&+" names a document`},
-		{"'&web.conf':\nkind: ConfigMap\n", `line 1: the key "&web.conf" declares a local, so "web.conf" must be a Jsonnet variable name, not a keyword; to name a document, write '&': web.conf`},
-		{"'&web+':\nb: 1\n", `"web+" must be a Jsonnet variable name, not a keyword; to name a document, write '&+': web`},
+		{"'&web.conf':\nkind: ConfigMap\n", `line 1: the key "&web.conf" declares a local, so "web.conf" must be a Jsonnet variable name, not a keyword or std; to name a document, write '&': web.conf`},
+		{"'&web+':\nb: 1\n", `"web+" must be a Jsonnet variable name, not a keyword or std; to name a document, write '&+': web`},
 		{"'&web':\nkind: ConfigMap\n", `line 1: the local key "&web" has no value; to name the document, write '&': web`},
 		{"'&if': 1\n", `"if" must be a Jsonnet variable name, not a keyword`},
 		{"'&-x': 1\n", `"-x" must be a Jsonnet variable name, not a keyword`},
@@ -505,6 +508,13 @@ func TestErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%q: got error %v, want %q", tc.src, err, tc.want)
 		}
+	}
+}
+
+// Readable code drops parentheses, which must not make a malformed expression pass for fields.
+func TestDesugarSyntaxError(t *testing.T) {
+	if code, err := Desugar("a: '${1, b: 2}'\n"); err == nil {
+		t.Errorf("no error, code:\n%s", code)
 	}
 }
 

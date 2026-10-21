@@ -62,14 +62,18 @@ func Desugar(src string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Readable code drops the parentheses around expressions, which could make a malformed one,
+	// like ${1, b: 2}, pass for something else. Compiled code keeps them, and the source lines, so
+	// its syntax errors point into the document.
+	compiled, err := Compile(src)
+	if err != nil {
+		return "", err
+	}
+	if _, err := formatter.Format("", compiled, formatter.DefaultOptions()); err != nil {
+		return code, err
+	}
 	formatted, err := formatter.Format("", code, formatter.DefaultOptions())
 	if err != nil {
-		// Compiled code keeps the source lines, so its syntax errors point into the document.
-		if compiled, cerr := Compile(src); cerr == nil {
-			if _, perr := formatter.Format("", compiled, formatter.DefaultOptions()); perr != nil {
-				err = perr
-			}
-		}
 		return code, err
 	}
 	return formatted, nil
@@ -915,7 +919,7 @@ func (c *compiler) localKey(k, v *yaml.Node) error {
 	name := k.Value[1:]
 	switch {
 	case !isIdentifier(name):
-		msg := fmt.Sprintf("the key %q declares a local, so %q must be a Jsonnet variable name, not a keyword", k.Value, name)
+		msg := fmt.Sprintf("the key %q declares a local, so %q must be a Jsonnet variable name, not a keyword or std", k.Value, name)
 		if trimmed := strings.TrimRight(name, "+:"); !strings.HasPrefix(name, "-") && trimmed != "" {
 			msg += fmt.Sprintf("; to name a document, write '&%s': %s among its top-level keys", name[len(trimmed):], trimmed)
 		}
@@ -956,7 +960,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 				if err := c.localKey(k, v); err != nil {
 					return err
 				}
-				if err := c.anchored(v, "", "in a document of local keys"+noPlace, false, nil, nil); err != nil {
+				if err := c.anchored(v, "", "in a document of local keys"+noPlace, false, false, nil, nil); err != nil {
 					return err
 				}
 				if err := addLocal(k.Value[1:], k); err != nil {
@@ -1205,7 +1209,7 @@ func (c *compiler) document(d doc) error {
 		return nil
 	}
 	var as []anchor
-	if err := c.anchored(d.root, "", "", false, nil, &as); err != nil {
+	if err := c.anchored(d.root, "", "", false, false, nil, &as); err != nil {
 		return err
 	}
 	if len(as) == 0 {
@@ -1225,9 +1229,9 @@ func (c *compiler) document(d doc) error {
 // anchored collects node n, at path from the document's root, and the nodes under it whose
 // anchors declare locals: those that are Jsonnet variable names. Others are plain YAML anchors.
 // Where nodes have no place of their own in the output, such anchors are errors, and where says
-// why. In a list that a + key extends (plus), the items are counted from the end. keys are the
-// computed keys of the mappings that hold n.
-func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, keys []*yaml.Node, out *[]anchor) error {
+// why. If n is a list that a + key combines with another, before and after say on which side the
+// other's items go. keys are the computed keys of the mappings that hold n.
+func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool, keys []*yaml.Node, out *[]anchor) error {
 	if n.Kind == yaml.MappingNode {
 		for i := 0; i < len(n.Content); i += 2 {
 			if k := n.Content[i]; strings.HasPrefix(c.keyText(k), "${") {
@@ -1253,7 +1257,7 @@ func (c *compiler) anchored(n *yaml.Node, path, where string, plus bool, keys []
 		}
 		*out = append(*out, anchor{n, path})
 	}
-	return c.anchors(n, path, where, plus, keys, out)
+	return c.anchors(n, path, where, before, after, keys, out)
 }
 
 var unknownVar = regexp.MustCompile(`Unknown variable: ([A-Za-z_][A-Za-z0-9_]*)`)
@@ -1281,37 +1285,47 @@ func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
 }
 
 // anchors collects the nodes under n whose anchors declare locals, like anchored, but not n.
-func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, keys []*yaml.Node, out *[]anchor) error {
+func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool, keys []*yaml.Node, out *[]anchor) error {
 	switch n.Kind {
 	case yaml.SequenceNode:
-		// Past a ${for} or ${if} item, or in a list that a + key extends, items are counted from the
-		// end, which a ${for} or ${if} item after them makes unknown too.
-		before, after := 0, 0
+		// Past a ${for} or ${if} item, or the items of a list that this one extends, items are
+		// counted from the end, which a ${for} or ${if} item after them, or the items of a list
+		// that extends this one, makes unknown too.
+		clauses, seen := 0, 0
 		for _, m := range n.Content {
 			if k, _, _ := c.clauseItem(m); k != nil {
-				after++
+				clauses++
 			}
 		}
 		for i, m := range n.Content {
 			if k, _, _ := c.clauseItem(m); k != nil {
-				before, after = before+1, after-1
-				if err := c.anchored(m, "", cmp.Or(where, inBody), false, keys, out); err != nil {
+				seen++
+				if err := c.anchored(m, "", cmp.Or(where, inBody), false, false, keys, out); err != nil {
 					return err
 				}
 				continue
 			}
 			item, w := fmt.Sprintf("%s[%d]", path, i), where
-			if plus || before > 0 {
+			if before || seen > 0 {
 				item = fmt.Sprintf("%s[std.length(%s%s) - %d]", path, rootVar, path, len(n.Content)-i)
-				if after > 0 && w == "" {
+				if (after || seen < clauses) && w == "" {
 					w = "in a list item whose index depends on ${for} or ${if} items"
 				}
 			}
-			if err := c.anchored(m, item, w, false, keys, out); err != nil {
+			if err := c.anchored(m, item, w, false, false, keys, out); err != nil {
 				return err
 			}
 		}
 	case yaml.MappingNode:
+		// The fields of + keys, which extend those of keys without + in the same mapping.
+		extended := map[string]bool{}
+		for i := 0; i < len(n.Content); i += 2 {
+			k := n.Content[i]
+			text := c.keyText(k)
+			if strings.HasSuffix(strings.TrimRight(text, ":"), "+") && text != "<<+" && !strings.HasPrefix(text, "&") && !strings.HasPrefix(text, "${") {
+				extended[c.fieldName(k)] = true
+			}
+		}
 		for i := 0; i < len(n.Content); i += 2 {
 			k, v := n.Content[i], n.Content[i+1]
 			if k.Anchor != "" && k.Kind == yaml.ScalarNode && k.Tag == "!!null" && k.Value == "" && k.Style == 0 {
@@ -1320,7 +1334,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, keys []*
 			if isIdentifier(k.Anchor) {
 				return c.errorf(k, "&%s anchors the key %q, which has no place of its own in the output; an anchor for the whole document goes on its own line", k.Anchor, c.keyText(k))
 			}
-			w, p, plus := where, "", false
+			w, p, plus, ext := where, "", false, false
 			switch text := c.keyText(k); {
 			case k.Tag == "!!merge":
 				w = "in a merge source (<<)" + noPlace
@@ -1335,8 +1349,9 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, plus bool, keys []*
 			default:
 				_, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
 				p = access(path, c.fieldName(k))
+				ext = !plus && extended[c.fieldName(k)]
 			}
-			if err := c.anchored(v, p, w, plus, keys, out); err != nil {
+			if err := c.anchored(v, p, w, plus, ext, keys, out); err != nil {
 				return err
 			}
 		}
@@ -2118,7 +2133,8 @@ var keywords = map[string]bool{
 
 var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func isIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] }
+// isIdentifier reports whether s can name a local. Not std, which generated code calls.
+func isIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] && s != "std" }
 
 // Scalars.
 

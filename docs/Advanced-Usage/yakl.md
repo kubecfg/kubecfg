@@ -664,7 +664,8 @@ spec:
   an overlay that changes `config` changes what `${config.replicas}` reads. `$.config` gives the
   same value. That's the difference from an anchor, whose local is the node as written.
 - **Only a Jsonnet variable name gives a local.** `'&': web.conf` gives the field
-  `'web.conf':`, and expressions read it as `$['web.conf']`.
+  `'web.conf':`, and expressions read it as `$['web.conf']`. Neither does `std`, which would
+  hide Jsonnet's standard library.
 - **Scope: the whole file,** in any order.
 - **The key says how the field combines,** with the `+` and colons a mapping key has after its
   name. `'&:'` is to `'&'` what `config::` is to `config:`.
@@ -741,8 +742,8 @@ The node stays where it's written, and the local reads it there.
   so it's still the item written there.
 - **Aliases still copy.** `*labels` gives the same value as `${labels}`, unless the node uses
   `self` or `$`, which a copy reads where the alias is.
-- **Names:** a Jsonnet variable name, not a keyword. Other anchors, like `&default-labels` or
-  `&if`, stay plain YAML anchors. The same name twice in one document is an error: YAML lets a
+- **Names:** a Jsonnet variable name, not a keyword or `std`. Other anchors, like
+  `&default-labels`, `&if` or `&std`, stay plain YAML anchors. The same name twice in one document is an error: YAML lets a
   later anchor replace an earlier one, but a local can't have two values. An anchor may hide a
   file local or a document name with the same name, as Jsonnet locals do.
 - **Not in a key of a mapping that holds the node.** Jsonnet needs a mapping's keys to build it,
@@ -801,7 +802,7 @@ deployment: {
   both `metadata` and `spec` goes at the top of the document.
 - **The value is YAML data or an expression.** It stays an object local where it's written, so
   it can use `self`, `$` and other locals.
-- **Names:** a Jsonnet variable name, not a keyword, at most once per mapping. A local may hide
+- **Names:** a Jsonnet variable name, not a keyword or `std`, at most once per mapping. A local may hide
   an outer one with the same name.
 - **The quotes are required.** Unquoted, `&labels: {...}` is a YAML anchor on an empty key,
   which kubectl rejects. yakl sees that shape and says to quote it.
@@ -1241,7 +1242,7 @@ line:
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
 | a key expression that uses the local of an anchor in the same mapping, or below it | Jsonnet needs the key to build the mapping that the local reads |
 | an anchor inside the value of a local key, or on or inside a document of local keys | that value isn't in the output, so there's no node to name |
-| a local key whose name isn't a Jsonnet variable name, is a keyword, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is `'&': web.conf` |
+| a local key whose name isn't a Jsonnet variable name, is a keyword or `std`, or has dashes or `+`, such as `'&web.conf':` | the key declares a local, nothing else; a name is `'&': web.conf` |
 | a local key without a value, such as `'&web':` | most likely meant as a name: `'&': web` |
 | a name key (`'&'`, `'&+'`, `'&:'`, ...) below the top level of a document, or two in one document | it only names documents, once |
 | a name that is an expression, empty, or ends in `+` or `:`, such as `'&': web+` | names are known before evaluation, and `+` and `:` go on the key: `'&+': web` |
@@ -1252,7 +1253,7 @@ line:
 | `&a &b` on one node | YAML allows one anchor per node |
 | a `${for}` or `${if}` list item with keys next to the clause, or without a body | the body goes under the clause; beside it, its keys would read as the item's own |
 | a `${for}` or `${if}` key in a mapping | a mapping gets fields from elsewhere through `<<+`; clauses make list items |
-| an anchor in the body of a `${for}` or `${if}`, or on a list item whose index depends on them | there's no single node to name |
+| an anchor in the body of a `${for}` or `${if}`, or on a list item whose index depends on them, as after one in an `args:` that `args+:` extends | there's no single node to name |
 | `${for ...}+:` | a string that starts with `${` is one whole expression |
 | `${local x = ...}` | removed: see [Migrating](#migrating-from-jamlet) |
 
