@@ -52,6 +52,7 @@ in plain YAML:
 | a document made only of `'&name':` keys | locals of the whole file |
 | documents without a name, next to named ones | `unnamed+: [...]` |
 | a `.yakl` overlay | `base + overlay`, as written |
+| a first document of only `<<+: S` (and local keys) | the file is `S + {its documents}` |
 
 Four ideas carry the design:
 
@@ -516,7 +517,9 @@ That's `deployment: k.deployment('web', image='nginx:1.27') + {spec+: {replicas:
 ### Merge keys keep their YAML meaning
 
 - **`<<` copies fields,** as in YAML. Sources are aliases to mappings, inline mappings, or a
-  list of those. Own keys win, and an earlier source wins over a later one.
+  list of those. Own keys win, and an earlier source wins over a later one. Keys match as
+  YAML reads them, so `0x1F` matches `31`; expression keys match by their code, laid out as
+  `yaklfmt` lays it out, so `${'a'+'b'}` matches `${'a' + 'b'}`, but not `${'ab'}`.
 - **`<<` must be the very first key, and appear once,** before any local key too. With an own
   key before `<<`, kubectl keeps
   the merged value and kustomize the own one. Two `<<` keys are accepted by kubectl and
@@ -558,7 +561,8 @@ object one document at a time.
    documents of local keys from the rest doesn't count, so a file of imports plus one document
    still gives that document, and adding imports never changes the shape. A file with only
    documents of local keys gives an empty list.
-2. **At least one name: an object.** Each named document is a field. Documents without a name
+2. **At least one name, or a [parent](#a-file-that-extends-another): an object.** Each named
+   document is a field. Documents without a name
    go, in file order, into a field called `unnamed`. It compiles as `unnamed+:`, so an
    overlay's unnamed documents are appended rather than swapped in. When there are none, the
    field is left out. `unnamed` is reserved as a name.
@@ -755,7 +759,9 @@ The node stays where it's written, and the local reads it there.
   template keep the local's value, which is what a Deployment's immutable selector needs.
 - **Under a `+` key, that's the combined value.** `labels+: &labels {...}` holds the inherited
   labels too. An item of a list under `args+:` is counted from the end of the combined list,
-  so it's still the item written there.
+  so it's still the item written there. If a later `+` key of the document adds to that list as
+  well, as `x+: {args+: [...]}` after `x: {args+: [&a ...]}`, the item's index isn't known, and
+  the anchor is an error.
 - **Aliases still copy.** `*labels` gives the same value as `${labels}`, unless the node uses
   `self` or `$`, which a copy reads where the alias is.
 - **Names:** a Jsonnet variable name, not a keyword or `std`. Other anchors, like
@@ -923,11 +929,54 @@ document:
   base's root, which is the single-document overlay above. Several documents make a list, and
   an object plus a list is an error. To add documents to a named base, the overlay needs at
   least one name.
+- **A file can name its base itself,** so it needs no flag: see the next section.
 - **A whole object as an unnamed single-document overlay is a mistake:** merged into a named
   base's root, its `apiVersion` and `kind` would turn the whole file into that one object.
   kubecfg reports an overlay with `apiVersion` and `kind` but no name when the base has no
   `kind` of its own. A flag that names the field, `--overlay-code-file sa=whole.yakl`, adds it
   as the document `sa`.
+
+### A file that extends another
+
+A file can say what it extends, as a Jsonnet file does with `(import 'base.jsonnet') + {...}`.
+Its first document holds only `<<+` and, if needed, local keys:
+
+```yaml
+<<+: ${import 'yakl:web.yakl'}
+---
+!config+
+replicas: 5
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${$.config.name}
+```
+
+```jsonnet
+(import 'yakl:web.yakl') + {
+  config+: { replicas: 5 },
+  unnamed+: [{ apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: $.config.name } }],
+}
+```
+
+`kubecfg --alpha show prod.yakl` then shows `web.yakl` with the changes, and a third file can
+extend `prod.yakl` in turn. With the [worked example](#worked-example)'s `prod.yakl`, adding
+that first document gives the same output as `--overlay-code-file`.
+
+- **`<<+` means what it means in a mapping,** with the file as the mapping and its documents as
+  the fields: the value is an expression, a mapping, or a list of them, and `null` extends
+  nothing.
+- **The file is an object,** even without names. Documents without a name are appended to
+  `unnamed`, and a single one is not merged into the root as it is in an overlay without names.
+  To extend one object, give its document `<<+` and the fields, as in
+  [`<<+`](#-extend-an-object).
+- **It must be the first document,** so a reader finds the base at the top.
+- **The base is evaluated outside the file,** as `S` in `S + {...}` is, so it can't use the
+  file's locals. The file's documents reach the base through `$`, and the base sees their
+  changes through its names and `$`, as with an overlay.
+- **A single document of only `<<+`** is that document, as before: a file is extended only when
+  more documents follow.
 
 ## Worked example
 
@@ -1260,12 +1309,14 @@ line:
 | a name tag without a name, like `!+`, or with more than three colons | there's no field to name |
 | `$` in a file local of a file without names | there is no file object; Jsonnet would read it as the local's own object |
 | `!unnamed` | `unnamed` is reserved for unnamed documents |
+| a document of only `<<+` and local keys that isn't the first, in a file of several documents | it says what the file extends, so it comes first |
+| a file that extends a single object, one with `apiVersion` and `kind` | the file's documents would be hidden inside that object; give the object's own document `<<+` instead |
 | `&labels: value`, a local key without quotes | YAML reads an empty key carrying the anchor `labels`; yakl says to quote it |
 | `&web.conf:` without quotes | a YAML syntax error in kubectl, go-yaml v3, PyYAML and yamllint |
 | `&a &b` on one node | YAML allows one anchor per node |
 | a `${for}` or `${if}` list item with keys next to the clause, or without a body | the body goes under the clause; beside it, its keys would read as the item's own |
 | a `${for}` or `${if}` key in a mapping | a mapping gets fields from elsewhere through `<<+`; clauses make list items |
-| an anchor in the body of a `${for}` or `${if}`, or on a list item whose index depends on them, as after one in an `args:` that `args+:` extends | there's no single node to name |
+| an anchor in the body of a `${for}` or `${if}`, or on a list item whose index depends on them, as after one in an `args:` that `args+:` extends, or on items that `+` keys add both before and after | there's no single node to name |
 | `${for ...}+:` | a string that starts with `${` is one whole expression |
 | `${local x = ...}` | removed: see [Migrating](#migrating-from-jamlet) |
 
@@ -1457,7 +1508,8 @@ file, and in each document of a list. It becomes the file only in files with nam
 
 `.yakl` files work wherever `.jsonnet` files do: `show`, `diff`, `update`, `delete`,
 `validate`, `eval`, overlays (`--overlay-code-file x.yakl` is applied as
-`base + overlay`, see [Overlays](#overlays); `.yaml` and `.json` overlays are still
+`base + overlay`, see [Overlays](#overlays), or a file names its base with
+[`<<+`](#a-file-that-extends-another); `.yaml` and `.json` overlays are still
 deep-merged), OCI bundles, and `pack` (which ships the yakl source). `eval -o jsonnet` prints
 the Jsonnet of a yakl file, see [Seeing the generated Jsonnet](#seeing-the-generated-jsonnet),
 and `yaklfmt` formats its expressions, see [Formatting](#formatting).

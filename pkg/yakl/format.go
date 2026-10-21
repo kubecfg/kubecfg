@@ -28,8 +28,8 @@ import (
 // Format formats the Jsonnet code of the expressions in a yakl document, as jsonnetfmt does, and
 // leaves the YAML around them as it is. A plain expression whose formatted code isn't a valid plain
 // YAML scalar any more, like ${ { a: 1 } } with its `: `, gets quoted. Expressions holding YAML
-// blocks, ${for} and ${if} clauses, and code that would take several lines outside a block
-// expression are left as they are. What follows a "---" on its line, like the tag in --- !web, moves
+// blocks, ${for} and ${if} clauses, code that would take several lines outside a block
+// expression, and a block expression with a string spanning its lines are left as they are. What follows a "---" on its line, like the tag in --- !web, moves
 // to the next line, since kubectl's reader allows only a comment there.
 func Format(src string) (string, error) {
 	c, err := compiled(src, false, false)
@@ -51,10 +51,18 @@ func Format(src string) (string, error) {
 		if !ok {
 			continue
 		}
+		code := f
 		if strings.HasPrefix(f, "{") {
 			f = " " + f + " " // ${ {a: 1} }, rather than ${{ a: 1 }}
 		}
-		if s, ok := c.spell(n, "${"+f+"}", start); ok {
+		s, ok := c.spell(n, "${"+f+"}", start)
+		// Indenting the lines of a block changes a string that spans them.
+		if ok && n.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+			if g, _ := formatCode("", s[2:len(s)-1]); g != code {
+				continue
+			}
+		}
+		if ok {
 			edits = append(edits, edit{start, end, s})
 		}
 	}
@@ -75,7 +83,7 @@ func Format(src string) (string, error) {
 	b.WriteString(c.src[prev:])
 	out := b.String()
 	// The YAML means the same, and so does each expression, as formatting it shows. Readable code
-	// doesn't depend on where things are in the source.
+	// doesn't depend on where things are in the source, and canonical code leaves out comments.
 	want, err := compiled(c.src, true, true)
 	if err != nil {
 		return "", err
@@ -99,6 +107,14 @@ func formatCode(code, raw string) (string, bool) {
 	opts := formatter.DefaultOptions()
 	opts.StringStyle = formatter.StringStyleLeave // a string's quotes may be chosen to fit the YAML quotes
 	f, err := formatter.Format("", code, opts)
+	// A pass removes one level of redundant parentheses, ((0)) giving (0); the next would go on.
+	for i := 0; err == nil && i < len(code); i++ {
+		g, gerr := formatter.Format("", f, opts)
+		if gerr != nil || g == f {
+			break
+		}
+		f = g
+	}
 	f = strings.TrimSuffix(f, "\n")
 	// A line comment at the end keeps its line break, or it would take the closing }.
 	if end, _, err := exprEnd("${"+f+"}", 2); err != nil || end != len(f)+2 {

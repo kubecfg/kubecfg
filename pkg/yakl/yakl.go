@@ -44,7 +44,9 @@ const maxCopies = 100_000
 var (
 	// Same document start marker detection as std.parseYaml.
 	docStart = regexp.MustCompile(`(?m)^---(\s|$)`)
-	yamlLine = regexp.MustCompile(`line (\d+)`)
+	// A line, after the first, that starts a document or ends one.
+	docMarker = regexp.MustCompile(`\n(---|\.\.\.)(\s|$)`)
+	yamlLine  = regexp.MustCompile(`line (\d+)`)
 )
 
 // Compile translates a yakl document into equivalent Jsonnet code.
@@ -98,6 +100,12 @@ func compiled(src string, readable, canonical bool) (*compiler, error) {
 	src = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(src)
 	if i := strings.IndexAny(src, "\u0085\u2028\u2029"); i >= 0 {
 		return nil, fmt.Errorf("line %d: unsupported Unicode line separator", strings.Count(src[:i], "\n")+1)
+	}
+	// yaml.v3 rejects these anywhere, but it doesn't see the code of expressions.
+	if i := strings.IndexFunc(src, func(r rune) bool {
+		return r < 0x20 && r != '\t' && r != '\n' || r >= 0x7F && r <= 0x9F || r == 0xFFFE || r == 0xFFFF
+	}); i >= 0 {
+		return nil, fmt.Errorf("line %d: control characters are not allowed", strings.Count(src[:i], "\n")+1)
 	}
 	// Like std.parseYaml and kubecfg's YAML reader, which keep the final line break of a block
 	// scalar ending the file.
@@ -442,6 +450,10 @@ func (l *lexer) expr() error {
 	if strings.TrimSpace(code) == "" {
 		return errorAt(l.src, start, "empty expression")
 	}
+	// YAML tools would end the document there, and see the expression's code as YAML.
+	if m := docMarker.FindStringSubmatchIndex(code); m != nil {
+		return errorAt(l.src, start+2+m[2], "a line starting with %s in an expression ends the YAML document; indent it", code[m[2]:m[3]])
+	}
 	l.i = end + 1
 	j := l.i
 	for j < len(l.src) && (l.src[j] == ' ' || l.src[j] == '\t' || l.src[j] == '\r') {
@@ -726,7 +738,7 @@ type compiler struct {
 	copies    int                            // nodes copied by aliases
 	noDollar  bool                           // compiling a file local where there is no file object: $ is an error
 	readable  bool                           // see Desugar
-	canonical bool                           // writes expressions as Format formats them, to compare meanings
+	canonical bool                           // writes expressions as Format formats them, and no YAML comments, to compare meanings
 }
 
 // unit compiles the YAML in src[from:to], as lexed by l.
@@ -882,6 +894,29 @@ func (c *compiler) classify(d *yaml.Node) (doc, error) {
 	return r, nil
 }
 
+// extension returns the <<+ entry of document d if <<+ and local keys are all d holds. In a file
+// of several documents, the first such document says what the file extends, as <<+ does for a
+// mapping, and its local keys are file locals.
+func extension(d *yaml.Node) *entry {
+	if len(d.Content) == 0 {
+		return nil
+	}
+	root := d.Content[0]
+	if root.Kind != yaml.MappingNode || root.Style&yaml.TaggedStyle != 0 {
+		return nil
+	}
+	var ext *entry
+	for i := 0; i < len(root.Content); i += 2 {
+		switch k := root.Content[i]; {
+		case k.Kind == yaml.ScalarNode && k.Value == "<<+":
+			ext = &entry{k: k, v: root.Content[i+1]}
+		case k.Kind != yaml.ScalarNode || !strings.HasPrefix(k.Value, "&"):
+			return nil
+		}
+	}
+	return ext
+}
+
 // liftComment gives document d the head comment of the first key k of its tagged root mapping, if
 // the comment is above the tag: yaml.v3 gives the key the comments above the tag too.
 func (c *compiler) liftComment(d *doc, k *yaml.Node) {
@@ -960,10 +995,32 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		locals[name] = at
 		return nil
 	}
+	var ext *entry // what the file extends
 	for i, d := range yamlDocs {
+		if e := extension(d); e != nil && len(yamlDocs) > 1 {
+			if i > 0 {
+				return c.errorf(e.k, "<<+ in a document of its own extends the file, so the document must "+
+					"be the first; for a document that is an expression's object, write the expression")
+			}
+			if err := c.anchored(e.v, "", "in a source of <<+"+noPlace, false, false, nil, nil); err != nil {
+				return err
+			}
+			ext, objectFile = e, true
+			root := d.Content[0]
+			var rest []*yaml.Node // the local keys
+			for j := 0; j < len(root.Content); j += 2 {
+				if root.Content[j] != e.k {
+					rest = append(rest, root.Content[j], root.Content[j+1])
+				}
+			}
+			root.Content = rest
+		}
 		var err error
 		if docs[i], err = c.classify(d); err != nil {
 			return err
+		}
+		if i == 0 && ext != nil {
+			docs[i].kind = fileLocalsDoc
 		}
 		switch d := docs[i]; d.kind {
 		case fileLocalsDoc:
@@ -1009,7 +1066,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		docs[0].head[0] = ""
 	}
 	if objectFile {
-		return c.objectFile(docs, fields)
+		return c.objectFile(docs, fields, ext)
 	}
 
 	var body []int // the documents that aren't file locals
@@ -1086,11 +1143,26 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 	return nil
 }
 
-// objectFile writes a file with names as an object: a field per name, object locals for file
-// locals, and the documents without a name in the field unnamed. Everything stays in file order, so that the code keeps its source lines.
-func (c *compiler) objectFile(docs []doc, fields map[string][]int) error {
+// objectFile writes a file with names, or one that extends something (ext), as an object: a field
+// per name, object locals for file locals, and the documents without a name in the field unnamed.
+// Everything stays in file order, so that the code keeps its source lines.
+func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) error {
+	if ext != nil {
+		c.comment(ext.k.HeadComment, ext.k.LineComment, ext.v.LineComment, ext.k.FootComment, ext.v.FootComment)
+		c.write("(")
+		if err := c.extends(*ext); err != nil {
+			return err
+		}
+	}
 	c.write("{")
 	c.br(nil)
+	if ext != nil {
+		// Extended with documents, a single object would hide them as fields of its own.
+		c.write("assert !(std.objectHas(self, 'apiVersion') && std.objectHas(self, 'kind')) : " +
+			"'<<+ at the top of a file extends a file, not a single object; to extend one object, " +
+			"give its document <<+ and the fields', ")
+		c.br(nil)
+	}
 	var unnamedDocs []string
 	pending := map[string]string{} // the local holding the first of two documents giving a name
 	for i, d := range docs {
@@ -1162,6 +1234,9 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int) error {
 		c.br(nil)
 	}
 	c.write("}")
+	if ext != nil {
+		c.write(")")
+	}
 	return nil
 }
 
@@ -1351,6 +1426,9 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 				item = fmt.Sprintf("%s[std.length(%s%s) - %d]", path, rootVar, path, len(n.Content)-i)
 				if (after || seen < clauses) && w == "" {
 					w = "in a list item whose index depends on ${for} or ${if} items"
+					if clauses == 0 {
+						w = "in a list item whose index depends on what + keys add before and after it"
+					}
 				}
 			}
 			if err := c.anchored(m, item, w, false, false, holders, out); err != nil {
@@ -1390,7 +1468,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 			default:
 				_, plus = strings.CutSuffix(strings.TrimRight(text, ":"), "+")
 				p = access(path, c.fieldName(k))
-				ext = !plus && (after || extended[c.fieldName(k)])
+				ext = after || (!plus && extended[c.fieldName(k)])
 			}
 			if err := c.anchored(v, p, w, plus, ext, holders, out); err != nil {
 				return err
@@ -1565,7 +1643,8 @@ func (c *compiler) br(n *yaml.Node) {
 // comment writes YAML comments as Jsonnet comments, each ending its line, in readable code.
 // Copies made by aliases have none. It reports whether it wrote any.
 func (c *compiler) comment(texts ...string) bool {
-	if !c.readable || len(c.aliases) > 0 {
+	// yaml.v3 places comments by the lines around them, which Format changes.
+	if !c.readable || c.canonical || len(c.aliases) > 0 {
 		return false
 	}
 	wrote := false
@@ -1760,16 +1839,20 @@ func (c *compiler) entries(n *yaml.Node, seen map[*yaml.Node]bool) ([]entry, err
 }
 
 // keyName returns the field name that key k gives to YAML tools, to compare keys: resolved like
-// kubectl does, as 0x1F gives 31, and for an expression, its code.
+// kubectl does, as 0x1F gives 31, and for an expression, its code as Format formats it, which
+// formatting some keys and not others can't change.
 func (c *compiler) keyName(k *yaml.Node) string {
 	text := c.keyText(k)
 	if k.Kind == yaml.AliasNode {
 		k = k.Alias
 	}
-	if _, ok := c.placeholder(k.Value); !ok {
-		if lit, err := literal(k, true, c.places[k]); err == nil {
-			_ = json.Unmarshal([]byte(lit), &text)
+	if i, ok := c.placeholder(k.Value); ok {
+		e := c.exprs[i]
+		if f, ok := formatCode(e.code, c.src[e.from:e.to]); ok && len(e.blocks) == 0 {
+			text = "${" + f + "}"
 		}
+	} else if lit, err := literal(k, true, c.places[k]); err == nil {
+		_ = json.Unmarshal([]byte(lit), &text)
 	}
 	return text
 }

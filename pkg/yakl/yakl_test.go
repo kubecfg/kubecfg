@@ -302,6 +302,7 @@ env: ${[
 		{"keys name fields as YAML reads them", "a: {0777: p, '0777': q}\nb: {0777: p, 0777+: q, 511+: r}\n", `{"a":{"0777":"q","511":"p"},"b":{"0777":"q","511":"pr"}}`},
 		{"merged keys compare as YAML reads them", "a:\n  <<: {0x1F: a}\n  31: b\n", `{"a":{"31":"b"}}`},
 		{"merged expression keys compare as text", "a:\n  <<: {'${\"x\"}': 1}\n  ${\"x\"}: 2\n", `{"a":{"x":2}}`},
+		{"merged expression keys compare as formatted", "a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\" +  \"y\"}': 2\n", `{"a":{"xy":2}}`},
 		{"<<+ of a local key", "a:\n  '&base': ${ {x: 1} }\n  b:\n    <<+: ${base}\n    w: ${super.x + 1}\n", `{"a":{"b":{"w":2,"x":1}}}`},
 		{"x:: and x+: make a hidden field", "c:\n  r::\n    m: 1\n  r+: {c: 2}\n  v: ${self.r}\n", `{"c":{"v":{"c":2,"m":1}}}`},
 		{"literal key ending in a colon", "${'a:'}: 1\n${'b+'}: 2\n${'&'}: 3\n", `{"&":3,"a:":1,"b+":2}`},
@@ -330,6 +331,17 @@ env: ${[
 		{"an anchor on a document's root", "&r\nname: nm\nm:\n  v: ${r.name}\n", `{"m":{"v":"nm"},"name":"nm"}`},
 		{"a name isn't a local", "--- !labels\nx: 1\n--- !d\nm: &labels {z: 2}\nv: ${[labels, $.labels]}\n", `{"d":{"m":{"z":2},"v":[{"z":2},{"x":1}]},"labels":{"x":1}}`},
 		{"a file local named like a document", "'&x': 1\n--- !x\nv: ${[x, $.x.w]}\nw: 2\n", `{"x":{"v":[1,2],"w":2}}`},
+
+		// A first document of <<+ and local keys says what the file extends.
+		{"a file extends an object", "<<+: ${ {a: 1, unnamed: ['x']} }\n---\n!b\nv: 2\n---\nc: 3\n", `{"a":1,"b":{"v":2},"unnamed":["x",{"c":3}]}`},
+		{"one document without a name is appended", "<<+: ${ {unnamed: ['x']} }\n---\nc: 3\n", `{"unnamed":["x",{"c":3}]}`},
+		{"the file's documents see the parent through $", "<<+: ${ {x:: 3} }\n---\nv: ${$.x}\n", `{"unnamed":[{"v":3}]}`},
+		{"a hidden unnamed stays hidden", "<<+: ${ {unnamed:: []} }\n---\nc: 3\n", `{}`},
+		{"local keys next to <<+ are file locals", "'&n': 2\n<<+: ${ {a: 1} }\n---\n!b\nv: ${n}\n", `{"a":1,"b":{"v":2}}`},
+		{"a file extends several sources", "<<+: [${ {a: 1} }, {a: 2, b: 2}]\n---\nc: 3\n", `{"a":1,"b":2,"unnamed":[{"c":3}]}`},
+		{"a file extends null", "<<+: ${null}\n---\nc: 3\n", `{"unnamed":[{"c":3}]}`},
+		{"<<+ alone is the document", "<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n", `{"apiVersion":"v1","kind":"ConfigMap"}`},
+		{"<<+ with fields is a document", "<<+: ${ {a: 1} }\nb: 2\n---\nc: 3\n", `[{"a":1,"b":2},{"c":3}]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -352,6 +364,9 @@ env: ${[
 
 func TestErrors(t *testing.T) {
 	cases := []struct{ src, want string }{
+		{"a: ${\"\x17\"}\n", "line 1: control characters are not allowed"},
+		{"a: ${1\n--- -1}\n", "line 2, column 1: a line starting with --- in an expression ends the YAML document; indent it"},
+		{"a: ${1 +\n... }\n", "line 2, column 1: a line starting with ... in an expression"},
 		{"a: 1\nb: ${1 + \n", "line 2, column 4: unterminated ${"},
 		{"a: ${'}\n", "unterminated"},
 		{"a: ${}\n", "line 1, column 4: empty expression"},
@@ -456,6 +471,7 @@ func TestErrors(t *testing.T) {
 		{"x: &a {args+: [b]}\ny:\n  <<: *a\n  args:\n    - ${for x in [1]}: ${x}\n    - &f a\n", "line 6: &f in a list item whose index depends on ${for} or ${if} items"},
 		{"{'${': 1, value: &value 2}\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"x: {args: [{'${if true}': a}, &l b]}\nx+: {args+: [c]}\n", "line 1: &l in a list item whose index depends on ${for} or ${if} items"},
+		{"x: {args+: [&l b]}\nx+: {args+: [c]}\nv: ${l}\n", "line 1: &l in a list item whose index depends on what + keys add before and after it"},
 		{"'&std': 1\n", `"std" must be a Jsonnet variable name, not a keyword or std`},
 		{"a: ' ${a} ${b}'\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"a: &x 1\nb: &x 2\n", `line 2: the anchor &x is also on line 1: a local can't have two values`},
@@ -488,6 +504,10 @@ func TestErrors(t *testing.T) {
 		{"&config- &config\nx: 1\n", "did not find expected <document start>"},
 		{"'&x': ${$.a}\n---\nb: 1\n", "line 1: $ in a file local, in a file without names"},
 		{"'&x': {w: '${[$]}'}\n---\nb: 1\n", "$ in a file local"},
+		{"a: 1\n---\n<<+: ${ {} }\n", "line 3: <<+ in a document of its own extends the file, so the document must be the first"},
+		{"<<+: &p ${ {} }\n---\nb: 1\n", "line 1: &p in a source of <<+"},
+		{"<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n---\nb: 1\n", "<<+ at the top of a file extends a file, not a single object"},
+		{"<<+: ${[1]}\n---\nb: 1\n", "<<+ needs an object or null, not array"},
 		{"a: ${\\{\n    !Ref\n    b: 1\n  }}\n", "line 2: unsupported tag !Ref"},
 		{"&k\n'${x}': 1\n", "test.yakl:2:"},
 		{"a: '${0)(}'\n", "line 1: unmatched ) in an expression"},
@@ -622,6 +642,8 @@ func TestFilesAreYAML(t *testing.T) {
 func TestFormat(t *testing.T) {
 	cases := []struct{ src, want string }{
 		{"a: ${1+2} # c\n", "a: ${1 + 2} # c\n"},
+		{"a: ${(((0)))}\n", "a: ${(0)}\n"},
+		{"a: ${--- 1}\n", "a: ${---1}\n"},
 		{"${'k'+'x'}: ${std.length( [1] )}\n", "${'k' + 'x'}: ${std.length([1])}\n"},
 		// Quoted where a plain scalar can't hold the code, as before otherwise.
 		{"a: ${ {b:1} }\n", "a: '${ { b: 1 } }'\n"},
@@ -632,10 +654,13 @@ func TestFormat(t *testing.T) {
 		// Block expressions keep their lines in the block.
 		{"a: |-\n  ${[\n  {b:1}, # c\n      2]}\nd: 1\n", "a: |-\n  ${[\n    { b: 1 },  // c\n    2,\n  ]}\nd: 1\n"},
 		{"a: |-\n  ${1+2 # c\n  }\n", "a: |-\n  ${1 + 2  // c\n  }\n"},
+		{"a: |-\n  ${[1,'x\n  y']}\n", "a: |-\n  ${[1,'x\n  y']}\n"}, // the string would change
 		// What follows --- goes on the next line, which is all that kubectl's reader allows.
 		{"--- !web\na: ${1+2}\n--- !b # c\nx: 1\n---  # d\n--- |\n  ${3}\n--- ${ {a:1} }\n",
 			"---\n!web\na: ${1 + 2}\n---\n!b # c\nx: 1\n---  # d\n---\n|\n  ${3}\n---\n'${ { a: 1 } }'\n"},
 		{"a: |\n  --- !x\n", "a: |\n  --- !x\n"},
+		// An overridden merge key, which isn't written, still matches the key formatted.
+		{"a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\"+\"y\"}': 2\n", "a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\" + \"y\"}': 2\n"},
 		// Left as they are: clauses, YAML blocks, ${ in strings and comments.
 		{"l:\n  - ${for x in  [1,2]}: ${x*2}\n", "l:\n  - ${for x in  [1,2]}: ${x * 2}\n"},
 		{"a: ${ [\\{\n    b:  1\n  }] }\n", "a: ${ [\\{\n    b:  1\n  }] }\n"},
