@@ -1,0 +1,22 @@
+# Exercised by TestShowYAKL in cmd/show_test.go.
+'&name': ${std.extVar('name')}
+'&lib': ${import 'test.libsonnet'}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${name}
+  labels:
+    app: ${$.metadata.name}
+data:
+  kind: ${lib.kind}
+  answer: ${std.toString(lib.number)}
+  # import compiles with the yakl: scheme, importstr reads the source.
+  greeting: ${(import 'yakl:yakl_lib.yakl').greeting}
+  source: ${importstr 'yakl_lib.yakl'}
+  shell: echo ${HOME}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${name + '-ns'}

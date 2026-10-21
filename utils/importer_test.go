@@ -60,14 +60,14 @@ func TestExpandImportToCandidateURLs(t *testing.T) {
 
 func TestImportPath(t *testing.T) {
 	for path, want := range map[string]string{
-		"a.jamlet":                      "jamlet:a.jamlet",
-		"dir/a.jsonnet":                 "dir/a.jsonnet",
-		"jamlet:a.jamlet":               "jamlet:a.jamlet",
-		"file:///x/a.jamlet?raw=true":   "jamlet:file:///x/a.jamlet?raw=true",
-		"https://h/a.jamlet#fragment":   "jamlet:https://h/a.jamlet#fragment",
-		"https://h/a.jsonnet?x=.jamlet": "https://h/a.jsonnet?x=.jamlet",
-		"data:,{a: 1} // demo.jamlet":   "data:,{a: 1} // demo.jamlet",
-		`C:\x\a.jamlet`:                 `jamlet:C:\x\a.jamlet`,
+		"a.yakl":                      "yakl:a.yakl",
+		"dir/a.jsonnet":               "dir/a.jsonnet",
+		"yakl:a.yakl":                 "yakl:a.yakl",
+		"file:///x/a.yakl?raw=true":   "yakl:file:///x/a.yakl?raw=true",
+		"https://h/a.yakl#fragment":   "yakl:https://h/a.yakl#fragment",
+		"https://h/a.jsonnet?x=.yakl": "https://h/a.jsonnet?x=.yakl",
+		"data:,{a: 1} // demo.yakl":   "data:,{a: 1} // demo.yakl",
+		`C:\x\a.yakl`:                 `yakl:C:\x\a.yakl`,
 	} {
 		if got := ImportPath(path); got != want {
 			t.Errorf("ImportPath(%q) = %q, want %q", path, got, want)

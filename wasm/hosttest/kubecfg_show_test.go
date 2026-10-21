@@ -47,7 +47,7 @@ func TestKubecfgShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jamlet, err := os.ReadFile("../../examples/guestbook.jamlet")
+	yakl, err := os.ReadFile("../../examples/guestbook.yakl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,10 +59,10 @@ func TestKubecfgShow(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	_, err = r.InstantiateWithConfig(ctx, wasm, wazero.NewModuleConfig().
-		WithArgs("kubecfg-show", "--alpha", "app.jamlet").
+		WithArgs("kubecfg-show", "--alpha", "app.yakl").
 		WithEnv("PWD", "/src").
 		WithFSConfig(wazero.NewFSConfig().WithFSMount(fstest.MapFS{
-			"app.jamlet": {Data: jamlet},
+			"app.yakl": {Data: yakl},
 		}, "/src")).
 		WithStdout(&stdout).
 		WithStderr(&stderr))

@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func tempFile(t *testing.T, body string) (filename string) {
@@ -109,8 +111,8 @@ func TestParseResolverFlags(t *testing.T) {
 	}
 }
 
-func TestTracebackJamlet(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "t.jamlet")
+func TestTracebackYAKL(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "t.yakl")
 	if err := os.WriteFile(file, []byte("a: 1\nb: ${1 + 1}\nc: 3\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -147,8 +149,8 @@ func TestTracebackJamlet(t *testing.T) {
 	}
 }
 
-func TestJamletCodeFileVar(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "v.jamlet")
+func TestYAKLCodeFileVar(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "v.yakl")
 	if err := os.WriteFile(file, []byte("name: ${'world'}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -191,8 +193,8 @@ func TestEvalTLANamedLikeInternals(t *testing.T) {
 	}
 }
 
-func TestEvalJamletStream(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "s.jamlet")
+func TestEvalYAKLStream(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "s.yakl")
 	if err := os.WriteFile(file, []byte("---\na: ${1}\n---\nb: 2\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -214,5 +216,60 @@ func TestEvalJamletStream(t *testing.T) {
 	_, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "$.a", nil))
 	if err == nil || !strings.Contains(err.Error(), "-e needs the file to evaluate to an object, not array") {
 		t.Errorf("got error %v", err)
+	}
+}
+
+// A yakl overlay applies as written (base + overlay), not through toOverlay.
+func TestYAKLOverlay(t *testing.T) {
+	dir, err := filepath.Abs(filepath.FromSlash("../yakl/testdata/overlay"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(overlay string) ([]string, map[string]any, error) {
+		vm, err := JsonnetVM(WithAlpha(true))
+		if err != nil {
+			t.Fatal(err)
+		}
+		objs, err := ReadObjects(vm, []string{filepath.Join(dir, "web.yakl")}, utils.WithOverlayURL(overlay))
+		if err != nil {
+			return nil, nil, err
+		}
+		var kinds []string
+		var deployment map[string]any
+		for _, o := range objs {
+			kinds = append(kinds, o.GetKind())
+			if o.GetKind() == "Deployment" {
+				deployment = o.Object
+			}
+		}
+		sort.Strings(kinds)
+		return kinds, deployment, nil
+	}
+
+	kinds, deployment, err := read(filepath.Join(dir, "prod.yakl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(kinds, ","), "ConfigMap,Deployment,NetworkPolicy,PodDisruptionBudget,Service,ServiceAccount"; got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+	if got, _, _ := unstructured.NestedFieldNoCopy(deployment, "spec", "replicas"); fmt.Sprint(got) != "5" {
+		t.Errorf("got %v replicas, want 5 from the hidden config the overlay changed", got)
+	}
+
+	whole := filepath.Join(t.TempDir(), "whole.yakl")
+	if err := os.WriteFile(whole, []byte("apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: x\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := read(whole); err == nil || !strings.Contains(err.Error(), "a whole object without a name, overlaid on a file with names") {
+		t.Errorf("got error %v", err)
+	}
+	// Named by the flag, it's a new document.
+	kinds, _, err = read("account=" + whole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(kinds, ","), "ConfigMap,Deployment,NetworkPolicy,Service,ServiceAccount"; got != want {
+		t.Errorf("got %s, want %s", got, want)
 	}
 }

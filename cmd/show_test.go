@@ -349,8 +349,8 @@ metadata:
 	}
 }
 
-func TestShowJamlet(t *testing.T) {
-	path := filepath.FromSlash("../testdata/jamlet_test.jamlet")
+func TestShowYAKL(t *testing.T) {
+	path := filepath.FromSlash("../testdata/yakl_test.yakl")
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		t.Fatal(err)
@@ -363,13 +363,13 @@ func TestShowJamlet(t *testing.T) {
 			"-V", "name=demo",
 			file,
 		})
-		if got != wantShowJamlet {
-			t.Errorf("%s: got: %q, want: %q", file, got, wantShowJamlet)
+		if got != wantShowYAKL {
+			t.Errorf("%s: got: %q, want: %q", file, got, wantShowYAKL)
 		}
 	}
 }
 
-const wantShowJamlet = `---
+const wantShowYAKL = `---
 apiVersion: v1
 data:
   answer: "42"
