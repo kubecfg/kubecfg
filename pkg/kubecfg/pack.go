@@ -103,7 +103,7 @@ func bundleConfigMetadata(vm *jsonnet.VM, rootURL *url.URL) (json.RawMessage, er
 		return nil, err
 	}
 
-	// A jamlet stream evaluates to an array, which carries no metadata.
+	// A yakl stream evaluates to an array, which carries no metadata.
 	metadataExpr := fmt.Sprintf(`local root = import %q; %s + if std.isObject(root) then std.get(root, %q, {}) else {}`,
 		utils.ImportPath(rootURL.String()), string(base), packMetadataField)
 	metadata, err := vm.EvaluateAnonymousSnippet("", metadataExpr)
@@ -245,8 +245,8 @@ func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
 
 	var urls []*url.URL
 	for _, d := range deps {
-		// jamlet files are packed as source, which the consumer compiles on import.
-		u, err := url.Parse(strings.TrimPrefix(d, utils.JamletScheme))
+		// yakl files are packed as source, which the consumer compiles on import.
+		u, err := url.Parse(strings.TrimPrefix(d, utils.YAKLScheme))
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +261,7 @@ func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
 
 	urls = append(urls, rootURL)
 	sort.Slice(urls, func(i, j int) bool { return urls[i].String() < urls[j].String() })
-	// A jamlet file can be a dependency both compiled (import 'jamlet:x') and as is (importstr 'x').
+	// A yakl file can be a dependency both compiled (import 'yakl:x') and as is (importstr 'x').
 	return slices.CompactFunc(urls, func(a, b *url.URL) bool { return a.String() == b.String() }), nil
 
 }

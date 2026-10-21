@@ -16,13 +16,13 @@
 // Command kubecfg-show is the entry point of the WebAssembly (wasip1) build of kubecfg.
 // Natively, use the kubecfg CLI instead.
 //
-// It renders the given Jsonnet/jamlet/YAML/JSON files like `kubecfg show -o json` and
+// It renders the given Jsonnet/yakl/YAML/JSON files like `kubecfg show -o json` and
 // writes the resulting Kubernetes objects to stdout as a JSON array. It never touches the
 // network or a cluster: imports resolve only against the filesystem the host provides
 // and kubecfg's embedded libraries.
 //
 //	GOOS=wasip1 GOARCH=wasm go build -o kubecfg-show.wasm ./wasm/cmd/kubecfg-show
-//	wasmtime run --dir=/src kubecfg-show.wasm --alpha /src/app.jamlet
+//	wasmtime run --dir=/src kubecfg-show.wasm --alpha /src/app.yakl
 package main
 
 import (
@@ -49,7 +49,7 @@ func main() {
 
 func run(args []string) error {
 	flags := pflag.NewFlagSet("kubecfg-show", pflag.ContinueOnError)
-	alpha := flags.Bool("alpha", false, "Enable alpha features (required for jamlet)")
+	alpha := flags.Bool("alpha", false, "Enable alpha features (required for yakl)")
 	vm := jsonnet.MakeVM()
 	setters := map[string]func(string, string){
 		"ext-str":  vm.ExtVar,

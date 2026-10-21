@@ -85,7 +85,7 @@ func evalSnippet(pathURL, expr string, tla []string) string {
 	}
 	body := root
 	if expr != "" {
-		// `$` must be an object, while a YAML stream in a jamlet file evaluates to an array.
+		// `$` must be an object, while a YAML stream in a yakl file evaluates to an array.
 		body = fmt.Sprintf("local Z____root__Z_ = %s; if Z____std__Z_.isObject(Z____root__Z_) then (Z____root__Z_ { Z____expr__Z_:: %s }).Z____expr__Z_ "+
 			"else error '-e needs the file to evaluate to an object, not ' + Z____std__Z_.type(Z____root__Z_)", root, expr)
 	}
@@ -97,7 +97,7 @@ func evalSnippet(pathURL, expr string, tla []string) string {
 }
 
 func traceback(w io.Writer, vm *jsonnet.VM, pathURL string, expr string, showAll bool) error {
-	// The tracer extends the root with an object, so an array (a jamlet stream) is traced as {docs: [...]}.
+	// The tracer extends the root with an object, so an array (a yakl stream) is traced as {docs: [...]}.
 	isArray, err := vm.EvaluateAnonymousSnippet("", fmt.Sprintf("std.isArray(import %q)", pathURL))
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func traceback(w io.Writer, vm *jsonnet.VM, pathURL string, expr string, showAll
 		return err
 	}
 	for _, r := range roots {
-		r = strings.TrimPrefix(r, utils.JamletScheme) // compiled jamlet files are local files too
+		r = strings.TrimPrefix(r, utils.YAKLScheme) // compiled yakl files are local files too
 		if showAll || strings.HasPrefix(r, "file://") {
 			fmt.Fprintln(w, strings.TrimPrefix(r, "file://"))
 		}

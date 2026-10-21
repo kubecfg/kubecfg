@@ -19,7 +19,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
+	"github.com/kubecfg/kubecfg/pkg/yakl"
+	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -36,7 +39,7 @@ func init() {
 	RootCmd.AddCommand(cmd)
 	cmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
 	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
-	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml")
+	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml, jsonnet (the unevaluated code of a .yakl file)")
 	cmd.PersistentFlags().Bool(flagTrace, false, "print a causal trace")
 
 	addCommonEvalFlags(cmd, withoutShortEvalFlag())
@@ -100,6 +103,13 @@ var evalCmd = &cobra.Command{
 			return fmt.Errorf("jsonnet filename required")
 		}
 
+		if c.Format == "jsonnet" {
+			if c.Expr != "" || c.ShowKeys || c.Trace {
+				return fmt.Errorf("-o jsonnet prints the file's code without evaluating it, so it can't be combined with -e, -k or --trace")
+			}
+			return printJsonnet(cmd, vm, args[0])
+		}
+
 		tla, err := tlaNames(flags)
 		if err != nil {
 			return err
@@ -107,4 +117,34 @@ var evalCmd = &cobra.Command{
 
 		return c.Run(cmd.Context(), vm, args[0], tla)
 	},
+}
+
+// printJsonnet prints the code that kubecfg evaluates for the file at path, without evaluating it,
+// so it works when evaluating fails. A yakl file's code is formatted to be read: names become
+// fields, anchors and keys like '&x' become locals, key modifiers become +:, :: and :::, and YAML
+// comments become // comments. kubecfg evaluates the same code, laid out to keep the source lines.
+func printJsonnet(cmd *cobra.Command, vm *jsonnet.VM, file string) error {
+	// Through the importer, like the other commands, so URLs and /dev/stdin work too.
+	path, err := utils.PathToURL(file)
+	if err != nil {
+		return err
+	}
+	src, _, err := vm.ImportData(path, path)
+	if err != nil {
+		return err
+	}
+	if utils.ImportPath(path) == path { // not a yakl file, so it's its own code
+		fmt.Fprint(cmd.OutOrStdout(), src)
+		return nil
+	}
+	code, err := yakl.Desugar(src)
+	if err != nil && code == "" {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	// Unformatted code that doesn't parse still shows what the file means.
+	fmt.Fprintln(cmd.OutOrStdout(), strings.TrimSuffix(code, "\n"))
+	if err != nil {
+		return fmt.Errorf("%s:%w", file, err) // a Jsonnet syntax error, at "line:column"
+	}
+	return nil
 }

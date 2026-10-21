@@ -1,0 +1,68 @@
+'&lib': ${import 'lib.libsonnet'}
+'&port': 8080
+---
+'&:': config
+name: web
+image: nginx:1.27
+replicas: 2
+---
+'&': deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${config.name}
+  labels: &labels
+    app: ${config.name}
+spec:
+  replicas: ${config.replicas}
+  selector:
+    matchLabels: ${labels}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - <<+: ${lib.probes(port)}
+          name: web
+          image: ${config.image}
+          ports:
+            - containerPort: ${port}
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: conf
+          configMap:
+            name: ${$['web.conf'].metadata.name}
+---
+'&': service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${config.name}
+spec:
+  '&target': ${deployment.spec.template.spec.containers[0]}
+  selector: ${deployment.spec.selector.matchLabels}
+  ports:
+    - name: ${target.name}
+      port: 80
+      targetPort: ${target.ports[0].containerPort}
+---
+'&': web.conf
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${lib.conf(config.name)}
+data:
+  default.conf: |
+    server { listen 8080; }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-ingress
+spec:
+  podSelector:
+    matchLabels: ${deployment.spec.selector.matchLabels}
+  ingress:
+    - {}

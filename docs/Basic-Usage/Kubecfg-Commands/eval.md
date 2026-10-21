@@ -103,3 +103,8 @@ render to stdout in JSON format
    }
 }
 ```
+
+## Seeing the Jsonnet of a YAKL file
+
+`kubecfg --alpha eval -o jsonnet app.yakl` prints the Jsonnet that a [YAKL](../../Advanced-Usage/yakl.md)
+file compiles to, without evaluating it. See [Seeing the generated Jsonnet](../../Advanced-Usage/yakl.md#seeing-the-generated-jsonnet).

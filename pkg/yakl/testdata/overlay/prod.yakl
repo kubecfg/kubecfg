@@ -1,0 +1,26 @@
+'&+': config
+replicas: 5
+image: nginx:1.29
+---
+'&+': service
+spec+:
+  type: LoadBalancer
+---
+'&+': web.conf
+data:
+  default.conf: |
+    server { listen 8080; gzip on; }
+---
+'&': pdb
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ${$.config.name}
+spec:
+  minAvailable: 2
+  selector: ${$.deployment.spec.selector}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${$.config.name}

@@ -15,7 +15,7 @@ import (
 
 	jsonnet "github.com/google/go-jsonnet"
 	libsonnet "github.com/kubecfg/kubecfg/lib"
-	"github.com/kubecfg/kubecfg/pkg/jamlet"
+	"github.com/kubecfg/kubecfg/pkg/yakl"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -99,12 +99,12 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 	}
 }
 
-// JamletScheme prefixes imports that compile a jamlet file to Jsonnet: `import 'jamlet:foo.jamlet'`.
-// Without it a .jamlet file is imported as is, which keeps importstr and importbin returning its source:
+// YAKLScheme prefixes imports that compile a yakl file to Jsonnet: `import 'yakl:foo.yakl'`.
+// Without it a .yakl file is imported as is, which keeps importstr and importbin returning its source:
 // go-jsonnet caches contents by location for all three, so compiled code needs a location of its own.
-const JamletScheme = "jamlet:"
+const YAKLScheme = "yakl:"
 
-// ImportPath returns what to import to evaluate the file at path: .jamlet files need the jamlet: scheme.
+// ImportPath returns what to import to evaluate the file at path: .yakl files need the yakl: scheme.
 func ImportPath(path string) string {
 	if strings.HasPrefix(path, "data:") { // inline code, not a file
 		return path
@@ -113,14 +113,14 @@ func ImportPath(path string) string {
 	if u, err := url.Parse(path); err == nil && u.Opaque == "" {
 		p = u.Path // ignore a URL's query and fragment
 	}
-	if strings.HasSuffix(p, jamlet.Ext) && !strings.HasPrefix(path, JamletScheme) {
-		return JamletScheme + path
+	if strings.HasSuffix(p, yakl.Ext) && !strings.HasPrefix(path, YAKLScheme) {
+		return YAKLScheme + path
 	}
 	return path
 }
 
 // DocsScheme prefixes imports that wrap the imported value v in an object, {docs: v}, for tools
-// that need an object where a jamlet stream is an array.
+// that need an object where a yakl stream is an array.
 const DocsScheme = "kubecfg+docs:"
 
 type universalImporter struct {
@@ -142,10 +142,10 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		return c, importedPath, nil
 	}
 
-	// Code compiled from a jamlet file imports relative to the file itself.
-	importedFrom = strings.TrimPrefix(importedFrom, JamletScheme)
-	if path, ok := strings.CutPrefix(importedPath, JamletScheme); ok {
-		return importer.importJamlet(importedFrom, path)
+	// Code compiled from a yakl file imports relative to the file itself.
+	importedFrom = strings.TrimPrefix(importedFrom, YAKLScheme)
+	if path, ok := strings.CutPrefix(importedPath, YAKLScheme); ok {
+		return importer.importYAKL(importedFrom, path)
 	}
 
 	binary := false
@@ -195,19 +195,19 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 	)
 }
 
-func (importer *universalImporter) importJamlet(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
+func (importer *universalImporter) importYAKL(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
 	if !importer.alpha {
-		return jsonnet.Contents{}, "", fmt.Errorf("%s: jamlet is an alpha feature, please use --alpha", importedPath)
+		return jsonnet.Contents{}, "", fmt.Errorf("%s: yakl is an alpha feature, please use --alpha", importedPath)
 	}
 	src, foundAt, err := importer.Import(importedFrom, importedPath)
 	if err != nil {
 		return jsonnet.Contents{}, "", err
 	}
-	compiledAt := JamletScheme + foundAt
+	compiledAt := YAKLScheme + foundAt
 	if c, ok := importer.cache[compiledAt]; ok {
 		return c, compiledAt, nil
 	}
-	code, err := jamlet.Compile(src.String())
+	code, err := yakl.Compile(src.String())
 	if err != nil {
 		return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", foundAt, err)
 	}

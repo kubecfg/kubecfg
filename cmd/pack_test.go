@@ -204,13 +204,13 @@ func TestPush(t *testing.T) {
 
 }
 
-// .jamlet files are compiled on import, but must be packed as source.
-func TestPackJamlet(t *testing.T) {
+// .yakl files are compiled on import, but must be packed as source.
+func TestPackYAKL(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
-		"demo.jamlet": "kind: Namespace\napiVersion: v1\nmetadata:\n  name: ${(import 'jamlet:lib.jamlet').name}\n" +
-			"  annotations: {src: ${importstr 'lib.jamlet'}}\n",
-		"lib.jamlet": "name: ${'demo'}\n",
+		"demo.yakl": "kind: Namespace\napiVersion: v1\nmetadata:\n  name: ${(import 'yakl:lib.yakl').name}\n" +
+			"  annotations: {src: ${importstr 'lib.yakl'}}\n",
+		"lib.yakl": "name: ${'demo'}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0600); err != nil {
@@ -218,7 +218,7 @@ func TestPackJamlet(t *testing.T) {
 		}
 	}
 	output := filepath.Join(dir, "out.tar.gz")
-	cmdOutput(t, []string{"--alpha", "pack", testRef, filepath.Join(dir, "demo.jamlet"), "--output", output})
+	cmdOutput(t, []string{"--alpha", "pack", testRef, filepath.Join(dir, "demo.yakl"), "--output", output})
 
 	f, err := os.Open(output)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestPackJamlet(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", hdr.Name, b, files[hdr.Name])
 		}
 	}
-	if got, want := strings.Join(names, ","), "demo.jamlet,lib.jamlet"; got != want {
+	if got, want := strings.Join(names, ","), "demo.yakl,lib.yakl"; got != want {
 		t.Errorf("got files %s, want %s", got, want)
 	}
 }
