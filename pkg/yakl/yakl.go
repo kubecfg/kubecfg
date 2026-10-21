@@ -1230,14 +1230,10 @@ func (c *compiler) document(d doc) error {
 // anchors declare locals: those that are Jsonnet variable names. Others are plain YAML anchors.
 // Where nodes have no place of their own in the output, such anchors are errors, and where says
 // why. If n is a list that a + key combines with another, before and after say on which side the
-// other's items go. keys are the computed keys of the mappings that hold n.
-func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool, keys []*yaml.Node, out *[]anchor) error {
+// other's items go. holders are the mappings that hold n, outermost first.
+func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool, holders []*yaml.Node, out *[]anchor) error {
 	if n.Kind == yaml.MappingNode {
-		for i := 0; i < len(n.Content); i += 2 {
-			if k := n.Content[i]; strings.HasPrefix(c.keyText(k), "${") {
-				keys = append(keys, k)
-			}
-		}
+		holders = append(holders, n)
 	}
 	if isIdentifier(n.Anchor) {
 		if where != "" {
@@ -1248,31 +1244,53 @@ func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool
 				return c.errorf(n, "the anchor &%s is also on line %d: a local can't have two values", n.Anchor, c.srcLine(a.n))
 			}
 		}
-		// Jsonnet needs the keys of a mapping to build it, and the local reads the mapping.
-		for _, k := range keys {
-			if c.keyVars(k)[n.Anchor] {
-				return c.errorf(k, "%s uses the local %s, which reads line %d from what %[1]s builds; "+
-					"to use the value in both places, declare it with a local key, as '&%[2]s': value", c.keyText(k), n.Anchor, c.srcLine(n))
+		// Jsonnet needs the keys of a mapping to build it, and the local reads the mapping. A local
+		// key of a mapping hides the local from the keys inside it.
+	holders:
+		for _, m := range holders {
+			es, _ := c.entries(m, map[*yaml.Node]bool{}) // mapping reports errors
+			for _, e := range es {
+				if c.keyVars(e.k)[n.Anchor] {
+					return c.errorf(e.k, "%s uses the local %s, which reads line %d from what %[1]s builds; "+
+						"to use the value in both places, declare it with a local key, as '&%[2]s': value", c.keyText(e.k), n.Anchor, c.srcLine(n))
+				}
+			}
+			for _, e := range es {
+				if c.keyText(e.k) == "&"+n.Anchor {
+					break holders
+				}
 			}
 		}
 		*out = append(*out, anchor{n, path})
 	}
-	return c.anchors(n, path, where, before, after, keys, out)
+	return c.anchors(n, path, where, before, after, holders, out)
 }
 
 var unknownVar = regexp.MustCompile(`Unknown variable: ([A-Za-z_][A-Za-z0-9_]*)`)
 
-// keyVars returns the variables that key expression k reads from around it, as opposed to fields
-// and variables that it binds itself. It returns none if the code doesn't parse on its own.
+// keyVars returns the variables that key k reads from around it, if it is an expression, as
+// opposed to fields and variables that it binds itself. It returns none if the code doesn't parse
+// on its own.
 func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
+	if k.Kind == yaml.AliasNode {
+		k = k.Alias
+	}
+	i, ok := c.placeholder(k.Value)
+	if !ok {
+		return nil
+	}
 	if vars, ok := c.vars[k]; ok {
 		return vars
 	}
-	text, vars, bind := c.keyText(k), map[string]bool{}, ""
+	e, vars, bind := c.exprs[i], map[string]bool{}, ""
+	code := e.code
+	if code == "" {
+		code = withoutBlocks(c.src, e.from, e.to, e.blocks)
+	}
 	for {
 		// Jsonnet reports the first unbound variable, so bind each in turn. The key is in an
 		// object, where self and $ are valid.
-		_, err := jsonnet.SnippetToAST("", bind+"{f: ("+text[2:len(text)-1]+"\n)}")
+		_, err := jsonnet.SnippetToAST("", bind+"{f: ("+code+"\n)}")
 		m := unknownVar.FindStringSubmatch(fmt.Sprint(err))
 		if m == nil || vars[m[1]] {
 			break
@@ -1285,7 +1303,7 @@ func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
 }
 
 // anchors collects the nodes under n whose anchors declare locals, like anchored, but not n.
-func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool, keys []*yaml.Node, out *[]anchor) error {
+func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool, holders []*yaml.Node, out *[]anchor) error {
 	switch n.Kind {
 	case yaml.SequenceNode:
 		// Past a ${for} or ${if} item, or the items of a list that this one extends, items are
@@ -1300,7 +1318,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 		for i, m := range n.Content {
 			if k, _, _ := c.clauseItem(m); k != nil {
 				seen++
-				if err := c.anchored(m, "", cmp.Or(where, inBody), false, false, keys, out); err != nil {
+				if err := c.anchored(m, "", cmp.Or(where, inBody), false, false, holders, out); err != nil {
 					return err
 				}
 				continue
@@ -1312,18 +1330,18 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 					w = "in a list item whose index depends on ${for} or ${if} items"
 				}
 			}
-			if err := c.anchored(m, item, w, false, false, keys, out); err != nil {
+			if err := c.anchored(m, item, w, false, false, holders, out); err != nil {
 				return err
 			}
 		}
 	case yaml.MappingNode:
-		// The fields of + keys, which extend those of keys without + in the same mapping.
+		// The fields of + keys, merged ones too, which extend those of keys without + in the mapping.
 		extended := map[string]bool{}
-		for i := 0; i < len(n.Content); i += 2 {
-			k := n.Content[i]
-			text := c.keyText(k)
+		es, _ := c.entries(n, map[*yaml.Node]bool{}) // mapping reports errors
+		for _, e := range es {
+			text := c.keyText(e.k)
 			if strings.HasSuffix(strings.TrimRight(text, ":"), "+") && text != "<<+" && !strings.HasPrefix(text, "&") && !strings.HasPrefix(text, "${") {
-				extended[c.fieldName(k)] = true
+				extended[c.fieldName(e.k)] = true
 			}
 		}
 		for i := 0; i < len(n.Content); i += 2 {
@@ -1351,7 +1369,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 				p = access(path, c.fieldName(k))
 				ext = !plus && extended[c.fieldName(k)]
 			}
-			if err := c.anchored(v, p, w, plus, ext, keys, out); err != nil {
+			if err := c.anchored(v, p, w, plus, ext, holders, out); err != nil {
 				return err
 			}
 		}

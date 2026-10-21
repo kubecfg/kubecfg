@@ -911,7 +911,8 @@ document:
 - **A whole object as an unnamed single-document overlay is a mistake:** merged into a named
   base's root, its `apiVersion` and `kind` would turn the whole file into that one object.
   kubecfg reports an overlay with `apiVersion` and `kind` but no name when the base has no
-  `kind` of its own.
+  `kind` of its own. A flag that names the field, `--overlay-code-file sa=whole.yakl`, adds it
+  as the document `sa`.
 
 ## Worked example
 

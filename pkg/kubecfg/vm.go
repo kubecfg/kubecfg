@@ -317,7 +317,9 @@ const (
 	jsonnetFile
 )
 
-func (f overlayFormat) parse(src string) string {
+// parse returns the code of an overlay. root says whether it applies to the whole file, rather than
+// to a field that the flag names.
+func (f overlayFormat) parse(src string, root bool) string {
 	switch f {
 	case jsonnetCode:
 		return src
@@ -327,8 +329,12 @@ func (f overlayFormat) parse(src string) string {
 			// JSON is a proper subset of YAML (for our intents and purposes)
 			return fmt.Sprintf("(import 'kubecfg.libsonnet').toOverlay(std.parseYaml(importstr %q))", src)
 		case yakl.Ext:
-			// A yakl overlay spells its own +: and ::, so it applies as written. The assert sees
-			// the base as super: a whole object without a name would replace a base with names.
+			// A yakl overlay spells its own +: and ::, so it applies as written.
+			if !root {
+				return fmt.Sprintf("import %q", utils.ImportPath(src))
+			}
+			// The assert sees the base as super: a whole object without a name would replace a
+			// base with names.
 			return fmt.Sprintf(`(local o = import %q; if !std.isObject(o) then o else {`+
 				`assert !(std.objectHas(o, 'apiVersion') && std.objectHas(o, 'kind') && !('kind' in super)) : %q} + o)`,
 				utils.ImportPath(src), src+": a whole object without a name, overlaid on a file with names; name it (&name) to add it as a document")
@@ -346,7 +352,7 @@ func buildOverlayObject(format overlayFormat, flag string) string {
 
 	if len(parts) > 0 {
 		path, value := parts[1], parts[2]
-		wrapper := format.parse(value)
+		wrapper := format.parse(value, false)
 		fields := strings.Split(path, ".")
 		// we can't use slices.Reverse(s) since we must build on Go 1.21
 		for i, j := 0, len(fields)-1; i < j; i, j = i+1, j-1 {
@@ -357,7 +363,7 @@ func buildOverlayObject(format overlayFormat, flag string) string {
 		}
 		return wrapper
 	} else {
-		return format.parse(flag)
+		return format.parse(flag, true)
 	}
 }
 

@@ -264,4 +264,12 @@ func TestYAKLOverlay(t *testing.T) {
 	if _, _, err := read(whole); err == nil || !strings.Contains(err.Error(), "a whole object without a name, overlaid on a file with names") {
 		t.Errorf("got error %v", err)
 	}
+	// Named by the flag, it's a new document.
+	kinds, _, err = read("account=" + whole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(kinds, ","), "ConfigMap,Deployment,NetworkPolicy,Service,ServiceAccount"; got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
 }
