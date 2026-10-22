@@ -3,6 +3,10 @@ site_description: 'KubeCFG Documentation'
 
 site_dir: docs-build
 
+# docs/map is the todography map (https://github.com/mkmik/todography), not site pages.
+exclude_docs: |
+  map/
+
 theme:
   name: 'material'
   logo: 'https://avatars.githubusercontent.com/u/90627713?s=48&v=4' # TODO : Change this logo , it renderes horribly
