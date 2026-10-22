@@ -1,0 +1,60 @@
+# kubecfg's map of itself: what it has, what is being built, and what we'd like.
+# `todography lint` checks it; `todography build` draws it.
+# Format: https://mkmik.github.io/todography/reference/format.html
+title = "kubecfg"
+
+[[band]]
+id = "surfaces"
+title = "What you run"
+
+[[band]]
+id = "language"
+title = "What you write"
+
+[[band]]
+id = "engine"
+title = "How it evaluates"
+
+[[band]]
+id = "cluster"
+title = "How it talks to Kubernetes"
+
+[[band]]
+id = "ship"
+title = "How it ships"
+
+[[band]]
+id = "deps"
+title = "What it stands on"
+
+[[kind]]
+id = "command"
+summary = "A kubecfg subcommand"
+
+[[kind]]
+id = "embed"
+summary = "A way to run kubecfg inside another program"
+
+[[kind]]
+id = "lang"
+summary = "A language or library that templates are written in"
+
+[[kind]]
+id = "engine"
+summary = "Part of evaluation: the VM, imports, objects"
+
+[[kind]]
+id = "config"
+summary = "How a run is configured"
+
+[[kind]]
+id = "cluster"
+summary = "Talks to the Kubernetes API server"
+
+[[kind]]
+id = "infra"
+summary = "Repository machinery: CI, releases, docs, examples"
+
+[[kind]]
+id = "dep"
+summary = "A Go module kubecfg depends on"
