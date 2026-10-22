@@ -5,9 +5,9 @@ A fake shop (a web frontend, an API, a nightly worker and Redis) written in
 [k8s-libsonnet](https://github.com/kubecfg/k8s-libsonnet), with a dev and a prod overlay.
 
 ```
-kubecfg --alpha show shop.yakl
-kubecfg --alpha show shop.yakl --overlay-code-file dev.yakl
-kubecfg --alpha show shop.yakl --overlay-code-file prod.yakl
+kubecfg --features=yakl show shop.yakl
+kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file dev.yakl
+kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file prod.yakl
 ```
 
 Their output is in `testdata/shop.yaml`, `testdata/shop-dev.yaml` and

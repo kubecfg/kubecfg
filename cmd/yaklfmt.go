@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const flagInPlace = "in-place"
@@ -40,8 +40,8 @@ is; a YAML formatter like prettier keeps a yakl file's meaning. A plain expressi
 formatted code isn't a valid plain YAML scalar gets quoted.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !viper.GetBool(flagAlpha) {
-			return fmt.Errorf("yakl is an alpha feature, please use --alpha")
+		if err := gates.Require(features.YAKL); err != nil {
+			return err
 		}
 		inPlace, err := cmd.Flags().GetBool(flagInPlace)
 		if err != nil {

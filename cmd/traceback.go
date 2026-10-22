@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -23,9 +21,8 @@ var tracebackCmd = &cobra.Command{
 	Short: "Output jsonnet file line locations that may affect a given yaml output",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return fmt.Errorf("eval is an alpha feature, please use --alpha")
+		if err := gates.Require(features.Traceback); err != nil {
+			return err
 		}
 
 		vm, err := JsonnetVM(cmd)

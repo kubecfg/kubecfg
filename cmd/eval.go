@@ -20,12 +20,12 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -65,9 +65,8 @@ var evalCmd = &cobra.Command{
 	Short: "eval jsonnet expression",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return fmt.Errorf("eval is an alpha feature, please use --alpha")
+		if err := gates.Require(features.Eval); err != nil {
+			return err
 		}
 
 		flags := cmd.Flags()

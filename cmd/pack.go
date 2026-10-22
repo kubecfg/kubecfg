@@ -16,11 +16,9 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -44,9 +42,8 @@ var packCmd = &cobra.Command{
 	Short: "Create and push an OCI package",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return fmt.Errorf("eval is an alpha feature, please use --alpha")
+		if err := gates.Require(features.Pack); err != nil {
+			return err
 		}
 
 		vm, err := JsonnetVM(cmd)

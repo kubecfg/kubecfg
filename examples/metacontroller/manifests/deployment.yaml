@@ -18,7 +18,7 @@ spec:
       - name: hooks
         image: 'ghcr.io/kubecfg/kubecfg/kubecfg@sha256:98d47fc69a7fb9ce5f936d658b1f1ae6f2b1e801255570347c43e2e6b4305965'
         imagePullPolicy: Always
-        args: ['--alpha', 'httpd', 'sync.jsonnet']
+        args: ['--features=httpd', 'httpd', 'sync.jsonnet']
         env:
           - name: KUBECFG_JPATH
             value: '/hooks'

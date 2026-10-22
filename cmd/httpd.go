@@ -19,9 +19,9 @@ import (
 	"fmt"
 
 	jsonnet "github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -39,9 +39,8 @@ var httpdCmd = &cobra.Command{
 	Short: "process https requests with jsonnet",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return fmt.Errorf("httpd is an alpha feature, please use --alpha")
+		if err := gates.Require(features.Httpd); err != nil {
+			return err
 		}
 
 		flags := cmd.Flags()

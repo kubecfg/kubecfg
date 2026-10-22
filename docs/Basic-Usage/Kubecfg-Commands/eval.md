@@ -1,6 +1,6 @@
 # Eval
 
-**Alpha Feature**
+**Alpha Feature**: turn it on with `--features=eval` (see [Feature gates](../../Advanced-Usage/feature-gates.md)).
 
 `Eval` is very similar to `show` but it differs in a fundamental way, it does not traverse the code in search of kubernetes manifests, it instead behaves more like `jsonnet` command and does just evaluate the jsonnet code to output 
 
@@ -45,10 +45,10 @@ local kubecfg = import 'kubecfg.libsonnet';
 
 render jsonnet to stdout in YAML format
 
-`kubecfg --alpha eval source.jsonnet`
+`kubecfg --features=eval eval source.jsonnet`
 
 ```yaml
-➜ kubecfg --alpha eval code.jsonnet
+➜ kubecfg --features=eval eval code.jsonnet
 deployment:
   apiVersion: extensions/v1beta1
   kind: Deployment
@@ -70,7 +70,7 @@ deployment:
 
 render to stdout in JSON format
 
-`kubecfg --alpha eval -o json source.jsonnet`
+`kubecfg --features=eval eval -o json source.jsonnet`
 ```json
 {
    "deployment": {
@@ -106,5 +106,5 @@ render to stdout in JSON format
 
 ## Seeing the Jsonnet of a YAKL file
 
-`kubecfg --alpha eval -o jsonnet app.yakl` prints the Jsonnet that a [YAKL](../../Advanced-Usage/yakl.md)
+`kubecfg --features=eval,yakl eval -o jsonnet app.yakl` prints the Jsonnet that a [YAKL](../../Advanced-Usage/yakl.md)
 file compiles to, without evaluating it. See [Seeing the generated Jsonnet](../../Advanced-Usage/yakl.md#seeing-the-generated-jsonnet).

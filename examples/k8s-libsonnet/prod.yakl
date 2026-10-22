@@ -1,7 +1,7 @@
 # Production: its own namespace and nodes, more replicas, API resources, a
 # disruption budget, and a bigger Redis.
 #
-#   kubecfg --alpha show shop.yakl --overlay-code-file prod.yakl
+#   kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file prod.yakl
 
 !k8s+
 ObjectMeta+:

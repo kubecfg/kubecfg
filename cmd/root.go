@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
@@ -49,6 +50,7 @@ import (
 
 const (
 	flagAlpha       = "alpha"
+	flagFeatures    = "features"
 	flagVerbose     = "verbose"
 	flagJpath       = "jpath"
 	flagJUrl        = "jurl"
@@ -66,12 +68,16 @@ const (
 )
 
 var clientConfig clientcmd.ClientConfig
+
+// gates are the feature gates of this invocation, set before any command runs.
+var gates *features.Gates
 var overrides clientcmd.ConfigOverrides
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	RootCmd.PersistentFlags().Bool(flagAlpha, false, "Enable alpha features")
+	RootCmd.PersistentFlags().Bool(flagAlpha, false, "Enable all alpha features, including ones added by future releases; prefer --features")
+	RootCmd.PersistentFlags().StringSlice(flagFeatures, nil, `Turn features on or off: name, name=true or name=false, comma separated. May be repeated. Run "kubecfg features" to list them.`)
 	RootCmd.PersistentFlags().CountP(flagVerbose, "v", "Increase verbosity. May be given multiple times.")
 	RootCmd.PersistentFlags().StringArrayP(flagJpath, "J", nil, "Additional Jsonnet library search path, appended to the ones in the KUBECFG_JPATH env var. May be repeated.")
 	RootCmd.MarkPersistentFlagFilename(flagJpath)
@@ -124,6 +130,12 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 		log.SetLevel(logLevel(verbosity))
+
+		// Through viper, so KUBECFG_FEATURES is the same setting as --features.
+		gates, err = features.New(viper.GetBool(flagAlpha), features.Source{Name: "--" + flagFeatures, Items: viper.GetStringSlice(flagFeatures)})
+		if err != nil {
+			return err
+		}
 
 		// Ask me how much I love glog/klog's interface.
 		logflags := goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
@@ -231,7 +243,7 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 	}
 	opts = append(opts, kubecfg.WithImportURLs(sURLs...))
 
-	opts = append(opts, kubecfg.WithAlpha(viper.GetBool(flagAlpha)))
+	opts = append(opts, kubecfg.WithFeatures(gates))
 
 	withVar := func(typ vars.Type, expr vars.ExpressionType, source vars.Source) func(string, string) {
 		return func(name, value string) {
@@ -312,9 +324,8 @@ func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*
 	}
 
 	if overlayCodeFile != "" {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlayCodeFile, flagAlpha)
+		if err := gates.Require(features.Overlay); err != nil {
+			return nil, fmt.Errorf("--%s: %w", flagOverlayCodeFile, err)
 		}
 		opts = append(opts, utils.WithOverlayURL(overlayCodeFile))
 	}
@@ -324,9 +335,8 @@ func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*
 		return nil, err
 	}
 	if overlayCode != "" {
-		alpha := viper.GetBool(flagAlpha)
-		if !alpha {
-			return nil, fmt.Errorf("--%s is an alpha feature please use --%s", flagOverlayCode, flagAlpha)
+		if err := gates.Require(features.Overlay); err != nil {
+			return nil, fmt.Errorf("--%s: %w", flagOverlayCode, err)
 		}
 		opts = append(opts, utils.WithOverlayCode(overlayCode))
 	}

@@ -72,16 +72,16 @@ the 2 `kubecfg.github.com/provenance-` annotations will automatically be added t
 
 ## Traceback
 
-**Alpha Feature** 
+**Alpha Feature**: turn it on with `--features=traceback` (see [Feature gates](feature-gates.md)).
 
 when the annotations are added to the rendered manifests is possible to traceback the line in the jsonnet code that did add a specific field 
 
 for example, to find which line in jsonnet added the `replicas: 1` (which is line 12 in the manifest ) we can
 
-`kubecfg --alpha traceback RENDERED.yaml:LINE_NUMBER`
+`kubecfg --features=traceback traceback RENDERED.yaml:LINE_NUMBER`
 
 ```
-➜ kubecfg --alpha traceback output.yaml:12   
+➜ kubecfg --features=traceback traceback output.yaml:12   
 INFO  Tracing file="code.jsonnet", path="$.deployment.spec.replicas"
 /dev/shm/kubecfg/example/code.jsonnet:21 
 ```
@@ -111,7 +111,7 @@ If the replicas value gets updated by setting the replicas to 3 , the traceback 
 
 ➜ kubecfg show code.jsonnet --show-provenance > output.yaml
 
-➜ kubecfg --alpha traceback output.yaml:12
+➜ kubecfg --features=traceback traceback output.yaml:12
 INFO  Tracing file="code.jsonnet", path="$.deployment.spec.replicas"
 /dev/shm/kubecfg/example/code.jsonnet:34 
 

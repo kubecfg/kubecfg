@@ -49,9 +49,9 @@ gotest:
 
 jsonnettest: kubecfg $(JSONNET_FILES) examples/guestbook.yakl
 #	TODO: use `kubecfg validate` once it works offline
-	./kubecfg show --alpha $(JSONNET_FILES) >/dev/null
+	./kubecfg show --features=binary-import $(JSONNET_FILES) >/dev/null
 #	separately, as it redefines the guestbook.jsonnet resources
-	./kubecfg show --alpha examples/guestbook.yakl >/dev/null
+	./kubecfg show --features=yakl examples/guestbook.yakl >/dev/null
 
 wasmtest:
 	cd wasm/hosttest && $(GO) test $(GO_FLAGS) ./...

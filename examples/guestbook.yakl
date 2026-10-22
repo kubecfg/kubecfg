@@ -1,7 +1,7 @@
 # The guestbook frontend (see guestbook.jsonnet) written in YAKL: plain YAML
 # where any value can be a ${...} Jsonnet expression.
 #
-#   kubecfg --alpha show examples/guestbook.yakl
+#   kubecfg --features=yakl show examples/guestbook.yakl
 #
 # See docs/Advanced-Usage/yakl.md for the full spec.
 

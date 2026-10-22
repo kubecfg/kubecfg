@@ -1,8 +1,8 @@
 # A fake online shop: a web frontend, an API, a nightly worker and a Redis cache,
 # built on k8s-libsonnet. See README.md.
 #
-#   kubecfg --alpha show shop.yakl
-#   kubecfg --alpha show shop.yakl --overlay-code-file prod.yakl
+#   kubecfg --features=yakl show shop.yakl
+#   kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file prod.yakl
 
 # The library, plus a label for every shop object. It's a hidden field rather
 # than a local key, so an overlay can extend it (!k8s+) and change every
