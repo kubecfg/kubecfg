@@ -1,0 +1,22 @@
+# Lints the todography map in docs/map: https://github.com/mkmik/todography
+name: Map
+
+on:
+  push:
+    branches: [main]
+    paths: [docs/map/**, .github/workflows/map.yml]
+  pull_request:
+    branches: [main]
+    paths: [docs/map/**, .github/workflows/map.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: mkmik/todography@dad94ed9bcb73a01c4e462a365e5168fea9f4f98 # v0.12.0
+        with:
+          args: --strict
