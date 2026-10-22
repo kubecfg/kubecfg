@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -8,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	jsonnet "github.com/google/go-jsonnet"
 )
 
 func TestInternalFS(t *testing.T) {
@@ -104,5 +108,34 @@ func TestImportFromPipe(t *testing.T) {
 				t.Errorf("got %d bytes, want %d", len(got), len(tc.data))
 			}
 		})
+	}
+}
+
+func TestImportYAML(t *testing.T) {
+	dir := t.TempDir()
+	for name, src := range map[string]string{
+		"one.yaml":    "a: ${x}\n",
+		"stream.yaml": "a: 1\n---\nb: 2\n",
+		"main.jsonnet": `[
+			import 'yaml:one.yaml', import 'yaml:stream.yaml', importstr 'one.yaml',
+			std.parseYaml(importstr 'stream.yaml') == import 'yaml:stream.yaml',
+		]`,
+	} {
+		if err := os.WriteFile(dir+"/"+name, []byte(src), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	vm := jsonnet.MakeVM()
+	vm.Importer(MakeUniversalImporter(nil, false))
+	got, err := vm.EvaluateAnonymousSnippet("", fmt.Sprintf("import 'file://%s/main.jsonnet'", dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, []byte(got)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), `[{"a":"${x}"},[{"a":1},{"b":2}],"a: ${x}\n",true]`; got != want {
+		t.Errorf("got %s, want %s", got, want)
 	}
 }

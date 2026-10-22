@@ -1527,6 +1527,11 @@ error. The scheme is needed because go-jsonnet hands `import`, `importstr` and `
 the same cached file contents, so compiled code needs a location of its own. The scheme
 works with any location: `yakl:https://...`, `yakl:oci://...`.
 
+Plain YAML has a scheme of its own, `yaml:`, which doesn't need `--alpha`:
+`import 'yaml:team.yaml'` is `std.parseYaml(importstr 'team.yaml')`. It reads the file as
+YAML and nothing more, so a `${...}` in it stays text. One document gives that document;
+a file with `---` gives a list.
+
 ## Open questions
 
 - **A clearer kubecfg error when an overlay names a missing document,** such as "overlay field
