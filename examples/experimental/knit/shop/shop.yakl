@@ -1,0 +1,129 @@
+# A fake online shop: a web frontend, an API, a nightly worker and a Redis cache,
+# built with knit. See README.md.
+#
+#   kubecfg show shop.yakl
+#   kubecfg show prod.yakl   # shop.yakl with the prod overlay
+
+# Each object has a name, !web, which is the field $.web of the file: what an
+# overlay names to change it, and what other documents read it as. knit merges
+# the documents in order, list entries by their Kubernetes key (containers by
+# name), and $.web is the object as it ends up.
+<<+: ${(import 'kubecfg.libsonnet').knit}
+---
+# Templates under every object. A value a document sets itself wins.
+!registry+
+objects+:
+  metadata+:
+    labels+: {app.kubernetes.io/part-of: shop}
+types+:
+  # Every pod template, at any depth: Deployments, the CronJob, Redis.
+  PodTemplateSpec+:
+    metadata+:
+      labels+: {app.kubernetes.io/part-of: shop}
+---
+!config::
+registry: registry.example.com/shop
+version: 1.4.2
+domain: shop.example.com
+replicas: {web: 2, api: 2}
+---
+'&image': ${function(name) $.config.registry + '/' + name + ':' + $.config.version}
+---
+!web
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: ${$.config.replicas.web}
+  selector:
+    matchLabels: &labels {app.kubernetes.io/name: web}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - name: web
+          image: ${image('web')}
+          ports: [{name: http, containerPort: 8080}]
+          env: [{name: API_URL, value: 'http://api'}]
+---
+!webService
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector: {app.kubernetes.io/name: web}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+!api
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: ${$.config.replicas.api}
+  selector:
+    matchLabels: &labels {app.kubernetes.io/name: api}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - name: api
+          image: ${image('api')}
+          ports: [{name: http, containerPort: 8080}]
+          env: [{name: REDIS_URL, value: 'redis://redis:6379'}]
+---
+!apiService
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector: {app.kubernetes.io/name: api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+!worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: worker
+spec:
+  schedule: '0 3 * * *'
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ${image('api')}
+              args: [reindex]
+              # The API container's env as it ends up: what an overlay adds to the API's
+              # env reaches the worker too. containers_ is containers keyed by name.
+              env: ${$.api.spec.template.spec.containers_.api.env}
+---
+!ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+spec:
+  rules:
+    - host: ${$.config.domain}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: web, port: {name: http}}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: {name: api, port: {name: http}}
+---
+# Redis as published upstream, as it is: a parsed YAML stream is a layer too.
+# Its objects have no names; an overlay finds them by kind and name.
+${std.parseYaml(importstr 'redis.yaml')}

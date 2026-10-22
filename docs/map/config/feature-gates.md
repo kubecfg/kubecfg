@@ -55,6 +55,7 @@ on = "/config/alpha"
 why = "Keeps --alpha working"
 +++
 
-Merged in #538; all eight features start at alpha. Setting features in
+Merged in #538; all eight features start at alpha. #541 adds
+a ninth, `knit`. Setting features in
 `.kubecfgrc.jsonnet` comes with RFC02, `t8y:/config/rc-file#features`.
 Still open from the RFC: how long a feature stays in beta before GA.

@@ -1,0 +1,7 @@
+apiVersion: example.com/v1
+kind: Gateway
+metadata: { name: edge }
+spec:
+  listeners:
+  - name: https
+    tls: true

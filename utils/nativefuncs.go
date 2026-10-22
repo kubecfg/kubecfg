@@ -28,6 +28,7 @@ import (
 	goyaml "github.com/ghodss/yaml"
 	jsonnet "github.com/google/go-jsonnet"
 	jsonnetAst "github.com/google/go-jsonnet/ast"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 	log "github.com/sirupsen/logrus"
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
@@ -77,8 +78,32 @@ func (r *ArrayReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// RegisterFeatures makes std.native('requireFeature')(name) check gates: it returns true when
+// the named feature is on, and fails with the standard error when it is off. Jsonnet can
+// require a feature but not read it, so output never depends on which features are on.
+// RegisterNativeFuncs registers it with every feature at its default.
+func RegisterFeatures(vm *jsonnet.VM, gates *features.Gates) {
+	vm.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "requireFeature",
+		Params: []jsonnetAst.Identifier{"name"},
+		Func: func(args []interface{}) (interface{}, error) {
+			name, _ := args[0].(string)
+			f := features.Lookup(name)
+			if f == nil {
+				return nil, fmt.Errorf("unknown feature %q; run \"kubecfg features\" to list them", name)
+			}
+			if err := gates.Require(f); err != nil {
+				return nil, err
+			}
+			return true, nil
+		},
+	})
+}
+
 // RegisterNativeFuncs adds kubecfg's native jsonnet functions to provided VM
 func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
+	RegisterFeatures(vm, nil)
+
 	// TODO(mkm): go-jsonnet 0.12.x now contains native std.parseJson; deprecate and remove this one.
 	vm.NativeFunction(&jsonnet.NativeFunction{
 		Name:   "parseJson",

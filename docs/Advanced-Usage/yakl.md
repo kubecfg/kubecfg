@@ -751,8 +751,9 @@ deployment:
 The node stays where it's written, and the local reads it there.
 
 - **Scope: the whole document,** above or below the anchor. Another document can't use it:
-  Jsonnet reports "Unknown variable". Something several documents share belongs in a file local
-  or a field.
+  Jsonnet reports "Unknown variable", as a YAML parser rejects an alias to another document's
+  anchor. Anchors are for reusing a node inside one object; something several documents share
+  belongs in a field, like `!config`, or a file local.
 - **Value: the node as the document writes it,** after the document's own `<<+` and `x+` keys
   are applied, but before any overlay. Overlays change fields, never locals: an overlay that
   adds a label to `deployment.metadata.labels` changes only that field. The selector and the
@@ -977,6 +978,12 @@ that first document gives the same output as `--overlay-code-file`.
   changes through its names and `$`, as with an overlay.
 - **A single document of only `<<+`** is that document, as before: a file is extended only when
   more documents follow.
+- **The base can manage the file's names.** The file lists its documents, in order, in the
+  hidden field `documents`, as `{name, plus, doc}` (`name` is `null` for a document without
+  one). A named document's field is `self['$named'](name, plain)` when the object has that
+  method, `plain` being a function that gives the field as above; without the method, it's
+  `plain()`. The Jsonnet above leaves both out. [knit](knit.md#objects-have-names) uses them
+  to make each named manifest an object it merges, and the field the object as it ends up.
 
 ## Worked example
 
@@ -1201,9 +1208,9 @@ It means:
   Deployment's selector.
 - **`!web.conf+` with a plain `data:`** replaces all of `data`; `data+:` would merge it.
 
-A larger example, a shop built on [k8s-libsonnet](https://github.com/kubecfg/k8s-libsonnet)
+A larger example, a shop in plain Kubernetes YAML merged by [knit](knit.md)
 with dev and prod overlays that change every object, every pod, or one container, is in
-[`examples/k8s-libsonnet`](https://github.com/kubecfg/kubecfg/tree/main/examples/k8s-libsonnet).
+[`examples/experimental/knit/shop`](https://github.com/kubecfg/kubecfg/tree/main/examples/experimental/knit/shop).
 
 ## Semantics
 
@@ -1309,6 +1316,7 @@ line:
 | a name tag without a name, like `!+`, or with more than three colons | there's no field to name |
 | `$` in a file local of a file without names | there is no file object; Jsonnet would read it as the local's own object |
 | `!unnamed` | `unnamed` is reserved for unnamed documents |
+| `!documents` | `documents` is reserved for the list of a file's documents |
 | a document of only `<<+` and local keys that isn't the first, in a file of several documents | it says what the file extends, so it comes first |
 | a file that extends a single object, one with `apiVersion` and `kind` | the file's documents would be hidden inside that object; give the object's own document `<<+` instead |
 | `&labels: value`, a local key without quotes | YAML reads an empty key carrying the anchor `labels`; yakl says to quote it |
