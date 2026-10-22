@@ -3,26 +3,26 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
 
 // kustomizeImporter satifies the http.RoundTripper interface
 type kustomizeImporter struct {
-	alpha bool
+	gates *features.Gates
 }
 
 // RoundTrip performs a HTTP transaction for an `import kustomize+https://<url>` statement
 // by calling a simple Kustomize run against it, returning the rendered manifests.
 func (k *kustomizeImporter) RoundTrip(req *http.Request) (*http.Response, error) {
 
-	if !k.alpha {
-		return nil, fmt.Errorf("kustomize+https:// prefix is an alpha feature, please use the --alpha flag")
+	if err := k.gates.Require(features.KustomizeImport); err != nil {
+		return nil, err
 	}
 
 	// We know the scheme is kustomize+https, so simply grab the URL

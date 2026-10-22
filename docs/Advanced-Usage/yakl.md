@@ -1,7 +1,7 @@
 # YAKL: YAML with Jsonnet expressions
 
 !!! warning "Prototype"
-    YAKL is an experimental format, enabled with `--alpha` (or `KUBECFG_ALPHA=true`). The
+    YAKL is an experimental format, turned on with `--features=yakl` (see [Feature gates](feature-gates.md)). The
     syntax and semantics below may change.
 
 Jsonnet is a great language, but many people would rather write YAML. Tools like
@@ -123,7 +123,7 @@ Jsonnet errors and `kubecfg traceback` / `eval --trace` point at the right line 
 
 ### Seeing the generated Jsonnet
 
-`kubecfg --alpha eval -o jsonnet app.yakl` prints the Jsonnet a file compiles to, formatted
+`kubecfg --features=eval,yakl eval -o jsonnet app.yakl` prints the Jsonnet a file compiles to, formatted
 to be read, with a field per line and YAML comments as `//` comments. It doesn't evaluate the
 file, so it works when evaluating fails, and needs neither a cluster nor the file's imports. It
 is the quickest way to see what names, locals and key modifiers mean. For this document:
@@ -175,7 +175,7 @@ line in the yakl file.
 
 ### Formatting
 
-`kubecfg --alpha yaklfmt app.yakl` formats the Jsonnet code of the expressions, as jsonnetfmt
+`kubecfg --features=yakl yaklfmt app.yakl` formats the Jsonnet code of the expressions, as jsonnetfmt
 does, and prints the file; `-i` rewrites it instead. The YAML around the expressions, comments
 included, stays as it is: a YAML formatter such as prettier keeps a yakl file's meaning (see
 [What tools do with it](#what-tools-do-with-it)).
@@ -960,7 +960,7 @@ metadata:
 }
 ```
 
-`kubecfg --alpha show prod.yakl` then shows `web.yakl` with the changes, and a third file can
+`kubecfg --features=yakl show prod.yakl` then shows `web.yakl` with the changes, and a third file can
 extend `prod.yakl` in turn. With the [worked example](#worked-example)'s `prod.yakl`, adding
 that first document gives the same output as `--overlay-code-file`.
 
@@ -1174,7 +1174,7 @@ It means:
 }
 ```
 
-`kubecfg --alpha show web.yakl` and `kubecfg --alpha show web.yakl --overlay-code-file prod.yakl` give:
+`kubecfg --features=yakl show web.yakl` and `kubecfg --features=yakl,overlay show web.yakl --overlay-code-file prod.yakl` give:
 
 | Where | web.yakl alone | with prod.yakl |
 | --- | --- | --- |
@@ -1448,7 +1448,7 @@ files without a cluster), kustomize 5.8.3, go-yaml v3.0.5 and sigs.k8s.io/yaml v
 
 ## Migrating from jamlet
 
-YAKL used to be called jamlet. It is behind `--alpha`, so some meanings changed outright. Most
+YAKL used to be called jamlet. It is an alpha feature, so some meanings changed outright. Most
 old files fail loudly where their meaning changed.
 
 | Before | Now | Rewrite |
@@ -1527,7 +1527,7 @@ error. The scheme is needed because go-jsonnet hands `import`, `importstr` and `
 the same cached file contents, so compiled code needs a location of its own. The scheme
 works with any location: `yakl:https://...`, `yakl:oci://...`.
 
-Plain YAML has a scheme of its own, `yaml:`, which doesn't need `--alpha`:
+Plain YAML has a scheme of its own, `yaml:`, which isn't behind a feature gate:
 `import 'yaml:team.yaml'` is `std.parseYaml(importstr 'team.yaml')`. It reads the file as
 YAML and nothing more, so a `${...}` in it stays text. One document gives that document;
 a file with `---` gives a list.

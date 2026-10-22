@@ -51,7 +51,7 @@ This can be successfully evaluated, as it is valid against the schema:
 
 ```sh
 
-kubecfg eval --alpha example.jsonnet -o json
+kubecfg eval --features=eval example.jsonnet -o json
 {
    "person": {
       "age": 26
@@ -66,7 +66,7 @@ By modifying the `person.age` value to `-1` we can force this to produce an erro
 as this becomes invalid against our schema:
 
 ```sh
-kubecfg eval --alpha example.jsonnet -o json
+kubecfg eval --features=eval example.jsonnet -o json
 ERROR RUNTIME ERROR: object is invalid against the schema: jsonschema: '/age' does not validate with file:///properties/age/minimum: must be >= 0 but found -1
 ```
 

@@ -15,6 +15,7 @@ import (
 
 	jsonnet "github.com/google/go-jsonnet"
 	libsonnet "github.com/kubecfg/kubecfg/lib"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	log "github.com/sirupsen/logrus"
 )
@@ -71,6 +72,15 @@ A real-world example:
     and downloaded from that location.
 */
 func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
+	if alpha {
+		return MakeUniversalImporterWithFeatures(searchURLs, features.AllAlpha())
+	}
+	return MakeUniversalImporterWithFeatures(searchURLs, nil)
+}
+
+// MakeUniversalImporterWithFeatures is MakeUniversalImporter with the feature gates that decide
+// which import schemes are on; nil leaves every feature at its default.
+func MakeUniversalImporterWithFeatures(searchURLs []*url.URL, gates *features.Gates) jsonnet.Importer {
 	// Reconstructed copy of http.DefaultTransport (to avoid
 	// modifying the default)
 	t := &http.Transport{
@@ -89,13 +99,13 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 	t.RegisterProtocol("file", http.NewFileTransport(streamDir{http.Dir("/")}))
 	t.RegisterProtocol("internal", http.NewFileTransport(newInternalFS()))
 	t.RegisterProtocol("oci", newOCIImporter())
-	t.RegisterProtocol("kustomize+https", &kustomizeImporter{alpha: alpha})
+	t.RegisterProtocol("kustomize+https", &kustomizeImporter{gates: gates})
 
 	return &universalImporter{
 		BaseSearchURLs: searchURLs,
 		HTTPClient:     &http.Client{Transport: t},
 		cache:          map[string]jsonnet.Contents{},
-		alpha:          alpha,
+		gates:          gates,
 	}
 }
 
@@ -131,7 +141,7 @@ type universalImporter struct {
 	BaseSearchURLs []*url.URL
 	HTTPClient     *http.Client
 	cache          map[string]jsonnet.Contents
-	alpha          bool // alpha features are enable only if true
+	gates          *features.Gates
 }
 
 func (importer *universalImporter) Import(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
@@ -159,9 +169,8 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 
 	binary := false
 	if strings.HasPrefix(importedPath, "binary://") {
-		if !importer.alpha {
-			log.Debugf("WARNING: `import 'binary://file.tgz'` form is now deprecated. please use `importbin './file.tgz' instead")
-			return jsonnet.Contents{}, "", fmt.Errorf(`"binary://" url prefix requires the --alpha flag`)
+		if err := importer.gates.Require(features.BinaryImport); err != nil {
+			return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", importedPath, err)
 		}
 		log.Debugf("WARNING: `import 'binary://file.tgz'` form is now deprecated. please use `importbin './file.tgz' instead")
 		binary = true
@@ -205,8 +214,8 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 }
 
 func (importer *universalImporter) importYAKL(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
-	if !importer.alpha {
-		return jsonnet.Contents{}, "", fmt.Errorf("%s: yakl is an alpha feature, please use --alpha", importedPath)
+	if err := importer.gates.Require(features.YAKL); err != nil {
+		return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", importedPath, err)
 	}
 	return importer.importCompiled(importedFrom, importedPath, YAKLScheme, func(src jsonnet.Contents, _ string) (string, error) {
 		return yakl.Compile(src.String())

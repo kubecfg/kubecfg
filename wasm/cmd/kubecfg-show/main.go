@@ -22,7 +22,7 @@
 // and kubecfg's embedded libraries.
 //
 //	GOOS=wasip1 GOARCH=wasm go build -o kubecfg-show.wasm ./wasm/cmd/kubecfg-show
-//	wasmtime run --dir=/src kubecfg-show.wasm --alpha /src/app.yakl
+//	wasmtime run --dir=/src kubecfg-show.wasm --features=yakl /src/app.yakl
 package main
 
 import (
@@ -37,6 +37,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/utils"
 )
 
@@ -49,7 +50,8 @@ func main() {
 
 func run(args []string) error {
 	flags := pflag.NewFlagSet("kubecfg-show", pflag.ContinueOnError)
-	alpha := flags.Bool("alpha", false, "Enable alpha features (required for yakl)")
+	alpha := flags.Bool("alpha", false, "Enable all alpha features; prefer --features")
+	featureItems := flags.StringSlice("features", nil, "Turn features on or off: name, name=true or name=false (repeatable)")
 	vm := jsonnet.MakeVM()
 	setters := map[string]func(string, string){
 		"ext-str":  vm.ExtVar,
@@ -77,7 +79,11 @@ func run(args []string) error {
 			set(k, v)
 		}
 	}
-	vm.Importer(utils.MakeUniversalImporter([]*url.URL{{Scheme: "internal", Path: "/"}}, *alpha))
+	gates, err := features.New(*alpha, features.Source{Name: "--features", Items: *featureItems})
+	if err != nil {
+		return err
+	}
+	vm.Importer(utils.MakeUniversalImporterWithFeatures([]*url.URL{{Scheme: "internal", Path: "/"}}, gates))
 	utils.RegisterNativeFuncs(vm, utils.NewIdentityResolver())
 
 	var objs []*unstructured.Unstructured
@@ -92,7 +98,7 @@ func run(args []string) error {
 		}
 		objs = append(objs, utils.FlattenToV1(read)...)
 	}
-	objs, err := utils.RemoveDuplicates(objs)
+	objs, err = utils.RemoveDuplicates(objs)
 	if err != nil {
 		return err
 	}

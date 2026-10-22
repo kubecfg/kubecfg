@@ -29,13 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/kubecfg/kubecfg/internal/acquire"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 )
 
 type jsonnetVMOpts struct {
-	alpha      bool
+	gates      *features.Gates
 	workingDir string
 	importPath []string
 	importURLs []string
@@ -47,9 +48,19 @@ type jsonnetVMOpts struct {
 
 type JsonnetVMOpt func(*jsonnetVMOpts)
 
+// WithAlpha turns on every alpha feature, as --alpha does; WithAlpha(false) leaves every feature at its default.
 func WithAlpha(enable bool) JsonnetVMOpt {
 	return func(opts *jsonnetVMOpts) {
-		opts.alpha = enable
+		opts.gates = nil
+		if enable {
+			opts.gates = features.AllAlpha()
+		}
+	}
+}
+
+func WithFeatures(gates *features.Gates) JsonnetVMOpt {
+	return func(opts *jsonnetVMOpts) {
+		opts.gates = gates
 	}
 }
 
@@ -247,7 +258,7 @@ func JsonnetVM(opt ...JsonnetVMOpt) (*jsonnet.VM, error) {
 		v.Setter()(vm, name, value)
 	}
 
-	vm.Importer(utils.MakeUniversalImporter(searchUrls, opts.alpha))
+	vm.Importer(utils.MakeUniversalImporterWithFeatures(searchUrls, opts.gates))
 
 	resolver, err := buildResolver(&opts)
 	if err != nil {

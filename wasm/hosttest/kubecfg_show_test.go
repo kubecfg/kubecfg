@@ -59,7 +59,7 @@ func TestKubecfgShow(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	_, err = r.InstantiateWithConfig(ctx, wasm, wazero.NewModuleConfig().
-		WithArgs("kubecfg-show", "--alpha", "app.yakl").
+		WithArgs("kubecfg-show", "--features=yakl", "app.yakl").
 		WithEnv("PWD", "/src").
 		WithFSConfig(wazero.NewFSConfig().WithFSMount(fstest.MapFS{
 			"app.yakl": {Data: yakl},

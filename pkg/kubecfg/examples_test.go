@@ -37,10 +37,10 @@ func TestK8sLibsonnetExamples(t *testing.T) {
 				url:      lib,
 				file:     (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(dir, "testdata", "k8s.libsonnet"))}).String(),
 			})
-			cmd := "kubecfg --alpha show shop.yakl"
+			cmd := "kubecfg --features=yakl show shop.yakl"
 			var opts []utils.ReadOption
 			if tc.overlay != "" {
-				cmd += " --overlay-code-file " + tc.overlay
+				cmd = "kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file " + tc.overlay
 				opts = append(opts, utils.WithOverlayURL(filepath.Join(dir, tc.overlay)))
 			}
 			objs, err := ReadObjects(vm, []string{filepath.Join(dir, "shop.yakl")}, opts...)

@@ -35,6 +35,7 @@ nav:
   - "Provenance and Tracing": Advanced-Usage/provenance-traceback.md
   - "JSON schema validation": Advanced-Usage/schema-validation.md
   - "YAKL (YAML + Jsonnet)": Advanced-Usage/yakl.md
+  - "Feature gates": Advanced-Usage/feature-gates.md
 
 
 #extra_css:
