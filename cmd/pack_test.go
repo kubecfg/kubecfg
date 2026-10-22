@@ -204,13 +204,14 @@ func TestPush(t *testing.T) {
 
 }
 
-// .yakl files are compiled on import, but must be packed as source.
+// .yakl and yaml: files are compiled on import, but must be packed as source.
 func TestPackYAKL(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
 		"demo.yakl": "kind: Namespace\napiVersion: v1\nmetadata:\n  name: ${(import 'yakl:lib.yakl').name}\n" +
-			"  annotations: {src: ${importstr 'lib.yakl'}}\n",
-		"lib.yakl": "name: ${'demo'}\n",
+			"  annotations: {src: ${importstr 'lib.yakl'}, team: ${(import 'yaml:team.yaml').team}}\n",
+		"lib.yakl":  "name: ${'demo'}\n",
+		"team.yaml": "team: web\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0600); err != nil {
@@ -244,7 +245,7 @@ func TestPackYAKL(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", hdr.Name, b, files[hdr.Name])
 		}
 	}
-	if got, want := strings.Join(names, ","), "demo.yakl,lib.yakl"; got != want {
+	if got, want := strings.Join(names, ","), "demo.yakl,lib.yakl,team.yaml"; got != want {
 		t.Errorf("got files %s, want %s", got, want)
 	}
 }

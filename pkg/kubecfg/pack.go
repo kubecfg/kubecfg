@@ -245,8 +245,8 @@ func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
 
 	var urls []*url.URL
 	for _, d := range deps {
-		// yakl files are packed as source, which the consumer compiles on import.
-		u, err := url.Parse(strings.TrimPrefix(d, utils.YAKLScheme))
+		// yakl and yaml files are packed as source, which the consumer compiles on import.
+		u, err := url.Parse(strings.TrimPrefix(strings.TrimPrefix(d, utils.YAKLScheme), utils.YAMLScheme))
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +261,7 @@ func urlsToBePackaged(vm *jsonnet.VM, rootURL *url.URL) ([]*url.URL, error) {
 
 	urls = append(urls, rootURL)
 	sort.Slice(urls, func(i, j int) bool { return urls[i].String() < urls[j].String() })
-	// A yakl file can be a dependency both compiled (import 'yakl:x') and as is (importstr 'x').
+	// A file can be a dependency both compiled (import 'yakl:x') and as is (importstr 'x').
 	return slices.CompactFunc(urls, func(a, b *url.URL) bool { return a.String() == b.String() }), nil
 
 }

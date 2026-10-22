@@ -104,6 +104,10 @@ func MakeUniversalImporter(searchURLs []*url.URL, alpha bool) jsonnet.Importer {
 // go-jsonnet caches contents by location for all three, so compiled code needs a location of its own.
 const YAKLScheme = "yakl:"
 
+// YAMLScheme prefixes imports that parse a YAML file: `import 'yaml:foo.yaml'` is
+// `std.parseYaml(importstr 'foo.yaml')`, and importstr still returns the file as is.
+const YAMLScheme = "yaml:"
+
 // ImportPath returns what to import to evaluate the file at path: .yakl files need the yakl: scheme.
 func ImportPath(path string) string {
 	if strings.HasPrefix(path, "data:") { // inline code, not a file
@@ -146,6 +150,11 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 	importedFrom = strings.TrimPrefix(importedFrom, YAKLScheme)
 	if path, ok := strings.CutPrefix(importedPath, YAKLScheme); ok {
 		return importer.importYAKL(importedFrom, path)
+	}
+	if path, ok := strings.CutPrefix(importedPath, YAMLScheme); ok {
+		return importer.importCompiled(importedFrom, path, YAMLScheme, func(_ jsonnet.Contents, foundAt string) (string, error) {
+			return fmt.Sprintf("std.parseYaml(importstr %q)", foundAt), nil
+		})
 	}
 
 	binary := false
@@ -199,15 +208,22 @@ func (importer *universalImporter) importYAKL(importedFrom, importedPath string)
 	if !importer.alpha {
 		return jsonnet.Contents{}, "", fmt.Errorf("%s: yakl is an alpha feature, please use --alpha", importedPath)
 	}
+	return importer.importCompiled(importedFrom, importedPath, YAKLScheme, func(src jsonnet.Contents, _ string) (string, error) {
+		return yakl.Compile(src.String())
+	})
+}
+
+// importCompiled imports the code that compile makes from a file, at the file's location prefixed with scheme.
+func (importer *universalImporter) importCompiled(importedFrom, importedPath, scheme string, compile func(src jsonnet.Contents, foundAt string) (string, error)) (jsonnet.Contents, string, error) {
 	src, foundAt, err := importer.Import(importedFrom, importedPath)
 	if err != nil {
 		return jsonnet.Contents{}, "", err
 	}
-	compiledAt := YAKLScheme + foundAt
+	compiledAt := scheme + foundAt
 	if c, ok := importer.cache[compiledAt]; ok {
 		return c, compiledAt, nil
 	}
-	code, err := yakl.Compile(src.String())
+	code, err := compile(src, foundAt)
 	if err != nil {
 		return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", foundAt, err)
 	}
