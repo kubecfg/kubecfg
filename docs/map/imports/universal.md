@@ -45,9 +45,9 @@ status = "done"
 
 [[feature]]
 id = "binary"
-title = "binary:// prefix (the binary-import feature), deprecated in favour of importbin"
-status = "done"
-note = "RFC05: candidate for removal"
+title = "binary:// prefix (the binary-import feature)"
+status = "dropped"
+note = "Removed in v0.41.0: importbin, built into Jsonnet, does the same"
 needs = ["/config/feature-gates"]
 
 [[needs]]
