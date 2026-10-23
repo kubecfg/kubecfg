@@ -124,11 +124,6 @@ local result =
   std.assertEqual('7f94f699bd5353f1ba023bcd391b5068', std.md5(std.base64(importBin))) &&
   std.assertEqual(std.base64(chartData), std.base64(importBin)) &&
 
-  // Testing import of chart using import binary:// alpha feature
-  local importBinary = import 'binary://mysql-8.8.26.tgz';
-  std.assertEqual('7f94f699bd5353f1ba023bcd391b5068', std.md5(std.base64(importBinary))) &&
-  std.assertEqual(std.base64(chartData), std.base64(importBinary)) &&
-
   std.assertEqual(kubecfg.isK8sObject('bogus'), false) &&
 
   std.assertEqual(kubecfg.isK8sObject({ apiVersion: 'v1', kind: 'Pod' }), true) &&

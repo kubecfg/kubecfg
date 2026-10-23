@@ -49,7 +49,7 @@ gotest:
 
 jsonnettest: kubecfg $(JSONNET_FILES) examples/guestbook.yakl
 #	TODO: use `kubecfg validate` once it works offline
-	./kubecfg show --features=binary-import $(JSONNET_FILES) >/dev/null
+	./kubecfg show $(JSONNET_FILES) >/dev/null
 #	separately, as it redefines the guestbook.jsonnet resources
 	./kubecfg show --features=yakl examples/guestbook.yakl >/dev/null
 

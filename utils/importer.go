@@ -167,16 +167,6 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		})
 	}
 
-	binary := false
-	if strings.HasPrefix(importedPath, "binary://") {
-		if err := importer.gates.Require(features.BinaryImport); err != nil {
-			return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", importedPath, err)
-		}
-		log.Debugf("WARNING: `import 'binary://file.tgz'` form is now deprecated. please use `importbin './file.tgz' instead")
-		binary = true
-		importedPath = strings.TrimPrefix(importedPath, "binary://")
-	}
-
 	candidateURLs, err := importer.expandImportToCandidateURLs(importedFrom, importedPath)
 	if err != nil {
 		return jsonnet.Contents{}, "", fmt.Errorf("Could not get candidate URLs for when importing %s (imported from %s): %v", importedPath, importedFrom, err)
@@ -189,16 +179,12 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		}
 
 		foundAt := u.String()
-		// Avoid collision bug when importing same chart in the same jsonnet file using `import binary://` and `importbin`
-		if binary {
-			foundAt = u.String() + "##binaryImport"
-		}
 		if c, ok := importer.cache[foundAt]; ok {
 			return c, foundAt, nil
 		}
 
 		tried = append(tried, foundAt)
-		importedData, err := importer.tryImport(foundAt, binary)
+		importedData, err := importer.tryImport(foundAt)
 		if err == nil {
 			importer.cache[foundAt] = importedData
 			return importedData, foundAt, nil
@@ -241,8 +227,7 @@ func (importer *universalImporter) importCompiled(importedFrom, importedPath, sc
 	return c, compiledAt, nil
 }
 
-func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.Contents, error) {
-	url = strings.TrimSuffix(url, "##binaryImport")
+func (importer *universalImporter) tryImport(url string) (jsonnet.Contents, error) {
 	res, err := importer.HTTPClient.Get(url)
 	if err != nil {
 		return jsonnet.Contents{}, err
@@ -259,24 +244,7 @@ func (importer *universalImporter) tryImport(url string, binary bool) (jsonnet.C
 	if err != nil {
 		return jsonnet.Contents{}, err
 	}
-	if binary {
-		return toIntArray(bodyBytes), nil
-	}
 	return jsonnet.MakeContents(string(bodyBytes)), nil
-}
-
-func toIntArray(bytes []byte) jsonnet.Contents {
-	var sb strings.Builder
-	sb.WriteRune('[')
-	for i, ch := range bytes {
-		if i > 0 {
-			sb.WriteRune(',')
-		}
-		fmt.Fprintf(&sb, "%d", ch)
-	}
-	sb.WriteRune(']')
-
-	return jsonnet.MakeContents(sb.String())
 }
 
 func (importer *universalImporter) expandImportToCandidateURLs(importedFrom, importedPath string) ([]*url.URL, error) {
