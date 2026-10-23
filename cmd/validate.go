@@ -37,9 +37,10 @@ func init() {
 }
 
 var validateCmd = &cobra.Command{
-	Use:   "validate",
-	Short: "Compare generated manifest against server OpenAPI spec",
-	Args:  cobra.ArbitraryArgs,
+	Use:         "validate",
+	Short:       "Compare generated manifest against server OpenAPI spec",
+	Args:        cobra.ArbitraryArgs,
+	Annotations: map[string]string{evalCmdAnno: ""},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		flags := cmd.Flags()
 		var err error

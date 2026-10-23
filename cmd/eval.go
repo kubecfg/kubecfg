@@ -61,9 +61,10 @@ func tlaNames(flags *pflag.FlagSet) ([]string, error) {
 }
 
 var evalCmd = &cobra.Command{
-	Use:   "eval",
-	Short: "eval jsonnet expression",
-	Args:  cobra.ArbitraryArgs,
+	Use:         "eval",
+	Short:       "eval jsonnet expression",
+	Args:        cobra.ArbitraryArgs,
+	Annotations: map[string]string{evalCmdAnno: ""},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := gates.Require(features.Eval); err != nil {
 			return err
