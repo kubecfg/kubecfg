@@ -21,14 +21,17 @@ import (
 	goflag "flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	jsonnet "github.com/google/go-jsonnet"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -131,12 +134,6 @@ var RootCmd = &cobra.Command{
 		}
 		log.SetLevel(logLevel(verbosity))
 
-		// Through viper, so KUBECFG_FEATURES is the same setting as --features.
-		gates, err = features.New(viper.GetBool(flagAlpha), features.Source{Name: "--" + flagFeatures, Items: viper.GetStringSlice(flagFeatures)})
-		if err != nil {
-			return err
-		}
-
 		// Ask me how much I love glog/klog's interface.
 		logflags := goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
 		klog.InitFlags(logflags)
@@ -146,8 +143,212 @@ var RootCmd = &cobra.Command{
 			logflags.Set("v", fmt.Sprintf("%d", verbosity*3))
 		}
 
-		return nil
+		rcFeatures, err := flagsFromFile(cmd, args)
+		if err != nil {
+			return err
+		}
+
+		// After flagsFromFile, so an rc file's alpha counts.
+		// Through viper, so KUBECFG_FEATURES is the same setting as --features.
+		// --features goes first: per feature, it beats the rc file's features.
+		gates, err = features.New(viper.GetBool(flagAlpha), features.Source{Name: "--" + flagFeatures, Items: viper.GetStringSlice(flagFeatures)}, rcFeatures)
+		return err
 	},
+}
+
+// flagsFromFile sets cmd's flags from .kubecfgrc.jsonnet and returns the rc file's features.
+// Only commands that evaluate files (evalCmdAnno) take flags from it, and they look for it from
+// their input files. The feature settings, alpha and features, are global: every command takes
+// them from the rc file's flags, looking for it from the current directory if it has no input files.
+func flagsFromFile(cmd *cobra.Command, args []string) (features.Source, error) {
+	_, evalCmd := cmd.Annotations[evalCmdAnno]
+	if !evalCmd {
+		args = nil // not input files
+	}
+
+	rcFile, found, err := findKubecfgRCFile(args)
+	if err != nil {
+		return features.Source{}, err
+	}
+	if !found {
+		return features.Source{}, nil
+	}
+	// With every feature gate at its default: the rc file decides the features.
+	vm, err := kubecfg.JsonnetVM()
+	if err != nil {
+		return features.Source{}, err
+	}
+	rcURL, err := utils.PathToURL(rcFile)
+	if err != nil {
+		return features.Source{}, err
+	}
+
+	// Each command's flags default to the shared $.flags, as the RFC describes,
+	// except the feature settings, which aren't per command.
+	rcStr, err := vm.EvaluateAnonymousSnippet(rcFile, fmt.Sprintf(
+		`{flags: {}, commands: {[%q]: {[k]: $.flags[k] for k in std.objectFields($.flags) if k != %q && k != %q}}} + import %q`,
+		cmd.Name(), flagAlpha, flagFeatures, rcURL))
+	if err != nil {
+		return features.Source{}, err
+	}
+
+	var rc struct {
+		Flags    map[string]interface{}            `json:"flags"`
+		Commands map[string]map[string]interface{} `json:"commands"`
+	}
+	if err := json.Unmarshal([]byte(rcStr), &rc); err != nil {
+		return features.Source{}, err
+	}
+	for name, c := range rc.Commands {
+		for _, k := range []string{flagAlpha, flagFeatures} {
+			if _, ok := c[k]; ok {
+				return features.Source{}, fmt.Errorf("%s: set %s under flags, not commands.%s; features apply to every command", rcFile, k, name)
+			}
+		}
+	}
+
+	settings := map[string]interface{}{}
+	if evalCmd {
+		maps.Copy(settings, rc.Commands[cmd.Name()])
+	}
+	if v, ok := rc.Flags[flagAlpha]; ok {
+		settings[flagAlpha] = v
+	}
+
+	for k, v := range settings {
+		f := cmd.Flags().Lookup(k)
+		if f == nil {
+			if _, shared := rc.Flags[k]; shared {
+				continue // shared flags need not apply to every command
+			}
+			return features.Source{}, fmt.Errorf("unknown flag %q for command %q in %s", k, cmd.Name(), rcFile)
+		}
+		// client-go reads KUBECONFIG itself and can't tell an rc value from --kubeconfig,
+		// so skip it here to keep the environment's cluster.
+		if k == "kubeconfig" && os.Getenv("KUBECONFIG") != "" {
+			continue
+		}
+
+		normalizeFlagValue := func(v interface{}) string {
+			s := fmt.Sprint(v)
+
+			_, isFileFlag := f.Annotations[cobra.BashCompFilenameExt]
+			_, isDirFlag := f.Annotations[cobra.BashCompSubdirsInDir]
+			if !isFileFlag && !isDirFlag {
+				return s
+			}
+			resolve := func(p string) string {
+				if filepath.IsAbs(p) {
+					return p
+				}
+				return filepath.Join(filepath.Dir(rcFile), p)
+			}
+			// --{ext,tla}-*-file take name=path; only the path is relative to the rc file.
+			if name, path, ok := strings.Cut(s, "="); ok && strings.HasSuffix(f.Name, "-file") {
+				return name + "=" + resolve(path)
+			}
+			return resolve(s)
+		}
+
+		if !f.Changed {
+			switch v := v.(type) {
+			case []interface{}:
+				var values []string
+				for _, i := range v {
+					values = append(values, normalizeFlagValue(i))
+				}
+				sliceValue, ok := f.Value.(pflag.SliceValue)
+				if !ok {
+					return features.Source{}, fmt.Errorf("flag %q is not an array flag, but instead it's a %q", k, f.Value.Type())
+				}
+				if err := sliceValue.Replace(values); err != nil {
+					return features.Source{}, fmt.Errorf("invalid value for --%s in %s: %w", k, rcFile, err)
+				}
+			default:
+				if err := f.Value.Set(normalizeFlagValue(v)); err != nil {
+					return features.Source{}, fmt.Errorf("invalid value for --%s in %s: %w", k, rcFile, err)
+				}
+			}
+		}
+	}
+
+	items, err := featureItems(rc.Flags[flagFeatures])
+	if err != nil {
+		return features.Source{}, fmt.Errorf("%s: %w", rcFile, err)
+	}
+	return features.Source{Name: ".kubecfgrc.jsonnet", Items: items}, nil
+}
+
+// featureItems turns the rc file's features, a list of names or an object of name: bool,
+// into the items of a features.Source.
+func featureItems(v interface{}) ([]string, error) {
+	var items []string
+	switch v := v.(type) {
+	case nil:
+	case []interface{}:
+		for _, i := range v {
+			s, ok := i.(string)
+			if !ok {
+				return nil, fmt.Errorf("features: want names, got %v", i)
+			}
+			items = append(items, s)
+		}
+	case map[string]interface{}:
+		for _, name := range slices.Sorted(maps.Keys(v)) {
+			on, ok := v[name].(bool)
+			if !ok {
+				return nil, fmt.Errorf("features: %s: want true or false, got %v", name, v[name])
+			}
+			items = append(items, fmt.Sprintf("%s=%t", name, on))
+		}
+	default:
+		return nil, fmt.Errorf("features: want a list of names or an object of name: true/false, got %v", v)
+	}
+	return items, nil
+}
+
+func findKubecfgRCFile(files []string) (string, bool, error) {
+	if len(files) == 0 {
+		// Inline code (-e) has no file; look up from the current directory.
+		files = []string{"-"}
+	}
+
+	seen := map[string]struct{}{}
+	const noRcFileFound = "<no .kubecfgrc.jsonnet found>"
+
+	for _, f := range files {
+		// Absolute, so the search goes past the current directory and
+		// the same rc file reached from relative and absolute inputs is one key.
+		f, err := filepath.Abs(f)
+		if err != nil {
+			return "", false, err
+		}
+		path, found, err := utils.SearchUp(".kubecfgrc.jsonnet", f)
+		if err != nil {
+			return "", false, err
+		}
+		key := path
+		if !found {
+			key = noRcFileFound
+		}
+		seen[key] = struct{}{}
+	}
+	if len(seen) != 1 {
+		var files []string
+		for k := range seen {
+			files = append(files, k)
+		}
+		return "", false, fmt.Errorf("all evaluated files should resolve to the same .kubecfgrc.jsonnet, found %q instead", files)
+	}
+
+	for k := range seen {
+		if k == noRcFileFound {
+			return "", false, nil
+		} else {
+			return k, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // clientConfig.Namespace() is broken in client-go 3.0:
