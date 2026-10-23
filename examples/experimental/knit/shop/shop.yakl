@@ -126,4 +126,4 @@ spec:
 ---
 # Redis as published upstream, as it is: a parsed YAML stream is a layer too.
 # Its objects have no names; an overlay finds them by kind and name.
-${std.parseYaml(importstr 'redis.yaml')}
+${import 'yaml:redis.yaml'}

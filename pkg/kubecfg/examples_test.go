@@ -32,6 +32,7 @@ func TestExamples(t *testing.T) {
 		{file: "experimental/knit/shop/shop.yakl", golden: "experimental/knit/shop/shop.yaml"},
 		{file: "experimental/knit/shop/dev.yakl", golden: "experimental/knit/shop/dev.yaml"},
 		{file: "experimental/knit/shop/prod.yakl", golden: "experimental/knit/shop/prod.yaml"},
+		{file: "experimental/knit/shop/prod-advanced.yakl", golden: "experimental/knit/shop/prod-advanced.yaml"},
 		{
 			file:    "metacontroller/jsonnet/sync.jsonnet",
 			golden:  "metacontroller/sync.json",

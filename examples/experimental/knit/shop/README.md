@@ -10,6 +10,7 @@ alpha features; `.kubecfgrc.jsonnet` turns them on, so no flags are needed:
 kubecfg show shop.yakl
 kubecfg show dev.yakl
 kubecfg show prod.yakl
+kubecfg show prod-advanced.yakl
 ```
 
 `dev.yakl` and `prod.yakl` start with `<<+: ${import 'yakl:shop.yakl'}`: each extends the
@@ -20,6 +21,7 @@ shop, so it renders on its own.
 | `shop.yakl` | the shop |
 | `redis.yaml` | Redis as published upstream, in plain YAML |
 | `dev.yakl`, `prod.yakl` | the overlays, each extending `shop.yakl` |
+| `prod-advanced.yakl` | prod with the label `app: shop` on every pod, extending `prod.yakl` |
 
 ## How the shop uses knit
 
@@ -34,7 +36,7 @@ shop, so it renders on its own.
 - **`!registry+` holds templates** that apply under every document: `objects` for the root of
   every object, `types` for every value of a Kubernetes type at any depth (`PodTemplateSpec`,
   `Container`), `kinds` for one kind. A value a document sets itself wins over a template.
-- **`redis.yaml` stays plain YAML.** `${std.parseYaml(importstr 'redis.yaml')}` makes it a
+- **`redis.yaml` stays plain YAML.** `${import 'yaml:redis.yaml'}` makes it a
   layer, so the templates and overlays reach Redis too. Its objects have no names, so
   `prod.yakl` finds the StatefulSet by kind and name, as `kubectl apply` would.
 - **`!config::` holds the settings.** Documents read them as `$.config`, so they see what an
@@ -45,6 +47,7 @@ shop, so it renders on its own.
 | Overlay document | Reaches | Used for |
 | --- | --- | --- |
 | `!registry+` with `objects+:` | every namespaced object | the namespace (dev, prod) |
+| `!registry+` with `types+: PodTemplateSpec+: metadata+: labels+:` | every pod | the label `app: shop` (prod-advanced) |
 | `!registry+` with `types+: PodTemplateSpec+:` | every pod: Deployments, the CronJob, Redis | node selector and tolerations (prod) |
 | `!registry+` with `types+: Container+:` | every container | `imagePullPolicy` and `LOG_LEVEL` (dev) |
 | `!registry+` with `kinds+: Service+:` | every Service | an annotation (prod) |
