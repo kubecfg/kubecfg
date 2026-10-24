@@ -1,0 +1,75 @@
+# Production: its own namespace and nodes, more replicas, API resources, a
+# disruption budget, and a bigger Redis.
+#
+#   kubecfg show prod.yakl
+
+# shop.yakl, then this file's documents on top of it.
+<<+: ${import 'yakl:shop.yakl'}
+---
+
+!registry+
+objects+:
+  metadata+: {namespace: shop-prod}
+types+:
+  # Every pod, Redis's too, runs on the shop's nodes.
+  PodTemplateSpec+:
+    spec+:
+      nodeSelector: {example.com/pool: shop}
+      tolerations: [{key: example.com/pool, value: shop, effect: NoSchedule}]
+kinds+:
+  # Every Service is scraped.
+  Service+:
+    metadata+:
+      annotations+:
+        prometheus.io/scrape: 'true'
+---
+!config+
+replicas: {web: 3, api: 6}
+---
+# !api+ changes the object named api: the container is found by its name, and
+# the rest is merged into it.
+!api+
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 1Gi}
+          # The worker reads the API's env, so it gets this too.
+          env: [{name: CACHE_TTL, value: '3600'}]
+---
+!apiBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: api}
+---
+# Redis's objects have no names, so this document finds the StatefulSet by its
+# kind and name, as kubectl apply would.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  template:
+    spec:
+      containers:
+        - name: redis
+          resources:
+            requests: {memory: 2Gi}
+  # volumeClaimTemplates is an atomic list in the Kubernetes schema: a layer
+  # replaces it whole, so the whole list is written again.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 20Gi

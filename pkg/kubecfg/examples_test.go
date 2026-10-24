@@ -2,82 +2,96 @@ package kubecfg
 
 import (
 	"bytes"
-	"fmt"
+	"flag"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/google/go-jsonnet"
 	"github.com/kubecfg/kubecfg/utils"
 )
 
-// The k8s-libsonnet examples give the kubecfg show output kept in their testdata. They import the
-// library from GitHub; the test serves it from the copy in testdata, so it runs offline.
-func TestK8sLibsonnetExamples(t *testing.T) {
-	// Pinned in examples/k8s-libsonnet/k8s.libsonnet; update with testdata/k8s.libsonnet there.
-	const lib = "https://raw.githubusercontent.com/kubecfg/k8s-libsonnet/0c6a5947b2e5b6ded6c6053c36fb675c8aa4c44d/k8s.libsonnet"
-	dir, err := filepath.Abs(filepath.FromSlash("../../examples/k8s-libsonnet"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct{ overlay, want string }{
-		{"", "shop.yaml"},
-		{"dev.yakl", "shop-dev.yaml"},
-		{"prod.yakl", "shop-prod.yaml"},
+var update = flag.Bool("update", false, "rewrite the golden files in testdata/examples")
+
+// Every example in examples/ gives the output kept in testdata/examples, so a change that
+// breaks an example fails here. If the new output is right, run:
+//
+//	go test ./pkg/kubecfg -run TestExamples -update
+func TestExamples(t *testing.T) {
+	for _, tc := range []struct {
+		// file is a path under examples/; golden is a path under testdata/examples.
+		file, golden string
+		// request is the Jsonnet of a metacontroller hook's request; the hook is evaluated
+		// with it instead of shown.
+		request string
+	}{
+		{file: "guestbook.jsonnet", golden: "guestbook.yaml"},
+		{file: "guestbook-overlay.jsonnet", golden: "guestbook-overlay.yaml"},
+		{file: "experimental/yakl/guestbook.yakl", golden: "experimental/yakl/guestbook.yaml"},
+		{file: "experimental/knit/guestbook.jsonnet", golden: "experimental/knit/guestbook.yaml"},
+		{file: "experimental/knit/shop/shop.yakl", golden: "experimental/knit/shop/shop.yaml"},
+		{file: "experimental/knit/shop/dev.yakl", golden: "experimental/knit/shop/dev.yaml"},
+		{file: "experimental/knit/shop/prod.yakl", golden: "experimental/knit/shop/prod.yaml"},
+		{file: "experimental/knit/shop/prod-advanced.yakl", golden: "experimental/knit/shop/prod-advanced.yaml"},
+		{
+			file:    "metacontroller/jsonnet/sync.jsonnet",
+			golden:  "metacontroller/sync.json",
+			request: `{parent: {metadata: {generation: 3}, spec: {name: 'demo'}}, children: {}}`,
+		},
 	} {
-		t.Run(tc.want, func(t *testing.T) {
-			vm, err := JsonnetVM(WithAlpha(true))
+		t.Run(tc.golden, func(t *testing.T) {
+			got := runExample(t, tc.file, tc.request)
+			golden := filepath.Join("testdata", "examples", filepath.FromSlash(tc.golden))
+			if *update {
+				if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(golden, got, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			want, err := os.ReadFile(golden)
 			if err != nil {
 				t.Fatal(err)
 			}
-			vm.Importer(offlineImporter{
-				Importer: utils.MakeUniversalImporter([]*url.URL{{Scheme: "internal", Path: "/"}}, true),
-				url:      lib,
-				file:     (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(dir, "testdata", "k8s.libsonnet"))}).String(),
-			})
-			cmd := "kubecfg --features=yakl show shop.yakl"
-			var opts []utils.ReadOption
-			if tc.overlay != "" {
-				cmd = "kubecfg --features=yakl,overlay show shop.yakl --overlay-code-file " + tc.overlay
-				opts = append(opts, utils.WithOverlayURL(filepath.Join(dir, tc.overlay)))
-			}
-			objs, err := ReadObjects(vm, []string{filepath.Join(dir, "shop.yakl")}, opts...)
-			if err != nil {
-				t.Fatal(err)
-			}
-			show, err := NewShowCmd("yaml", "", "", "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			var got bytes.Buffer
-			if err := show.Run(objs, &got); err != nil {
-				t.Fatal(err)
-			}
-			want, err := os.ReadFile(filepath.Join(dir, "testdata", tc.want))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got.String() != string(want) {
-				t.Errorf("output differs from testdata/%[1]s; if the change is right, in examples/k8s-libsonnet run:\n  %[2]s > testdata/%[1]s\ngot:\n%[3]s", tc.want, cmd, got.String())
+			if !bytes.Equal(got, want) {
+				t.Errorf("output differs from %s; if the change is right, run with -update\ngot:\n%s", golden, got)
 			}
 		})
 	}
 }
 
-// offlineImporter serves url from file, and fails on any other remote import.
-type offlineImporter struct {
-	jsonnet.Importer
-	url, file string
-}
-
-func (i offlineImporter) Import(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
-	if importedPath == i.url {
-		return i.Importer.Import("", i.file)
+func runExample(t *testing.T, file, request string) []byte {
+	t.Helper()
+	path, err := filepath.Abs(filepath.Join("..", "..", "examples", filepath.FromSlash(file)))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.HasPrefix(importedPath, "http:") || strings.HasPrefix(importedPath, "https:") {
-		return jsonnet.Contents{}, "", fmt.Errorf("%s: the test runs offline", importedPath)
+	vm, err := JsonnetVM(WithAlpha(true))
+	if err != nil {
+		t.Fatal(err)
 	}
-	return i.Importer.Import(importedFrom, importedPath)
+	vm.Importer(utils.MakeUniversalImporter([]*url.URL{{Scheme: "internal", Path: "/"}}, true))
+	if request != "" {
+		vm.TLACode("request", request)
+		out, err := vm.EvaluateFile((&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return []byte(out)
+	}
+	objs, err := ReadObjects(vm, []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	show, err := NewShowCmd("yaml", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got bytes.Buffer
+	if err := show.Run(objs, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got.Bytes()
 }

@@ -54,4 +54,5 @@ httpd             alpha  off      off      --features  v0.40.0
 | `yakl` | alpha | v0.40.0 | YAML with Jsonnet expressions: .yakl files, yakl: imports, yaklfmt, eval -o jsonnet |
 | `kustomize-import` | alpha | v0.40.0 | kustomize+https:// imports |
 | `binary-import` | removed | v0.41.0 | the binary:// import prefix; use importbin |
+| `knit` | alpha | v0.42.0 | the knit library: (import 'kubecfg.libsonnet').knit, 'knit/knit.libsonnet' |
 <!-- END features -->

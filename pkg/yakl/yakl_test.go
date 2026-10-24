@@ -334,6 +334,10 @@ env: ${[
 
 		// A first document of <<+ and local keys says what the file extends.
 		{"a file extends an object", "<<+: ${ {a: 1, unnamed: ['x']} }\n---\n!b\nv: 2\n---\nc: 3\n", `{"a":1,"b":{"v":2},"unnamed":["x",{"c":3}]}`},
+		{"a name extends the parent's", "<<+: ${ {a: {x: 1}, b:: {x: 1}} }\n---\n!a+\nw: 2\n---\n!b+\nw: 2\n", `{"a":{"w":2,"x":1}}`},
+		{"the parent can manage the names", "<<+: ${ {'$named'(n, plain):: {via: n, plain: plain()}} }\n---\n!a\nx: 1\n", `{"a":{"plain":{"x":1},"via":"a"}}`},
+		{"documents lists every document", "<<+: ${ {documents:: [], out: [[d.name, d.plus] for d in self.documents]} }\n---\n!a\nx: 1\n---\nw: 2\n---\n!a+\nz: 3\n",
+			`{"a":{"x":1,"z":3},"out":[["a",false],[null,false],["a",true]],"unnamed":[{"w":2}]}`},
 		{"one document without a name is appended", "<<+: ${ {unnamed: ['x']} }\n---\nc: 3\n", `{"unnamed":["x",{"c":3}]}`},
 		{"the file's documents see the parent through $", "<<+: ${ {x:: 3} }\n---\nv: ${$.x}\n", `{"unnamed":[{"v":3}]}`},
 		{"a hidden unnamed stays hidden", "<<+: ${ {unnamed:: []} }\n---\nc: 3\n", `{}`},
@@ -489,6 +493,9 @@ func TestErrors(t *testing.T) {
 		{"'&-x': 1\n", `"-x" must be a Jsonnet variable name, not a keyword`},
 		{"--- !unnamed\nx: 1\n", `the name "unnamed" is reserved`},
 		{"--- !unnamed+\n", `the name "unnamed" is reserved`},
+		{"--- !documents\nx: 1\n", `the name "documents" is reserved`},
+		// Anchors are locals of their document, as YAML aliases are, in a file that extends too.
+		{"<<+: ${ {} }\n---\n!d\na: &a 1\n---\nb: ${a}\n", "Unknown variable: a"},
 		{"'&x': {a: &y 1}\n", "line 1: &y in a document of local keys: the node has no place of its own in the output"},
 		{"&f\n'&x': 1\n", "line 1: &f in a document of local keys: the node has no place of its own in the output, so its anchor can't declare a local"},
 		{"m:\n  '&x': {a: &y 1}\n", "line 2: &y in the value of a local key"},

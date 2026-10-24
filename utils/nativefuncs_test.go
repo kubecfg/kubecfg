@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/pkg/features"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -234,4 +235,18 @@ func TestArrayReader(t *testing.T) {
 	// Not numbers
 	r = &ArrayReader{[]interface{}{"bogus"}}
 	assertRead(0, errBadByte, nil)
+}
+
+func TestFeature(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+	if _, err := vm.EvaluateAnonymousSnippet("feature", `std.native("requireFeature")("knit")`); err == nil || !strings.Contains(err.Error(), "--features=knit") {
+		t.Errorf("knit is off by default; got %v", err)
+	}
+	RegisterFeatures(vm, features.AllAlpha())
+	x, err := vm.EvaluateAnonymousSnippet("feature", `std.native("requireFeature")("knit")`)
+	check(t, err, x, "true\n")
+	if _, err = vm.EvaluateAnonymousSnippet("feature", `std.native("requireFeature")("nope")`); err == nil {
+		t.Error("an unknown feature should be an error")
+	}
 }

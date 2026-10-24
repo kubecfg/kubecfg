@@ -1,0 +1,83 @@
+# The guestbook frontend (see examples/guestbook.jsonnet) written in YAKL: plain
+# YAML where any value can be a ${...} Jsonnet expression.
+#
+#   kubecfg show guestbook.yakl
+#
+# See docs/Advanced-Usage/yakl.md for the full spec.
+
+# A tag names a document: this one is the field `params` of the file, and
+# every expression can read it as `$.params`. The colons hide it, like `params::`
+# in Jsonnet: it isn't output, but an overlay can change it with a document
+# tagged !params+
+!params::
+replicas: 3
+version: v3
+env: {GET_HOSTS_FROM: dns, REDIS_HOST: redis-leader}
+---
+!deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  # An anchor on a node names it for the whole document: ${labels}.
+  labels: &labels {app: guestbook, tier: frontend}
+spec:
+  # An expression keeps its type: 3, not "3".
+  replicas: ${$.params.replicas}
+  selector:
+    matchLabels: ${labels}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - name: php-redis
+          # A key starting with & declares a local, which isn't output.
+          '&port': 80
+          # Strings are built in Jsonnet; an expression is always a whole value.
+          image: ${'gcr.io/google-samples/gb-frontend:' + $.params.version}
+          ports: [{containerPort: '${port}'}]
+          # A ${for} item is a loop: its body, indented under it, is an item per k.
+          # A ${if cond} item adds its body only if cond holds.
+          env:
+            - ${for k in std.objectFields($.params.env)}:
+                name: ${k}
+                value: ${$.params.env[k]}
+            - name: PORT
+              value: ${std.toString(port)}
+          volumeMounts: [{name: config, mountPath: /etc/guestbook}]
+      volumes:
+        - name: config
+          configMap:
+            name: ${$['frontend-config'].metadata.name}
+---
+!service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: LoadBalancer
+  ports: [{port: 80}]
+  selector: ${$.deployment.spec.selector.matchLabels}
+---
+# frontend-config isn't a Jsonnet variable name, so expressions write
+# $['frontend-config'].
+!frontend-config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+data:
+  # Strings are never interpolated, so shell ${VARIABLES} need no escaping.
+  start.sh: |
+    #!/bin/sh
+    echo "starting on ${HOSTNAME}"
+    exec apache2-foreground
+  version: ${$.params.version}
+  # A computed key; a key that evaluates to null drops the field.
+  ${if $.params.replicas > 1 then 'ha.conf'}: |-
+    ${|||
+      sessions = redis
+      replicas = %d
+    ||| % $.params.replicas}

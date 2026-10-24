@@ -855,6 +855,16 @@ const (
 // unnamed is the field holding the documents without a name, in a file with names.
 const unnamed = "unnamed"
 
+// In a file that extends an object, the hidden field documents lists every document, named or
+// not, in file order, as {name, plus, doc}; the object it extends can then manage the file's
+// names: a named document's field is o['$named'](name, plain) when the object has that method,
+// where plain gives the field's value as YAKL alone would. knit makes its manifests objects
+// this way.
+const (
+	documentsField = "documents"
+	namedHook      = "$named"
+)
+
 // nameKey matches the keys that named documents before tags did: '&', '&+', '&:' and the like.
 var nameKey = regexp.MustCompile(`^&\+?:{0,2}$`)
 
@@ -952,6 +962,8 @@ func (c *compiler) name(d *doc, tag string) error {
 		return c.errorf(d.at, "the tag !%s ends in more than three colons", tag)
 	case name == unnamed:
 		return c.errorf(d.at, "the name %q is reserved for the documents without a name", unnamed)
+	case name == documentsField:
+		return c.errorf(d.at, "the name %q is reserved for the list of a file's documents", documentsField)
 	}
 	d.kind, d.name, d.plus, d.colons = fieldDoc, name, plus, max(colons, 1)
 	return nil
@@ -1162,8 +1174,13 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 			"'<<+ at the top of a file extends a file, not a single object; to extend one object, " +
 			"give its document <<+ and the fields', ")
 		c.br(nil)
+		if len(fields) > 0 {
+			c.write("local yakl__named(o, name, plain) = if std.objectHasAll(o, " + quote(namedHook) + ") then o[" +
+				quote(namedHook) + "](name, plain) else plain(), ")
+			c.br(nil)
+		}
 	}
-	var unnamedDocs []string
+	var unnamedDocs, documents []string
 	pending := map[string]string{} // the local holding the first of two documents giving a name
 	for i, d := range docs {
 		switch d.kind {
@@ -1184,10 +1201,41 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 			continue
 		}
 		c.comment(d.head...)
+		if ext != nil && d.kind == fieldDoc {
+			v := fmt.Sprintf("yakl__doc%d", i)
+			c.align(d.at)
+			c.write("local " + v + " = ")
+			if err := c.document(d); err != nil {
+				return err
+			}
+			c.end(nil, ", ")
+			documents = append(documents, fmt.Sprintf("{name: %s, plus: %t, doc: %s}", quote(d.name), d.plus, v))
+			// The field goes with the last document giving the name. Its plain value takes the
+			// visibility of the document without +, extended with the one with +.
+			if idx := fields[d.name]; idx[len(idx)-1] == i {
+				colons, plain := d.colons, v
+				switch {
+				case len(idx) == 2:
+					first, a := docs[idx[0]], fmt.Sprintf("yakl__doc%d", idx[0])
+					if first.plus {
+						plain = v + " + " + a
+					} else {
+						colons, plain = first.colons, a+" + "+v
+					}
+				case d.plus:
+					plain = fmt.Sprintf("if %s in super then %s + %s else %s", quote(d.name), access("super", d.name), v, v)
+				}
+				c.write(quote(d.name) + strings.Repeat(":", colons) + " yakl__named(self, " + quote(d.name) + ", function() " + plain + ")")
+				c.end(nil, ", ")
+			}
+			c.comment(d.foot...)
+			continue
+		}
 		switch d.kind {
 		case unnamedDoc:
 			tmp := fmt.Sprintf("yakl__unnamed%d", i)
 			unnamedDocs = append(unnamedDocs, tmp)
+			documents = append(documents, "{name: null, plus: false, doc: "+tmp+"}")
 			c.write("local " + tmp + " = ")
 		case fieldDoc:
 			c.align(d.at)
@@ -1231,6 +1279,10 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 	if len(unnamedDocs) > 0 {
 		// Appended, so that the documents without a name in an overlay add to the base's.
 		c.write(unnamed + "+: [" + strings.Join(unnamedDocs, ", ") + "], ")
+		c.br(nil)
+	}
+	if ext != nil && len(documents) > 0 {
+		c.write(documentsField + "+:: [" + strings.Join(documents, ", ") + "], ")
 		c.br(nil)
 	}
 	c.write("}")

@@ -33,7 +33,7 @@ func TestFeatures(t *testing.T) {
 		{[]string{"--features=eval", "--features", "overlay"}, map[string]string{"eval": "--features", "overlay": "--features"}},
 		{[]string{"--alpha", "--features=httpd=false"}, map[string]string{
 			"eval": "--alpha", "traceback": "--alpha", "pack": "--alpha", "overlay": "--alpha",
-			"yakl": "--alpha", "kustomize-import": "--alpha",
+			"yakl": "--alpha", "kustomize-import": "--alpha", "knit": "--alpha",
 		}},
 	} {
 		var list []features.Status

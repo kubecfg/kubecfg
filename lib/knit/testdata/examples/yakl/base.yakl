@@ -1,0 +1,27 @@
+# The root of the chain: knit renders the documents without a name.
+<<+: ${import 'knit/knit.libsonnet'}
+---
+!registry+
+objects+:
+  metadata+:
+    labels+: {team: platform}
+---
+# Settings that a file extending this one can change.
+!config::
+replicas: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web}
+spec:
+  replicas: ${$.config.replicas}
+  template:
+    spec:
+      containers:
+        - name: web
+          image: web:1.0
+          env:
+            - {name: LOG_LEVEL, value: info}
+            - {name: DB_HOST, value: db.dev}
+        - name: debug
+          image: busybox

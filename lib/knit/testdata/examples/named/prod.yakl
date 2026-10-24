@@ -1,0 +1,48 @@
+<<+: ${import 'yakl:base.yakl'}
+---
+!config+
+image: api:2
+---
+# A patch of the object named api: no apiVersion, kind or name to repeat.
+!api+
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          env: [{name: B, value: '2'}]
+---
+!worker+
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: worker
+              env: [{name: C, value: '3'}]
+---
+# Found by kind and name: a document without a name changes a named object too.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: shop}
+spec:
+  replicas: 3
+---
+# Hidden: still there for other documents and later patches, but not output.
+!old+:: {}
+---
+# Without +, a name is given again, as a Jsonnet field is: the object is replaced.
+!replaced
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: replaced}
+data: {from: prod}
+---
+!seen
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: seen}
+data:
+  draft: ${$.draft.metadata.name}
+  settings: ${std.join(',', std.objectFields($.settings.data))}

@@ -1,0 +1,198 @@
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    name: frontend
+  name: frontend
+spec:
+  minReadySeconds: 30
+  replicas: 3
+  selector:
+    matchLabels:
+      name: frontend
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        name: frontend
+    spec:
+      containers:
+      - args: []
+        env: []
+        image: gcr.io/google-samples/gb-frontend:v3
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+        name: php-redis
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        stdin: false
+        tty: false
+        volumeMounts: []
+      imagePullSecrets: []
+      initContainers: []
+      terminationGracePeriodSeconds: 30
+      volumes: []
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels:
+    name: frontend
+  name: frontend
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    name: frontend
+  type: LoadBalancer
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    name: redis-master
+  name: redis-master
+spec:
+  minReadySeconds: 30
+  replicas: 1
+  selector:
+    matchLabels:
+      name: redis-master
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        name: redis-master
+    spec:
+      containers:
+      - args: []
+        env:
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        - name: REDIS_REPLICATION_MODE
+          value: master
+        image: bitnami/redis:4.0.9
+        imagePullPolicy: IfNotPresent
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        stdin: false
+        tty: false
+        volumeMounts: []
+      imagePullSecrets: []
+      initContainers: []
+      terminationGracePeriodSeconds: 30
+      volumes: []
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels:
+    name: redis-master
+  name: redis-master
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    name: redis-master
+  type: ClusterIP
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    name: redis-slave
+  name: redis-slave
+spec:
+  minReadySeconds: 30
+  replicas: 2
+  selector:
+    matchLabels:
+      name: redis-slave
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        name: redis-slave
+    spec:
+      containers:
+      - args: []
+        env:
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        - name: REDIS_MASTER_HOST
+          value: redis-master
+        - name: REDIS_MASTER_PORT_NUMBER
+          value: "6379"
+        - name: REDIS_REPLICATION_MODE
+          value: slave
+        image: bitnami/redis:4.0.9
+        imagePullPolicy: IfNotPresent
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        stdin: false
+        tty: false
+        volumeMounts: []
+      imagePullSecrets: []
+      initContainers: []
+      terminationGracePeriodSeconds: 30
+      volumes: []
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels:
+    name: redis-slave
+  name: redis-slave
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    name: redis-slave
+  type: ClusterIP

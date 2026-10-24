@@ -77,6 +77,7 @@ var (
 	YAKL            = register(Feature{Name: "yakl", Stage: Alpha, Since: "v0.40.0", Doc: "YAML with Jsonnet expressions: .yakl files, yakl: imports, yaklfmt, eval -o jsonnet"})
 	KustomizeImport = register(Feature{Name: "kustomize-import", Stage: Alpha, Since: "v0.40.0", Doc: "kustomize+https:// imports"})
 	BinaryImport    = register(Feature{Name: "binary-import", Stage: Removed, Since: "v0.41.0", Doc: "the binary:// import prefix; use importbin"})
+	Knit            = register(Feature{Name: "knit", Stage: Alpha, Since: "v0.42.0", Doc: "the knit library: (import 'kubecfg.libsonnet').knit, 'knit/knit.libsonnet'"})
 )
 
 // All returns every registered feature, in registration order.

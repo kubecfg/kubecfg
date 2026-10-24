@@ -5,7 +5,7 @@ aka = ["jamlet", "yannet", ".yakl", "yet another konfig language"]
 kind = "lang"
 intent = "goal"
 research = "done"
-refs = ["pkg/yakl/yakl.go", "docs/Advanced-Usage/yakl.md", "examples/guestbook.yakl"]
+refs = ["pkg/yakl/yakl.go", "docs/Advanced-Usage/yakl.md", "examples/experimental/yakl/guestbook.yakl"]
 
 [[feature]]
 id = "expressions"
@@ -36,6 +36,12 @@ status = "done"
 id = "locals"
 title = "Anchors are locals; local keys and file locals"
 status = "done"
+
+[[feature]]
+id = "managed-names"
+title = "The object a file extends can manage the file's names: documents lists them in order, and $named gives their fields"
+status = "wip"
+note = "In #541, for knit"
 
 [[feature]]
 id = "file-extends"

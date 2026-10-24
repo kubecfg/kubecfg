@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -175,5 +176,27 @@ func TestFlagsFromFileFeatures(t *testing.T) {
 	RootCmd.SetArgs([]string{"show", "main.jsonnet"})
 	if err := RootCmd.Execute(); err == nil || !strings.Contains(err.Error(), "set features under flags, not commands.show") {
 		t.Errorf("got %v, want an error about features under commands", err)
+	}
+}
+
+// The experimental examples run without flags: their .kubecfgrc.jsonnet turns on the features they need.
+func TestExperimentalExamples(t *testing.T) {
+	t.Setenv("KUBECFG_ALPHA", "")
+	t.Setenv("KUBECFG_FEATURES", "")
+	var files []string
+	err := filepath.WalkDir("../examples/experimental", func(path string, d fs.DirEntry, err error) error {
+		if ext := filepath.Ext(path); (ext == ".yakl" || ext == ".jsonnet") && !strings.HasPrefix(d.Name(), ".") {
+			files = append(files, path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no examples found")
+	}
+	for _, f := range files {
+		cmdOutput(t, []string{"show", f})
 	}
 }

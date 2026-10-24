@@ -40,6 +40,7 @@ nav:
   - "JSON schema validation": Advanced-Usage/schema-validation.md
   - "YAKL (YAML + Jsonnet)": Advanced-Usage/yakl.md
   - "Feature gates": Advanced-Usage/feature-gates.md
+  - "knit (layered manifests)": Advanced-Usage/knit.md
 
 
 #extra_css:

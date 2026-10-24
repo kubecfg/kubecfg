@@ -1,0 +1,16 @@
+# Production, with the label app: shop on every pod.
+#
+#   kubecfg show prod-advanced.yakl
+
+# prod.yakl, then this file's documents on top of it.
+<<+: ${import 'yakl:prod.yakl'}
+---
+# types+: PodTemplateSpec+: is the template under every pod template, at any
+# depth: the Deployments, the CronJob's job template, and Redis's StatefulSet.
+# It merges with the labels the pods already have, and a label a pod sets
+# itself wins. The objects' own labels don't change.
+!registry+
+types+:
+  PodTemplateSpec+:
+    metadata+:
+      labels+: {app: shop}

@@ -1,0 +1,23 @@
+# Development: its own namespace, one replica each, debug logs.
+#
+#   kubecfg show dev.yakl
+
+# shop.yakl, then this file's documents on top of it.
+<<+: ${import 'yakl:shop.yakl'}
+---
+
+# Every namespaced object gets the namespace, and every container, Redis's
+# included, gets the pull policy and LOG_LEVEL. A container that sets one of
+# these itself keeps its own value: templates are the bottom layer.
+!registry+
+objects+:
+  metadata+: {namespace: shop-dev}
+types+:
+  Container+:
+    imagePullPolicy: Always
+    env: [{name: LOG_LEVEL, value: debug}]
+---
+!config+
+version: 1.5.0-rc.1
+domain: shop.dev.example.com
+replicas: {web: 1, api: 1}
