@@ -78,7 +78,8 @@ clean:
 .PHONY: kubecfg kubecfg-show.wasm
 
 .PHONY: serve-docs build-docs
+# Needs mdbook: https://rust-lang.github.io/mdBook/guide/installation.html
 serve-docs:
-	@docker run --rm -t -i -u $$(id -u) -v `pwd`:/docs -p 8000:8000 squidfunk/mkdocs-material:9 serve -a 0.0.0.0:8000
+	mdbook serve -n 0.0.0.0
 build-docs:
-	@docker run --rm -u $$(id -u) -v `pwd`:/docs -p 8000:8000 squidfunk/mkdocs-material:9 build
+	mdbook build

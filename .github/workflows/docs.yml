@@ -3,7 +3,7 @@ name: Deploy static content to Pages
 
 on:
   push:
-    paths: [ docs/**.md ] # Only trigger workflow when there are changes on docs
+    paths: [ docs/**.md, book.toml, theme/** ] # Only trigger workflow when there are changes on docs
     branches: [ main ] # Configure the branchs which you want to run this workflow
 
   # Allows you to run this workflow manually from the Actions tab
@@ -32,7 +32,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Build docs
-      - name: Build Docs with MkDocs
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin
+      - name: Build Docs with mdBook
         run: |
           make build-docs
       - name: Setup Pages

@@ -1,15 +1,15 @@
 +++
 title = "Docs site"
-summary = "The mkdocs site on GitHub Pages: usage, commands and advanced topics"
-aka = ["mkdocs", "github pages"]
+summary = "The mdBook site on GitHub Pages: usage, commands and advanced topics"
+aka = ["mdbook", "github pages"]
 kind = "infra"
 intent = "goal"
 research = "done"
-refs = ["mkdocs.yml", "docs/", ".github/workflows/mkdocs.yml"]
+refs = ["book.toml", "docs/", ".github/workflows/docs.yml"]
 
 [[feature]]
 id = "site"
-title = "Built with mkdocs-material on every docs change"
+title = "Built with mdBook on every docs change"
 status = "done"
 
 [[feature]]

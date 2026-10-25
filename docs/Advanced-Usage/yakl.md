@@ -1,8 +1,8 @@
 # YAKL: YAML with Jsonnet expressions
 
-!!! warning "Prototype"
-    YAKL is an experimental format, turned on with `--features=yakl` (see [Feature gates](feature-gates.md)). The
-    syntax and semantics below may change.
+> [!WARNING]
+> **Prototype.** YAKL is an experimental format, turned on with `--features=yakl` (see [Feature gates](feature-gates.md)). The
+> syntax and semantics below may change.
 
 Jsonnet is a great language, but many people would rather write YAML. Tools like
 [kro](https://kro.run) keep YAML as the outer language and embed `${...}` expressions
