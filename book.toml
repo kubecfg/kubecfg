@@ -1,0 +1,12 @@
+[book]
+title = "KubeCFG"
+description = "KubeCFG Documentation"
+src = "docs"
+
+[build]
+build-dir = "docs-build"
+
+[output.html]
+git-repository-url = "https://github.com/kubecfg/kubecfg"
+edit-url-template = "https://github.com/kubecfg/kubecfg/edit/main/{path}"
+additional-js = ["theme/mermaid.js"]
