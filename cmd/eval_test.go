@@ -8,7 +8,7 @@ import (
 
 func TestEvalJsonnet(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "app.yakl")
-	src := "'&k': ${import 'k.libsonnet'}\n--- !config::\nreplicas: 2 # overlays change it\n--- !deployment\nkind: Deployment\n" +
+	src := "'&k': ${import 'k.libsonnet'}\n---\n^^:: config\nreplicas: 2 # overlays change it\n---\n^^: deployment\nkind: Deployment\n" +
 		"metadata:\n  labels: &labels {app: web}\nspec:\n  replicas: ${$.config.replicas}\n  selector: {matchLabels: '${labels}'}\n"
 	if err := os.WriteFile(file, []byte(src), 0600); err != nil {
 		t.Fatal(err)

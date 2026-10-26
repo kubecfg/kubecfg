@@ -29,7 +29,7 @@ status = "done"
 
 [[feature]]
 id = "names"
-title = "Documents named with a tag (--- !web), read as $.name"
+title = "Documents named with a key (^^: web), read as $.name"
 status = "done"
 
 [[feature]]

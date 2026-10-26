@@ -208,7 +208,7 @@ func TestExpressions(t *testing.T) {
 		{"anchors through hidden and quoted keys", "my.cfg::\n  v: &v 1\n0x1F: {a: &k 2}\nw: ${[v, k]}\n", `{"31":{"a":2},"w":[1,2]}`},
 		{"an anchor under + is the combined value", "<<+: ${ {labels: {a: '1'}} }\nlabels+: &l {b: '2'}\ncopy: ${l}\n", `{"copy":{"a":"1","b":"2"},"labels":{"a":"1","b":"2"}}`},
 		{"items of a list under + count from the end", "<<+: ${ {args: ['x', 'y']} }\nargs+: [&a z]\nv: ${a}\n", `{"args":["x","y","z"],"v":"z"}`},
-		{"std is no name for a local", "--- !std\na: &std {x: 1}\nb: *std\nc: ${std.length([1, 2])}\nd:\n  <<+: ${ {} }\n", `{"std":{"a":{"x":1},"b":{"x":1},"c":2,"d":{}}}`},
+		{"std is no name for a local", "---\n^^: std\na: &std {x: 1}\nb: *std\nc: ${std.length([1, 2])}\nd:\n  <<+: ${ {} }\n", `{"std":{"a":{"x":1},"b":{"x":1},"c":2,"d":{}}}`},
 		{"items of x and x+", "args: [&f a]\nargs+: [b, &l c]\nv: ${[f, l]}\n", `{"args":["a","b","c"],"v":["a","c"]}`},
 		{"<<+ sees the document's anchors", "a:\n  <<+: ${l}\n  x: 1\nl: &l {z: 2}\n", `{"a":{"x":1,"z":2},"l":{"z":2}}`},
 		{"plain anchors don't bind", "a: &my-a\n  b: 1\nc: *my-a\nd: &if {e: '${self.f}', f: 2}\n", `{"a":{"b":1},"c":{"b":1},"d":{"e":2,"f":2}}`},
@@ -308,36 +308,37 @@ env: ${[
 		{"literal key ending in a colon", "${'a:'}: 1\n${'b+'}: 2\n${'&'}: 3\n", `{"&":3,"a:":1,"b+":2}`},
 
 		// Names.
-		{"a name makes an object", "'&names': {prefix: p-}\n--- !a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\nmetadata:\n  name: ${$.a.metadata.name + '-copy'}\n",
+		{"a name makes an object", "'&names': {prefix: p-}\n---\n^^: a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\nmetadata:\n  name: ${$.a.metadata.name + '-copy'}\n",
 			`{"a":{"metadata":{"name":"p-a"}},"unnamed":[{"metadata":{"name":"p-a-copy"}}]}`},
-		{"hidden name", "--- !config::\nnum: 1\n--- !a\nv: ${$.config.num}\n", `{"a":{"v":1}}`},
-		{"forced visible name", "--- !a:::\nnum: 1\n", `{"a":{"num":1}}`},
-		{"name tag", "--- !web.conf\nkind: ConfigMap\n--- !b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"},"web.conf":{"kind":"ConfigMap"}}`},
-		{"name tag with colons", "--- !web.conf::\nkind: ConfigMap\n--- !b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"}}`},
-		{"name tag on its own line", "!cm\nkind: ConfigMap\n", `{"cm":{"kind":"ConfigMap"}}`},
-		{"named list and expression", "--- !l\n- 1\n--- !lib::\n${ {f: 2} }\n--- !v\nx: ${$.lib.f}\n", `{"l":[1],"v":{"x":2}}`},
-		{"an anchor on a named document", "--- !web.conf &wc\nkind: ConfigMap\nv: ${wc.kind}\n", `{"web.conf":{"kind":"ConfigMap","v":"ConfigMap"}}`},
-		{"a number as a name", "--- !123\na: 1\n", `{"123":{"a":1}}`},
-		{"name with dashes", "--- !my-svc\na: 1\n", `{"my-svc":{"a":1}}`},
-		{"plain and + documents combine", "--- !web\na: 1\nb: {c: 1}\n--- !web+\nb+: {d: 2}\n", `{"web":{"a":1,"b":{"c":1,"d":2}}}`},
-		{"+ document first, hidden plain one", "--- !web+\nb+: {d: 2}\n--- !web::\nb: {c: 1}\n--- !v\nx: ${$.web.b}\n", `{"v":{"x":{"c":1,"d":2}}}`},
-		{"+ document alone", "--- !web+\nb: 1\n", `{"web":{"b":1}}`},
-		{"hidden + document", "--- !c+::\nx: 1\n--- !v\nw: ${$.c.x}\n", `{"v":{"w":1}}`},
-		{"unnamed documents", "--- !a\nx: 1\n---\nw: ${$.a.x}\n---\nz: 3\n", `{"a":{"x":1},"unnamed":[{"w":1},{"z":3}]}`},
-		{"file locals see the file", "'&num': ${$.a.x}\n--- !a\nx: 1\n--- !b\nv: ${num}\n", `{"a":{"x":1},"b":{"v":1}}`},
-		{"a document with only a name", "--- !a\n", `{"a":null}`},
-		{"named document with <<+", "'&base': {x: 1}\n--- !d\n<<+: ${base}\nw: &w 2\nz: ${w}\n", `{"d":{"w":2,"x":1,"z":2}}`},
-		{"a document's name in itself", "--- !root\nname: nm\nm:\n  v: ${$.root.name}\n", `{"root":{"m":{"v":"nm"},"name":"nm"}}`},
+		{"hidden name", "---\n^^:: config\nnum: 1\n---\n^^: a\nv: ${$.config.num}\n", `{"a":{"v":1}}`},
+		{"forced visible name", "---\n^^::: a\nnum: 1\n", `{"a":{"num":1}}`},
+		{"a name with a dot", "---\n^^: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"},"web.conf":{"kind":"ConfigMap"}}`},
+		{"a hidden name with a dot", "---\n^^:: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"}}`},
+		{"a single named document", "^^: cm\nkind: ConfigMap\n", `{"cm":{"kind":"ConfigMap"}}`},
+		{"a name for an expression's object", "---\n^^:: lib\n<<+: ${ {f: 2} }\n---\n^^: v\nx: ${$.lib.f}\n", `{"v":{"x":2}}`},
+		{"an anchor on a named document", "---\n&wc\n^^: web.conf\nkind: ConfigMap\nv: ${wc.kind}\n", `{"web.conf":{"kind":"ConfigMap","v":"ConfigMap"}}`},
+		{"a number as a name", "---\n^^: '123'\na: 1\n", `{"123":{"a":1}}`},
+		{"name with dashes", "---\n^^: my-svc\na: 1\n", `{"my-svc":{"a":1}}`},
+		{"plain and + documents combine", "---\n^^: web\na: 1\nb: {c: 1}\n---\n^^+: web\nb+: {d: 2}\n", `{"web":{"a":1,"b":{"c":1,"d":2}}}`},
+		{"+ document first, hidden plain one", "---\n^^+: web\nb+: {d: 2}\n---\n^^:: web\nb: {c: 1}\n---\n^^: v\nx: ${$.web.b}\n", `{"v":{"x":{"c":1,"d":2}}}`},
+		{"+ document alone", "---\n^^+: web\nb: 1\n", `{"web":{"b":1}}`},
+		{"hidden + document", "---\n^^+:: c\nx: 1\n---\n^^: v\nw: ${$.c.x}\n", `{"v":{"w":1}}`},
+		{"unnamed documents", "---\n^^: a\nx: 1\n---\nw: ${$.a.x}\n---\nz: 3\n", `{"a":{"x":1},"unnamed":[{"w":1},{"z":3}]}`},
+		{"file locals see the file", "'&num': ${$.a.x}\n---\n^^: a\nx: 1\n---\n^^: b\nv: ${num}\n", `{"a":{"x":1},"b":{"v":1}}`},
+		{"a document with only a name", "---\n^^: a\n", `{"a":{}}`},
+		{"the name key anywhere among the keys", "a: 1\n^^: d\nb: 2\n", `{"d":{"a":1,"b":2}}`},
+		{"named document with <<+", "'&base': {x: 1}\n---\n^^: d\n<<+: ${base}\nw: &w 2\nz: ${w}\n", `{"d":{"w":2,"x":1,"z":2}}`},
+		{"a document's name in itself", "---\n^^: root\nname: nm\nm:\n  v: ${$.root.name}\n", `{"root":{"m":{"v":"nm"},"name":"nm"}}`},
 		{"an anchor on a document's root", "&r\nname: nm\nm:\n  v: ${r.name}\n", `{"m":{"v":"nm"},"name":"nm"}`},
-		{"a name isn't a local", "--- !labels\nx: 1\n--- !d\nm: &labels {z: 2}\nv: ${[labels, $.labels]}\n", `{"d":{"m":{"z":2},"v":[{"z":2},{"x":1}]},"labels":{"x":1}}`},
-		{"a file local named like a document", "'&x': 1\n--- !x\nv: ${[x, $.x.w]}\nw: 2\n", `{"x":{"v":[1,2],"w":2}}`},
+		{"a name isn't a local", "---\n^^: labels\nx: 1\n---\n^^: d\nm: &labels {z: 2}\nv: ${[labels, $.labels]}\n", `{"d":{"m":{"z":2},"v":[{"z":2},{"x":1}]},"labels":{"x":1}}`},
+		{"a file local named like a document", "'&x': 1\n---\n^^: x\nv: ${[x, $.x.w]}\nw: 2\n", `{"x":{"v":[1,2],"w":2}}`},
 
 		// A first document of <<+ and local keys says what the file extends.
-		{"a file extends an object", "<<+: ${ {a: 1, unnamed: ['x']} }\n---\n!b\nv: 2\n---\nc: 3\n", `{"a":1,"b":{"v":2},"unnamed":["x",{"c":3}]}`},
+		{"a file extends an object", "<<+: ${ {a: 1, unnamed: ['x']} }\n---\n^^: b\nv: 2\n---\nc: 3\n", `{"a":1,"b":{"v":2},"unnamed":["x",{"c":3}]}`},
 		{"one document without a name is appended", "<<+: ${ {unnamed: ['x']} }\n---\nc: 3\n", `{"unnamed":["x",{"c":3}]}`},
 		{"the file's documents see the parent through $", "<<+: ${ {x:: 3} }\n---\nv: ${$.x}\n", `{"unnamed":[{"v":3}]}`},
 		{"a hidden unnamed stays hidden", "<<+: ${ {unnamed:: []} }\n---\nc: 3\n", `{}`},
-		{"local keys next to <<+ are file locals", "'&n': 2\n<<+: ${ {a: 1} }\n---\n!b\nv: ${n}\n", `{"a":1,"b":{"v":2}}`},
+		{"local keys next to <<+ are file locals", "'&n': 2\n<<+: ${ {a: 1} }\n---\n^^: b\nv: ${n}\n", `{"a":1,"b":{"v":2}}`},
 		{"a file extends several sources", "<<+: [${ {a: 1} }, {a: 2, b: 2}]\n---\nc: 3\n", `{"a":1,"b":2,"unnamed":[{"c":3}]}`},
 		{"a file extends null", "<<+: ${null}\n---\nc: 3\n", `{"unnamed":[{"c":3}]}`},
 		{"<<+ alone is the document", "<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n", `{"apiVersion":"v1","kind":"ConfigMap"}`},
@@ -430,7 +431,7 @@ func TestErrors(t *testing.T) {
 		{"a: 1\n\nb: ${error 'boom'}\n", "test.yakl:3:"},
 		{"a: ${\n  1 +\n  error 'deep'\n}\n", "test.yakl:3:"},
 		{"'&x': 1\n'&z': ${error 'decl'}\n---\nv: ${z}\n", "test.yakl:2:"},
-		{"'&x': 1\n--- !a\nv: ${x}\nw: ${error 'boom'}\n", "test.yakl:4:"},
+		{"'&x': 1\n---\n^^: a\nv: ${x}\nw: ${error 'boom'}\n", "test.yakl:5:"},
 		{"&a\nx: 1\n---\nv: ${a.x}\n", "test.yakl:4:"},
 		{"a:\n  b: &l\n    c: 1\n  d: ${l.e}\n", "test.yakl:4:"},
 		{"${1}: x\n", "Field name must be string"},
@@ -441,7 +442,7 @@ func TestErrors(t *testing.T) {
 		{"a: ${[\\{\n    b: 1\n  c: 2\n  }]}\n", "line 3, column 3: a YAML block in an expression must be closed by }"},
 		{"a: ${\\{\n    b: c: d\n  }}\n", "line 2"},
 		{"a: ${[\\{\n    b: ${error 'nested'}\n  }]}\n", "test.yakl:2:"},
-		{"a: ${\\{\n    '&': x\n    b: 1\n  }}\n", `line 2: the key "&" doesn't name a document: a tag does, on a line of its own where the document starts, as in !web`},
+		{"a: ${\\{\n    ^^: x\n    b: 1\n  }}\n", `line 2: the key "^^" names a document, so it goes among the top-level keys of a document`},
 		// Code after a nested block keeps the line of the block's closing }.
 		{"a: ${\\{\n    b: |\n      x\n\n  } + error 'boom'}\n", "test.yakl:5:"},
 
@@ -460,9 +461,9 @@ func TestErrors(t *testing.T) {
 		{"a:\n  <<+: ${base}\n  '&base': {x: 1}\n", "Unknown variable: base"},
 
 		// Names and locals.
-		{"--- !a\nx: 1\n--- !a\ny: 2\n", `line 3: the name "a" is already given on line 1`},
-		{"--- !a+\n--- !a+\n", `the name "a" is already given`},
-		{"--- !a\n--- !a+::\n", `the name "a" is already given`},
+		{"---\n^^: a\nx: 1\n---\n^^: a\ny: 2\n", `line 5: the name "a" is already given on line 2`},
+		{"---\n^^+: a\n---\n^^+: a\n", `the name "a" is already given`},
+		{"---\n^^: a\n---\n^^+:: a\n", `the name "a" is already given`},
 		{"name: &name foo\n${name}: 1\n", "line 2: ${name} uses the local name, which reads line 1 from what ${name} builds"},
 		{"- &count 2\n- ${for i in std.range(1, count)}: ${i}\n", "line 2: ${for i in std.range(1, count)} uses the local count, which reads line 1"},
 		{"l:\n  - ${if n > 1}: 1\n  - [&n 2]\n", "line 2: ${if n > 1} uses the local n, which reads line 3"},
@@ -476,19 +477,23 @@ func TestErrors(t *testing.T) {
 		{"a: ' ${a} ${b}'\n", "line 1: a string that starts with ${ must be exactly one expression"},
 		{"a: &x 1\nb: &x 2\n", `line 2: the anchor &x is also on line 1: a local can't have two values`},
 		{"a:\n  '&x': 1\n  '&x': 2\n", `line 3: duplicate key "&x"`},
-		{"'&': a\nb: 1\n", `line 1: the key "&" doesn't name a document: a tag does, on a line of its own where the document starts, as in !web`},
-		{"'&+': a\n", `line 1: the key "&+" doesn't name a document`},
-		{"a:\n  '&': x\n", `line 2: the key "&" doesn't name a document`},
-		{"--- !+\na: 1\n", "line 1: the tag !+ names no field"},
-		{"--- !a::::\n", "the tag !a:::: ends in more than three colons"},
-		{"a: !web {b: 1}\n", "line 1: unsupported tag !web: a tag like it names a document, on the document's root only"},
-		{"'&web.conf':\nkind: ConfigMap\n", `line 1: the key "&web.conf" declares a local, so "web.conf" must be a Jsonnet variable name, not a keyword or std; to name a document, tag it: !web.conf`},
-		{"'&web+':\nb: 1\n", `"web+" must be a Jsonnet variable name, not a keyword or std; to name a document, tag it: !web+`},
-		{"'&web':\nkind: ConfigMap\n", `line 1: the local key "&web" has no value; to name the document, tag it: !web`},
+		{"a:\n  ^^+: x\n", `line 2: the key "^^+" names a document, so it goes among the top-level keys of a document; for a literal key, write ${"^^+"}`},
+		{"^^: a\nb: 1\n^^: c\n", `line 3: a document has one name key, but this one has "^^" on line 1 too`},
+		{"^^: ${'a'}\n", `line 1: the key "^^" takes the document's name as text, not as an expression`},
+		{"^^: 123\n", `line 1: the key "^^" takes the document's name, as a string (quote a number: '123')`},
+		{"^^: web+\n", `line 1: the name "web+" can't end in + or :; they go on the key, as in ^^+: web`},
+		{"!web\na: 1\n", "line 1: unsupported tag !web; to name a document, write ^^: web among its top-level keys"},
+		{"!config+::\na: 1\n", "write ^^+:: config among its top-level keys"},
+		{"^^: ''\na: 1\n", `line 1: the key "^^" takes the document's name, as a string`},
+		{"^^:::: a\n", `the key "^^:::" ends in more than two colons`},
+		{"a: !web {b: 1}\n", "line 1: unsupported tag !web"},
+		{"'&web.conf':\nkind: ConfigMap\n", `line 1: the key "&web.conf" declares a local, so "web.conf" must be a Jsonnet variable name, not a keyword or std; to name a document, write ^^: web.conf among its top-level keys`},
+		{"'&web+':\nb: 1\n", `"web+" must be a Jsonnet variable name, not a keyword or std; to name a document, write ^^+: web among its top-level keys`},
+		{"'&web':\nkind: ConfigMap\n", `line 1: the local key "&web" has no value; to name the document, write ^^: web`},
 		{"'&if': 1\n", `"if" must be a Jsonnet variable name, not a keyword`},
 		{"'&-x': 1\n", `"-x" must be a Jsonnet variable name, not a keyword`},
-		{"--- !unnamed\nx: 1\n", `the name "unnamed" is reserved`},
-		{"--- !unnamed+\n", `the name "unnamed" is reserved`},
+		{"---\n^^: unnamed\nx: 1\n", `the name "unnamed" is reserved`},
+		{"---\n^^+: unnamed\n", `the name "unnamed" is reserved`},
 		{"'&x': {a: &y 1}\n", "line 1: &y in a document of local keys: the node has no place of its own in the output"},
 		{"&f\n'&x': 1\n", "line 1: &f in a document of local keys: the node has no place of its own in the output, so its anchor can't declare a local"},
 		{"m:\n  '&x': {a: &y 1}\n", "line 2: &y in the value of a local key"},
@@ -498,7 +503,7 @@ func TestErrors(t *testing.T) {
 		{"${'k'}: {a: &b 1}\n", "line 1: &b under a key expression"},
 		{"&web apiVersion: v1\n", `line 1: &web anchors the key "apiVersion", which has no place of its own in the output; an anchor for the whole document goes on its own line`},
 		{"a: {&k b: 1}\n", `&k anchors the key "b"`},
-		{"&web: value\n", "line 1: &web: anchors an empty key: write '&web': for a local key, or tag the document to name it: !web"},
+		{"&web: value\n", "line 1: &web: anchors an empty key: write '&web': for a local key, or ^^: web to name the document"},
 		{"a:\n  &port: 8080\n", "line 2: &port: anchors an empty key"},
 		{"&web.conf:\nx: 1\n", "did not find expected alphabetic or numeric character"},
 		{"&config- &config\nx: 1\n", "did not find expected <document start>"},
@@ -564,7 +569,7 @@ func laughs(levels int) string {
 }
 
 func FuzzCompile(f *testing.F) {
-	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "'&x': 1\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "--- !a\nb: &z ${1}\n--- !c+\n<<+: [${a}]\nd+: 1\ne: {'&l': '${z}'}\n", "a: ['${1}', \"${'}'}\"]\n'${k}': !!str '${v}'\n", "a: |-\n  ${[\\{\n    b: 1\n  }]}\nc: $${d}\n", "- ${for x in [1]}:\n    a: &a ${x}\n- &b 2\nm:\n  c: 1\n  <<+: ${if true then {d: 2}}\n", "# a\n\n--- !b # c\n# d\nx: 1 # e\n<<: {f: 1} # g\n# h\nl:\n  # i\n  - ${for y in [1]}: 2 # j\n  # k\n"} {
+	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "'&x': 1\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "---\n^^: a\nb: &z ${1}\n---\n^^+: c\n<<+: [${a}]\nd+: 1\ne: {'&l': '${z}'}\n", "a: ['${1}', \"${'}'}\"]\n'${k}': !!str '${v}'\n", "a: |-\n  ${[\\{\n    b: 1\n  }]}\nc: $${d}\n", "- ${for x in [1]}:\n    a: &a ${x}\n- &b 2\nm:\n  c: 1\n  <<+: ${if true then {d: 2}}\n", "# a\n\n---\n^^: b # c\n# d\nx: 1 # e\n<<: {f: 1} # g\n# h\nl:\n  # i\n  - ${for y in [1]}: 2 # j\n  # k\n"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, src string) {
@@ -656,8 +661,8 @@ func TestFormat(t *testing.T) {
 		{"a: |-\n  ${1+2 # c\n  }\n", "a: |-\n  ${1 + 2  // c\n  }\n"},
 		{"a: |-\n  ${[1,'x\n  y']}\n", "a: |-\n  ${[1,'x\n  y']}\n"}, // the string would change
 		// What follows --- goes on the next line, which is all that kubectl's reader allows.
-		{"--- !web\na: ${1+2}\n--- !b # c\nx: 1\n---  # d\n--- |\n  ${3}\n--- ${ {a:1} }\n",
-			"---\n!web\na: ${1 + 2}\n---\n!b # c\nx: 1\n---  # d\n---\n|\n  ${3}\n---\n'${ { a: 1 } }'\n"},
+		{"---\n^^: web\na: ${1+2}\n---\n^^: b # c\nx: 1\n---  # d\n--- |\n  ${3}\n--- ${ {a:1} }\n",
+			"---\n^^: web\na: ${1 + 2}\n---\n^^: b # c\nx: 1\n---  # d\n---\n|\n  ${3}\n---\n'${ { a: 1 } }'\n"},
 		{"a: |\n  --- !x\n", "a: |\n  --- !x\n"},
 		// An overridden merge key, which isn't written, still matches the key formatted.
 		{"a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\"+\"y\"}': 2\n", "a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\" + \"y\"}': 2\n"},
@@ -695,10 +700,11 @@ func TestDesugarComments(t *testing.T) {
 	const src = `# A web app.
 
 # The settings.
---- !config::
+^^:: config
 replicas: 2 # the default
+---
 # The deployment.
---- !deployment
+^^: deployment
 spec:
   # Scaled by config.
   replicas: ${$.config.replicas}
@@ -741,7 +747,7 @@ spec:
 // A document read through $ is the field, so it follows overlays; a nested anchor's local is the
 // node as the document writes it, so it doesn't.
 func TestBinding(t *testing.T) {
-	const src = "--- !config::\nreplicas: 2\n--- !deployment\nmetadata:\n  labels: &labels {app: web}\n" +
+	const src = "---\n^^:: config\nreplicas: 2\n---\n^^: deployment\nmetadata:\n  labels: &labels {app: web}\n" +
 		"spec:\n  replicas: ${$.config.replicas}\n  selector: {matchLabels: '${labels}'}\n"
 	const overlay = "{config+: {replicas: 5}, deployment+: {metadata+: {labels+: {canary: 'true'}}}}"
 	const want = `{"deployment":{"metadata":{"labels":{"app":"web","canary":"true"}},"spec":{"replicas":5,"selector":{"matchLabels":{"app":"web"}}}}}`
@@ -826,8 +832,8 @@ func TestPredefineKubecfg(t *testing.T) {
 		{"a document", "a: ${kubecfg.answer}\n", `{"a":42}`},
 		{"a list", "---\na: 1\n---\nb: ${kubecfg.answer}\n", `[{"a":1},{"b":42}]`},
 		{"a key", "${'k' + kubecfg.answer}: 1\n", `{"k42":1}`},
-		{"a file with names", "!x\na: ${kubecfg.answer}\n", `{"x":{"a":42}}`},
-		{"a file that extends an object", "<<+: ${ {b: 1} }\n---\n!x\na: ${kubecfg.answer}\n", `{"b":1,"x":{"a":42}}`},
+		{"a file with names", "^^: x\na: ${kubecfg.answer}\n", `{"x":{"a":42}}`},
+		{"a file that extends an object", "<<+: ${ {b: 1} }\n---\n^^: x\na: ${kubecfg.answer}\n", `{"b":1,"x":{"a":42}}`},
 		{"a file local", "'&n': ${kubecfg.answer}\n---\na: ${n}\n", `{"a":42}`},
 		{"an inner name hides it", "a: ${kubecfg.answer}\nb:\n  '&kubecfg': {answer: 1}\n  c: ${kubecfg.answer}\n", `{"a":42,"b":{"c":1}}`},
 	} {

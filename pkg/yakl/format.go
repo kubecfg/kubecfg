@@ -29,7 +29,7 @@ import (
 // leaves the YAML around them as it is. A plain expression whose formatted code isn't a valid plain
 // YAML scalar any more, like ${ { a: 1 } } with its `: `, gets quoted. Expressions holding YAML
 // blocks, ${for} and ${if} clauses, code that would take several lines outside a block
-// expression, and a block expression with a string spanning its lines are left as they are. What follows a "---" on its line, like the tag in --- !web, moves
+// expression, and a block expression with a string spanning its lines are left as they are. What follows a "---" on its line, like the | in --- |, moves
 // to the next line, since kubectl's reader allows only a comment there.
 func Format(src string) (string, error) {
 	c, err := compiled(src, false, false)

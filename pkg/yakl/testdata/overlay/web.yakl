@@ -1,12 +1,12 @@
 '&lib': ${import 'lib.libsonnet'}
 '&port': 8080
 ---
-!config::
+^^:: config
 name: web
 image: nginx:1.27
 replicas: 2
 ---
-!deployment
+^^: deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,7 +35,7 @@ spec:
           configMap:
             name: ${$['web.conf'].metadata.name}
 ---
-!service
+^^: service
 apiVersion: v1
 kind: Service
 metadata:
@@ -48,7 +48,7 @@ spec:
       port: 80
       targetPort: ${target.ports[0].containerPort}
 ---
-!web.conf
+^^: web.conf
 apiVersion: v1
 kind: ConfigMap
 metadata:
