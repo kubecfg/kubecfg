@@ -1,10 +1,32 @@
 +++
-title = "Implicit kubecfg"
-summary = "kubecfg is a predefined name, so files use the library without importing it"
-aka = ["implicit-stdlib"]
+title = "Predefined kubecfg"
+summary = "kubecfg is predefined in command-line code and .yakl files, not in Jsonnet files"
+aka = ["RFC06", "predefined-kubecfg", "implicit-stdlib"]
 kind = "lang"
 intent = "aspiration"
-research = "outline"
+research = "done"
+refs = ["docs/rfcs/rfc06.md"]
+
+[[feature]]
+id = "import-fix"
+title = "Imports work in eval -e, --ext-code and --tla-code"
+status = "todo"
+
+[[feature]]
+id = "cli"
+title = "kubecfg predefined in eval -e, --exec, --overlay-code, --ext-code, --tla-code"
+status = "todo"
+needs = ["#import-fix"]
+
+[[feature]]
+id = "yakl"
+title = "kubecfg predefined in .yakl expressions, and printed by eval -o jsonnet"
+status = "todo"
+needs = ["/lang/yakl"]
+
+[[feature]]
+id = "hint"
+title = "A hint after Unknown variable: kubecfg"
 status = "todo"
 
 [[needs]]
@@ -12,12 +34,9 @@ on = "/lang/stdlib"
 
 [[needs]]
 on = "/config/feature-gates"
-why = "Starts as the alpha feature implicit-stdlib"
-
-[[needs]]
-fuzzy = "go-jsonnet: let the embedding program add globals, the way std is added"
-why = "Prepending text to each file would change what importstr returns"
+why = "Starts as the alpha feature predefined-kubecfg"
 +++
 
-A follow-up in RFC05. It is additive: a free `kubecfg` variable is an error
-today, so no working file depends on it being missing.
+RFC06. Jsonnet files keep the explicit import, because editors, linters and
+other Jsonnet tools only know `std`. Code that isn't in a file is only read by
+kubecfg, so `kubecfg` can be predefined there.

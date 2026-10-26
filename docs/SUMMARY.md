@@ -23,3 +23,4 @@
 - [RFCs]()
   - [RFC02: Flags From Files](rfcs/rfc02.md)
   - [RFC05: Feature gates](rfcs/rfc05.md)
+  - [RFC06: `kubecfg` predefined outside Jsonnet files](rfcs/rfc06.md)
