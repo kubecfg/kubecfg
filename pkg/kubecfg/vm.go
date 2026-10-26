@@ -253,6 +253,8 @@ func JsonnetVM(opt ...JsonnetVMOpt) (*jsonnet.VM, error) {
 			}
 
 			value = fmt.Sprintf("%s @'%s'", imp, strings.ReplaceAll(target, "'", "''"))
+		} else if v.Expr == vars.Code {
+			value = yakl.PredefineKubecfg(value)
 		}
 
 		v.Setter()(vm, name, value)
@@ -400,7 +402,8 @@ func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*u
 		add := buildOverlayObject(jsonnetCode, overlay)
 		overlayExpression = func(src string) (string, string) {
 			expr := fmt.Sprintf(`(import %q) + (%s)`, utils.ImportPath(src), add)
-			return utils.ToDataURL(expr), expr
+			// The file is imported, so only the overlay's code sees kubecfg.
+			return utils.ToDataURL(yakl.PredefineKubecfg(expr)), expr
 		}
 	}
 

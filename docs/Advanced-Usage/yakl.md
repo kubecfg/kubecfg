@@ -880,6 +880,44 @@ document or list.
   object: there Jsonnet would read `$` as the local's own outermost object, so yakl reports it
   instead. `self` outside an object gives Jsonnet's own "Can't use self outside of an object".
 
+### `kubecfg` without an import
+
+A file can use `kubecfg` without importing `kubecfg.libsonnet`:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+spec:
+  containers:
+  - name: web
+    image: ${kubecfg.resolveImage('nginx:1.27')}
+```
+
+The compiler adds the file local that this local key would declare:
+
+```yaml
+'&kubecfg': ${import 'internal:///kubecfg.libsonnet'}
+```
+
+- **The built-in copy.** `internal:///kubecfg.libsonnet` is the copy built into kubecfg. A file
+  with that name on the search path (`-J`) or next to the `.yakl` file doesn't change it. To use
+  another copy, declare `kubecfg` yourself, with `'&kubecfg': ${import 'kubecfg.libsonnet'}`.
+- **Only when it's used.** The compiler adds it when an expression reads `kubecfg` and the file
+  doesn't declare it there. A file with its own `'&kubecfg':`, or that doesn't use `kubecfg`,
+  compiles as before. A field named `kubecfg`, as in `x.kubecfg`, isn't a use.
+- **Your own names win.** An anchor, a local key or a Jsonnet local named `kubecfg` hides it, as
+  an inner local hides an outer one.
+- **Same lines.** The local goes in front of the first line, without a line of its own, so errors
+  keep their line numbers.
+- **`eval -o jsonnet` shows it,** as `local kubecfg = import 'internal:///kubecfg.libsonnet';` at
+  the top. Saved as a `.jsonnet` file, that output works in kubecfg as it is. For other Jsonnet
+  tools, change the import to `'kubecfg.libsonnet'`.
+- **Not in Jsonnet files.** A Jsonnet file still needs the import, so editors, linters and other
+  Jsonnet tools can read it. [RFC06](../rfcs/rfc06.md)
+  explains why.
+
 ### Every way to declare a local
 
 | You want | Write | Scope | In the output |
@@ -887,6 +925,7 @@ document or list.
 | a name for a node that stays in the output | `&labels` on the node | its document | yes, where it's written |
 | a value used only by expressions | `'&port': 8080` in a mapping | that mapping | no |
 | imports and helpers for the whole file | a document of `'&k':` keys | the file | no |
+| `kubecfg.libsonnet`, the copy built into kubecfg | nothing: `kubecfg` is predefined | the file | no |
 | a document with a name | `!web` at the top of the document | the file | yes, as the field `web` |
 | settings an overlay can change | `!config::` at the top of a document | the file | no, it's a hidden field |
 
@@ -1240,7 +1279,8 @@ Expressions are evaluated in the generated Jsonnet, so:
   local keys of the mappings around the expression and the variables of the `${for}` items
   around it are in scope. An inner one hides an outer one with the same name, as in Jsonnet.
 - `std` is available, and so are `std.extVar` (kubecfg `-V`, `--ext-code`, ...) and the
-  kubecfg native functions.
+  kubecfg native functions. So is `kubecfg`, the kubecfg library: see
+  [`kubecfg` without an import](#kubecfg-without-an-import).
 - `import`, `importstr` and `importbin` resolve relative to the `.yakl` file, then the
   `-J` search path, just like in a `.jsonnet` file. URLs and `oci://` work too.
 

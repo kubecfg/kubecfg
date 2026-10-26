@@ -36,7 +36,11 @@ func main() {
 		// errors, like invalid command line flags.
 		logFmt := cmd.NewLogFormatter(log.StandardLogger().Out)
 		log.SetFormatter(logFmt)
-		log.Error(err.Error())
+		msg := err.Error()
+		if hint := cmd.Hint(err); hint != "" {
+			msg += "\n" + hint
+		}
+		log.Error(msg)
 
 		switch err {
 		case kubecfg.ErrDiffFound:
