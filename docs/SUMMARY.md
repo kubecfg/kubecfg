@@ -20,3 +20,6 @@
   - [JSON schema validation](Advanced-Usage/schema-validation.md)
   - [YAKL (YAML + Jsonnet)](Advanced-Usage/yakl.md)
   - [Feature gates](Advanced-Usage/feature-gates.md)
+- [RFCs]()
+  - [RFC02: Flags From Files](rfcs/rfc02.md)
+  - [RFC05: Feature gates](rfcs/rfc05.md)
