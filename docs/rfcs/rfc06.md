@@ -162,6 +162,11 @@ local keys:
 The compiler adds the local itself, not a document. A document in front of the file would break a
 file whose first document is `<<+: S`, because that document has to be the first.
 
+The local also declares `yakl__kubecfg`, the same library under a second name. It's for code the
+compiler writes itself: a file can declare its own `kubecfg`, which would hide the first name from
+that code, but it can't hide the second one. The compiler adds the local when the code reads either
+name.
+
 A file that doesn't use `kubecfg`, or that declares it wherever it uses it, for example with
 `'&kubecfg':`, compiles to the same Jsonnet as before.
 
@@ -173,7 +178,8 @@ the code of line 1 and doesn't add a line.
 For the Pod above, without its first document, it prints:
 
 ```jsonnet
-local kubecfg = import 'internal:///kubecfg.libsonnet';
+local kubecfg = import 'internal:///kubecfg.libsonnet',
+      yakl__kubecfg = kubecfg;
 {
   apiVersion: 'v1',
   kind: 'Pod',
