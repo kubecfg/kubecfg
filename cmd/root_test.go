@@ -13,6 +13,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func TestReadObjsDuplicates(t *testing.T) {
@@ -251,5 +252,13 @@ func TestPredefinedKubecfg(t *testing.T) {
 	}
 	if hint := Hint(errors.New("Unknown variable: kubecfgx")); hint != "" {
 		t.Errorf("another variable: got hint %q", hint)
+	}
+}
+
+func TestEnvVarUnderscores(t *testing.T) {
+	t.Setenv("KUBECFG_RESOLVE_IMAGES_ERROR", "error")
+	initConfig()
+	if got := viper.GetString(flagResolvFail); got != "error" {
+		t.Errorf("got %q, want %q", got, "error")
 	}
 }

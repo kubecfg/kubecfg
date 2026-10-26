@@ -610,4 +610,6 @@ func Hint(err error) string {
 func initConfig() {
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("KUBECFG")
+	// --resolve-images-error is KUBECFG_RESOLVE_IMAGES_ERROR: shells can't export names with dashes.
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 }
