@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,6 +59,27 @@ func TestExpandImportToCandidateURLs(t *testing.T) {
 		}
 		if !reflect.DeepEqual(urls, expected) {
 			t.Errorf("Expected %v, got %v", expected, urls)
+		}
+	})
+
+	t.Run("An import dir that isn't a URL is relative to the current directory", func(t *testing.T) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// "" is the directory of --ext-code and --tla-code; "dir/" that of eval -e on dir/app.jsonnet.
+		for dir, want := range map[string]string{"": "/file.libsonnet", "dir/": "/dir/file.libsonnet"} {
+			urls, err := importer.expandImportToCandidateURLs(dir, "file.libsonnet")
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := []*url.URL{
+				{Scheme: "file", Path: filepath.ToSlash(cwd) + want},
+				{Scheme: "file", Path: "/first/base/search/file.libsonnet"},
+			}
+			if !reflect.DeepEqual(urls, expected) {
+				t.Errorf("%q: Expected %v, got %v", dir, expected, urls)
+			}
 		}
 	})
 }

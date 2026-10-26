@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing/fstest"
@@ -257,8 +258,15 @@ func (importer *universalImporter) expandImportToCandidateURLs(importedFrom, imp
 	}
 
 	importDirURL, err := url.Parse(importedFrom)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid import dir %q: %v", importedFrom, err)
+	if err != nil || importDirURL.Scheme == "" {
+		// The directory of code whose name isn't a URL: "" for --ext-code and --tla-code, or the
+		// directory of the file that eval -e evaluates. As in the jsonnet command, it's relative
+		// to the current directory.
+		dir, err := filepath.Abs(importedFrom)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid import dir %q: %v", importedFrom, err)
+		}
+		importDirURL = &url.URL{Scheme: "file", Path: strings.TrimSuffix(filepath.ToSlash(dir), "/") + "/"}
 	}
 
 	candidateURLs := make([]*url.URL, 1, len(importer.BaseSearchURLs)+1)
