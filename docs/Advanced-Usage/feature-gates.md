@@ -1,6 +1,6 @@
 # Feature gates
 
-Features that aren't stable yet are off until you turn them on. Each one has a name and a stage:
+Features that aren't stable yet can be turned on and off one at a time. Each one has a name and a stage:
 
 * **alpha**: off by default. It can change or go away in any release.
 * **beta**: on by default, and it only changes by adding things. You can still turn it off.
@@ -53,5 +53,6 @@ httpd             alpha  off      off      --features  v0.40.0
 | `overlay` | alpha | v0.40.0 | --overlay-code, --overlay-code-file (and the deprecated --overlay) |
 | `yakl` | alpha | v0.40.0 | YAML with Jsonnet expressions: .yakl files, yakl: imports, yaklfmt, eval -o jsonnet |
 | `kustomize-import` | alpha | v0.40.0 | kustomize+https:// imports |
+| `pinned-imports` | beta | v0.42.0 | #hash= on an import URL: the import fails if the content doesn't match the hash |
 | `binary-import` | removed | v0.41.0 | the binary:// import prefix; use importbin |
 <!-- END features -->

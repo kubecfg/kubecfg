@@ -28,10 +28,11 @@ func TestFeatures(t *testing.T) {
 		args []string
 		want map[string]string // name -> source of the enabled features
 	}{
-		{nil, map[string]string{"yakl": "--features", "pack": "--features"}},
+		// pinned-imports is beta: on by default
+		{nil, map[string]string{"yakl": "--features", "pack": "--features", "pinned-imports": "default"}},
 		// the flag replaces the env var, as for any flag
-		{[]string{"--features=eval", "--features", "overlay"}, map[string]string{"eval": "--features", "overlay": "--features"}},
-		{[]string{"--alpha", "--features=httpd=false"}, map[string]string{
+		{[]string{"--features=eval", "--features", "overlay"}, map[string]string{"eval": "--features", "overlay": "--features", "pinned-imports": "default"}},
+		{[]string{"--alpha", "--features=httpd=false,pinned-imports=false"}, map[string]string{
 			"eval": "--alpha", "traceback": "--alpha", "pack": "--alpha", "overlay": "--alpha",
 			"yakl": "--alpha", "kustomize-import": "--alpha",
 		}},

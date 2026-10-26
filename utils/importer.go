@@ -1,15 +1,21 @@
 package utils
 
 import (
+	"crypto"
+	_ "crypto/sha256" // for crypto.SHA256
+	_ "crypto/sha512" // for crypto.SHA512
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing/fstest"
 	"time"
@@ -187,6 +193,11 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		tried = append(tried, foundAt)
 		importedData, err := importer.tryImport(foundAt)
 		if err == nil {
+			if importer.gates.Enabled(features.PinnedImports) {
+				if err := checkHashes(u, importedData.Data()); err != nil {
+					return jsonnet.Contents{}, "", fmt.Errorf("%s: %w", foundAt, err)
+				}
+			}
 			importer.cache[foundAt] = importedData
 			return importedData, foundAt, nil
 		} else if err != errNotFound {
@@ -198,6 +209,59 @@ func (importer *universalImporter) Import(importedFrom, importedPath string) (js
 		importedPath,
 		strings.Join(tried, ";"),
 	)
+}
+
+// importHashes are the algorithms that #hash=<algo>:<hex> can use.
+var importHashes = map[string]crypto.Hash{"sha256": crypto.SHA256, "sha512": crypto.SHA512}
+
+// checkHashes checks imported data against the #hash=<algo>:<hex> entries in the fragment of the
+// URL it came from. Servers never see a fragment, so it's for kubecfg alone; one without a hash
+// key isn't meant for kubecfg, and is left alone. Algorithms kubecfg doesn't know are skipped, so a
+// URL can list a newer one next to sha256 and still work with this version. At least one must be
+// known, so a typo can't quietly turn the check off, and every known one must match.
+func checkHashes(u *url.URL, data []byte) error {
+	q, err := url.ParseQuery(u.EscapedFragment())
+	if !q.Has("hash") {
+		if u.Fragment != "" {
+			log.Warnf("%s: ignoring the URL fragment: kubecfg only reads #hash=<algo>:<hex>", u)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("invalid URL fragment %q: %w", u.Fragment, err)
+	}
+	for k := range q {
+		if k != "hash" {
+			return fmt.Errorf("unknown key %q in URL fragment %q", k, u.Fragment)
+		}
+	}
+	known := slices.Sorted(maps.Keys(importHashes))
+	seen := map[string]bool{}
+	checked := false
+	for _, v := range q["hash"] {
+		algo, want, ok := strings.Cut(v, ":")
+		if !ok {
+			return fmt.Errorf("invalid hash %q in URL fragment: want <algo>:<hex>, e.g. sha256:<hex>", v)
+		}
+		if seen[algo] {
+			return fmt.Errorf("URL fragment %q has %s more than once", u.Fragment, algo)
+		}
+		seen[algo] = true
+		hash, ok := importHashes[algo]
+		if !ok {
+			continue
+		}
+		h := hash.New()
+		h.Write(data)
+		if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, want) {
+			return fmt.Errorf("content hash mismatch: got %s:%s, want %s:%s", algo, got, algo, want)
+		}
+		checked = true
+	}
+	if !checked {
+		return fmt.Errorf("URL fragment %q has no hash this kubecfg can check (it knows %s); a newer kubecfg may", u.Fragment, strings.Join(known, ", "))
+	}
+	return nil
 }
 
 func (importer *universalImporter) importYAKL(importedFrom, importedPath string) (jsonnet.Contents, string, error) {
