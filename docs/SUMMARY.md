@@ -16,6 +16,7 @@
   - [Helm Integration](Advanced-Usage/helm-integration.md)
   - [Metacontroller Integration](Advanced-Usage/metacontroller-integration.md)
   - [OCI Support](Advanced-Usage/OCI-support.md)
+  - [Pinned imports](Advanced-Usage/pinned-imports.md)
   - [Provenance and Tracing](Advanced-Usage/provenance-traceback.md)
   - [JSON schema validation](Advanced-Usage/schema-validation.md)
   - [YAKL (YAML + Jsonnet)](Advanced-Usage/yakl.md)

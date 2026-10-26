@@ -168,7 +168,7 @@ func TestFlagsFromFileFeatures(t *testing.T) {
 			got[s.Name] = s.Source
 		}
 	}
-	if want := map[string]string{"eval": ".kubecfgrc.jsonnet", "yakl": "--features"}; !reflect.DeepEqual(got, want) {
+	if want := map[string]string{"eval": ".kubecfgrc.jsonnet", "yakl": "--features", "pinned-imports": "default"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("enabled features: got %v, want %v", got, want)
 	}
 

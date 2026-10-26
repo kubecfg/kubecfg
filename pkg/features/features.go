@@ -76,6 +76,7 @@ var (
 	Overlay         = register(Feature{Name: "overlay", Stage: Alpha, Since: "v0.40.0", Doc: "--overlay-code, --overlay-code-file (and the deprecated --overlay)"})
 	YAKL            = register(Feature{Name: "yakl", Stage: Alpha, Since: "v0.40.0", Doc: "YAML with Jsonnet expressions: .yakl files, yakl: imports, yaklfmt, eval -o jsonnet"})
 	KustomizeImport = register(Feature{Name: "kustomize-import", Stage: Alpha, Since: "v0.40.0", Doc: "kustomize+https:// imports"})
+	PinnedImports   = register(Feature{Name: "pinned-imports", Stage: Beta, Since: "v0.42.0", Doc: "#hash= on an import URL: the import fails if the content doesn't match the hash"})
 	BinaryImport    = register(Feature{Name: "binary-import", Stage: Removed, Since: "v0.41.0", Doc: "the binary:// import prefix; use importbin"})
 )
 

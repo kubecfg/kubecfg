@@ -13,6 +13,7 @@ import (
 	"time"
 
 	jsonnet "github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/pkg/features"
 )
 
 func TestInternalFS(t *testing.T) {
@@ -130,6 +131,51 @@ func TestImportFromPipe(t *testing.T) {
 				t.Errorf("got %d bytes, want %d", len(got), len(tc.data))
 			}
 		})
+	}
+}
+
+func TestImportHashes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.jsonnet")
+	if err := os.WriteFile(path, []byte("{a: 1}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Hashes of {a: 1}.
+	const (
+		sha256 = "sha256:5c41c5087643e28ad46363c644cc5e3ad8a0aec629d514f0a672482f74e1effb"
+		sha512 = "sha512:aaf558218ccae466271e6690d940c621cd8c4c969c173e36f419654571bbcbf6e8781e3f0ee5ca89d31fbee23f4e3b61d0209104ebc17670c80396c2c5b50e0d"
+	)
+	off, err := features.New(false, features.Source{Name: "test", Items: []string{"pinned-imports=false"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for fragment, wantErr := range map[string]string{
+		"":                                     "",
+		"#":                                    "",
+		"#L42":                                 "", // not for kubecfg
+		"#a;b":                                 "",
+		"#hash=" + sha256:                      "",
+		"#hash=" + sha512:                      "",
+		"#hash=" + strings.ToUpper(sha256[7:]): "invalid hash",
+		"#hash=sha256:" + strings.ToUpper(sha256[7:]): "",
+		"#hash=" + sha256 + "&hash=" + sha512:         "",
+		"#hash=" + sha256 + "&hash=blake3:x":          "",                      // unknown algorithms are skipped
+		"#hash=" + sha256 + "&hash=" + sha512[:20]:    "content hash mismatch", // every known one must match
+		"#hash=" + sha256[:20]:                        "content hash mismatch",
+		"#hash=sha256:":                               "content hash mismatch",
+		"#hash=blake3:x":                              "no hash this kubecfg can check",
+		"#hash=sha265:" + sha256[7:]:                  "no hash this kubecfg can check",
+		"#hash=" + sha256 + "&hash=" + sha256:         "more than once",
+		"#hash=" + sha256 + "&x=1":                    "unknown key",
+		"#hash=" + sha256 + "&a;b":                    "invalid URL fragment",
+	} {
+		url := "file://" + filepath.ToSlash(path) + fragment
+		_, _, err := MakeUniversalImporter(nil, false).Import("", url)
+		if wantErr == "" && err != nil || wantErr != "" && (err == nil || !strings.Contains(err.Error(), wantErr)) {
+			t.Errorf("importing %s: got error %v, want %q", url, err, wantErr)
+		}
+		if _, _, err := MakeUniversalImporterWithFeatures(nil, off).Import("", url); err != nil {
+			t.Errorf("importing %s with pinned-imports off: %v", url, err)
+		}
 	}
 }
 
