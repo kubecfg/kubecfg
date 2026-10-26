@@ -16,7 +16,7 @@ similarly-named internal tool ;)
 
 ## Documentation
 
-https://kubecfg.github.io/kubecfg/
+https://kubecfg.dev/
 
 ## Install
 
