@@ -7,8 +7,10 @@ hash, the import fails:
 local lib = import 'https://raw.githubusercontent.com/kubecfg/kubecfg/v0.29.1/testdata/configmap.jsonnet#hash=sha256:7871c163d6071da0289f4f20276f9e2a728ad2f82bd7e68361f986b53a585f22';
 ```
 
-This lets you import by a readable tag, like `v0.29.1`, and still be sure you get the same bytes
-every time. Tags can be moved; the hash can't.
+kubecfg can't tell whether a URL will always return the same bytes. A URL with a commit hash in it
+is meant to be fixed, but kubecfg would have to know each hosting site's URL format to check that,
+and a tag like `v0.29.1` can be moved. A hash in the URL works the same for every server: kubecfg
+checks the bytes it got against it.
 
 It works for every kind of import: `https://`, `file://`, `oci://`, relative paths, `yaml:` and
 `yakl:` imports, `importstr` and `importbin`, and the file you pass on the command line:
