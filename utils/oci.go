@@ -35,7 +35,6 @@ import (
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/docker/cli/cli/config/credentials"
 	ctypes "github.com/docker/cli/cli/config/types"
-	"github.com/docker/docker/registry"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -162,9 +161,10 @@ func (c *dockerClient) Credential(hostname string) (string, string, error) {
 }
 
 func resolveHostname(hostname string) string {
+	// Docker Hub aliases; docker's config.json stores Hub creds under the v1 index URL.
 	switch hostname {
-	case registry.IndexHostname, registry.IndexName, registry.DefaultV2Registry.Host:
-		return registry.IndexServer
+	case "index.docker.io", "docker.io", "registry-1.docker.io":
+		return "https://index.docker.io/v1/"
 	}
 	return hostname
 }
