@@ -180,3 +180,7 @@ spec:
       - image: busybox:latest
         name: busybox
 ```
+
+Inline code (`-e`, `--overlay-code`, `--ext-code` and `--tla-code`) can use `kubecfg` without
+importing `kubecfg.libsonnet` first. See
+[Using `kubecfg` without importing it](eval.md#using-kubecfg-without-importing-it).

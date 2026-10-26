@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -45,6 +46,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
+	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 
 	// Register auth plugins
@@ -507,7 +509,7 @@ func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*
 		return nil, err
 	}
 	if exec != "" {
-		paths = append(paths, utils.ToDataURL(exec))
+		paths = append(paths, utils.ToDataURL(yakl.PredefineKubecfg(exec)))
 	}
 
 	overlayCodeFile, err := flags.GetString(flagOverlayCodeFile)
@@ -591,6 +593,18 @@ func getDynamicClients(cmd *cobra.Command) (dynamic.Interface, meta.RESTMapper, 
 	}
 
 	return cl, mapper, discoCache, nil
+}
+
+var unknownKubecfg = regexp.MustCompile(`Unknown variable: kubecfg\b`)
+
+// Hint returns advice to print after err, or "".
+func Hint(err error) string {
+	if !unknownKubecfg.MatchString(err.Error()) {
+		return ""
+	}
+	// Elsewhere it's predefined (RFC06), so the code that failed is in a Jsonnet file.
+	return "hint: kubecfg is not predefined in Jsonnet files. Add this line at the top of the file:\n" +
+		"  local kubecfg = import 'kubecfg.libsonnet';"
 }
 
 func initConfig() {

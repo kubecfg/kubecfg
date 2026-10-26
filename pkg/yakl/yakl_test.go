@@ -816,3 +816,76 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 		}
 	}
 }
+
+func TestPredefineKubecfg(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	vm.Importer(&jsonnet.MemoryImporter{Data: map[string]jsonnet.Contents{
+		"internal:///kubecfg.libsonnet": jsonnet.MakeContents("{answer: 42}"),
+	}})
+	for _, tc := range []struct{ name, src, want string }{
+		{"a document", "a: ${kubecfg.answer}\n", `{"a":42}`},
+		{"a list", "---\na: 1\n---\nb: ${kubecfg.answer}\n", `[{"a":1},{"b":42}]`},
+		{"a key", "${'k' + kubecfg.answer}: 1\n", `{"k42":1}`},
+		{"a file with names", "!x\na: ${kubecfg.answer}\n", `{"x":{"a":42}}`},
+		{"a file that extends an object", "<<+: ${ {b: 1} }\n---\n!x\na: ${kubecfg.answer}\n", `{"b":1,"x":{"a":42}}`},
+		{"a file local", "'&n': ${kubecfg.answer}\n---\na: ${n}\n", `{"a":42}`},
+		{"an inner name hides it", "a: ${kubecfg.answer}\nb:\n  '&kubecfg': {answer: 1}\n  c: ${kubecfg.answer}\n", `{"a":42,"b":{"c":1}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, err := Compile(tc.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := vm.EvaluateAnonymousSnippet("test.yakl", code)
+			if err != nil {
+				t.Fatalf("%v\ngenerated:\n%s", err, code)
+			}
+			if got := compact(t, got); got != tc.want {
+				t.Errorf("got  %s\nwant %s", got, tc.want)
+			}
+			// The local goes in front of the first line, without a line of its own.
+			if !strings.HasPrefix(code, "("+KubecfgLocal) {
+				t.Errorf("got:\n%s", code)
+			}
+		})
+	}
+
+	// Nothing is added where kubecfg isn't read, or is declared.
+	for _, src := range []string{
+		"a: 1\n",
+		"a: ${x.kubecfg}\n",
+		"a: ${'kubecfg'} # kubecfg\n",
+		"'&kubecfg': 1\n---\na: ${kubecfg}\n",
+		"a: &kubecfg 1\nb: ${kubecfg}\n",
+		"a: ${local kubecfg = 1; kubecfg}\n",
+	} {
+		if code, _ := Compile(src); strings.Contains(code, KubecfgLocal) {
+			t.Errorf("%q: got:\n%s", src, code)
+		}
+	}
+
+	// The readable code reads like the file with the import written out, after its first comments.
+	const src = "# A web server.\n\napiVersion: v1\nkind: Pod\nspec:\n  image: ${kubecfg.resolveImage('nginx:1.27')}\n"
+	got, err := Desugar(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := Desugar("# A web server.\n\n'&kubecfg': ${import 'internal:///kubecfg.libsonnet'}\n---\n" + src[len("# A web server.\n\n"):])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+
+	// Code from the command line: $ and self don't hide a use.
+	for code, want := range map[string]bool{
+		"kubecfg.fold(kubecfg.layouts.gvkName, $, {})": true,
+		"$.a":                       false,
+		"function(kubecfg) kubecfg": false,
+	} {
+		if got := PredefineKubecfg(code) != code; got != want {
+			t.Errorf("%q: predefined %v, want %v", code, got, want)
+		}
+	}
+}

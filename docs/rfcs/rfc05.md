@@ -375,6 +375,9 @@ start as an alpha feature (`implicit-stdlib`). It needs a small go-jsonnet chang
 embedding program add globals the way `std` is added. Adding the text to the start of each file
 would change what `importstr` returns for `.jsonnet` files.
 
+[RFC06](rfc06.md) replaces this. It predefines `kubecfg` only in code that isn't in a Jsonnet file,
+which needs no go-jsonnet change, and explains why Jsonnet files are left out.
+
 ### Caching and vendoring (RFC03)
 
 `--cache-dir`, `--ci` and the pruning options in [RFC03](https://github.com/kubecfg/kubecfg/pull/235)

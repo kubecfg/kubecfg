@@ -55,6 +55,26 @@ func Compile(src string) (string, error) {
 	return compile(src, false)
 }
 
+// KubecfgLocal is the code that predefines kubecfg (RFC06): the copy of kubecfg.libsonnet built
+// into kubecfg, whatever the search path holds. It ends in a space, not a line break, so code after
+// it keeps its line numbers.
+const KubecfgLocal = "local kubecfg = import 'internal:///kubecfg.libsonnet'; "
+
+// PredefineKubecfg returns Jsonnet code with KubecfgLocal in front if the code reads kubecfg
+// without declaring it, and otherwise the code as it is. kubecfg calls it on code that isn't in a
+// Jsonnet file, like the code of command-line flags; Compile does the same for a yakl document.
+func PredefineKubecfg(code string) string {
+	return predefineKubecfg(code, 0)
+}
+
+// predefineKubecfg is PredefineKubecfg, with KubecfgLocal written at offset at.
+func predefineKubecfg(code string, at int) string {
+	if !strings.Contains(code, "kubecfg") || !freeVars(code)["kubecfg"] {
+		return code
+	}
+	return code[:at] + KubecfgLocal + code[at:]
+}
+
 // Desugar translates a yakl document into equivalent Jsonnet code meant for people to read:
 // formatted, with a field per line, rather than keeping source lines. If the code doesn't parse,
 // it returns it unformatted, with the Jsonnet syntax error, whose position ("line:column") is in
@@ -86,7 +106,7 @@ func compile(src string, readable bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return c.String(), nil
+	return predefineKubecfg(c.String(), c.localsAt), nil
 }
 
 // compiled returns the compiler that has compiled src.
@@ -737,6 +757,7 @@ type compiler struct {
 	places    map[*yaml.Node]place           // where each node's text is, to resolve scalars in the same syntax
 	copies    int                            // nodes copied by aliases
 	noDollar  bool                           // compiling a file local where there is no file object: $ is an error
+	localsAt  int                            // where the file's code starts, after its first comments: see KubecfgLocal
 	readable  bool                           // see Desugar
 	canonical bool                           // writes expressions as Format formats them, and no YAML comments, to compare meanings
 }
@@ -1065,6 +1086,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		}
 		docs[0].head[0] = ""
 	}
+	c.localsAt = c.Len()
 	if objectFile {
 		return c.objectFile(docs, fields, ext)
 	}
@@ -1374,7 +1396,7 @@ func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
 	if vars, ok := c.vars[k]; ok {
 		return vars
 	}
-	e, vars, bind := c.exprs[i], map[string]bool{}, ""
+	e := c.exprs[i]
 	code := e.code
 	if code == "" {
 		code = withoutBlocks(c.src, e.from, e.to, e.blocks)
@@ -1385,19 +1407,26 @@ func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
 	case "if":
 		code = code + "\nthen null"
 	}
+	vars := freeVars(code)
+	c.vars[k] = vars
+	return vars
+}
+
+// freeVars returns the variables that the Jsonnet expression code reads without declaring them.
+// It returns none if the code doesn't parse.
+func freeVars(code string) map[string]bool {
+	vars, bind := map[string]bool{}, ""
 	for {
-		// Jsonnet reports the first unbound variable, so bind each in turn. The key is in an
-		// object, where self and $ are valid.
+		// Jsonnet reports the first unbound variable, so bind each in turn. The code is in an
+		// object, where self and $ are valid, so that they don't stop the check.
 		_, err := jsonnet.SnippetToAST("", bind+"{f: ("+code+"\n)}")
 		m := unknownVar.FindStringSubmatch(fmt.Sprint(err))
 		if m == nil || vars[m[1]] {
-			break
+			return vars
 		}
 		vars[m[1]] = true
 		bind += "local " + m[1] + " = null; "
 	}
-	c.vars[k] = vars
-	return vars
 }
 
 // anchors collects the nodes under n whose anchors declare locals, like anchored, but not n.

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/kubecfg/ursonnet"
 	"github.com/kubecfg/yaml/v2"
@@ -38,6 +39,8 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	if c.ShowKeys {
 		eval = fmt.Sprintf("std.objectFields(%s)", eval)
 	}
+	// The whole snippet, so that a top-level argument named kubecfg declares it.
+	eval = yakl.PredefineKubecfg(eval)
 
 	jsonstr, err := vm.EvaluateAnonymousSnippet(path, eval)
 	if err != nil {
@@ -105,7 +108,8 @@ func traceback(w io.Writer, vm *jsonnet.VM, pathURL string, expr string, showAll
 	if rest, ok := strings.CutPrefix(expr, "$"); ok && strings.TrimSpace(isArray) == "true" {
 		pathURL, expr = utils.DocsScheme+pathURL, "$.docs"+rest
 	}
-	roots, err := ursonnet.Roots(vm, pathURL, expr)
+	// The expression can be code from the command line.
+	roots, err := ursonnet.Roots(vm, pathURL, yakl.PredefineKubecfg(expr))
 	if err != nil {
 		return err
 	}
