@@ -187,6 +187,17 @@
   // objectHasPathAll(obj path): Shorthand for objectHasPath(obj, path, inc_hidden=true)
   objectHasPathAll(obj, path):: objectHasDeep(obj, path, inc_hidden=true),
 
+  // pick(arr, cond, where=''): the one element of arr for which cond(x) is
+  // true. None, or more than one, is an error that starts with where, the
+  // place of the call. YAKL's selectors, list[@.name == 'api'], pass their
+  // file:line:column.
+  //   pick(containers, function(c) c.name == 'api')
+  pick(arr, cond, where=''):: (
+    local found = std.filter(cond, arr);
+    if std.length(found) == 1 then found[0]
+    else error std.lstripChars('%s want one matching entry, found %d' % [where, std.length(found)], ' ')
+  ),
+
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
     // two-level collection of objects by 'apiVersion.kind'

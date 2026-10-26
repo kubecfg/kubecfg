@@ -209,6 +209,8 @@ local result =
   std.assertEqual(kubecfg.objectHasPath(nested_obj, 'foo.hidden.qux'), false) &&
   std.assertEqual(kubecfg.objectHasPathAll(nested_obj, 'foo.hidden.qux'), true) &&
 
+  std.assertEqual(kubecfg.pick([{ n: 1 }, { n: 2 }], function(x) x.n == 2), { n: 2 }) &&
+
   true;
 
 // Kubecfg wants to see something that looks like a k8s object

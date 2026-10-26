@@ -613,7 +613,7 @@ func startsWith(code, kw string) bool {
 // parses reports whether code is syntactically valid Jsonnet. Unlike jsonnet.SnippetToAST, the
 // formatter doesn't check variables, which may be bound by the code around an expression.
 func parses(code string) bool {
-	_, err := formatter.Format("", code, formatter.DefaultOptions())
+	_, err := formatter.Format("", withIt(code), formatter.DefaultOptions())
 	return err == nil
 }
 
@@ -1419,6 +1419,7 @@ func (c *compiler) keyVars(k *yaml.Node) map[string]bool {
 	if code == "" {
 		code = withoutBlocks(c.src, e.from, e.to, e.blocks)
 	}
+	code = withIt(code)
 	switch c.clause(k) {
 	case "for":
 		code = "[null " + code + "\n]"
@@ -1569,9 +1570,27 @@ func (c *compiler) code(e expr, bare bool) error {
 			return nil
 		}
 	}
+	// The code is written aside, then with its selectors (list[@.name == 'x']) made Jsonnet.
+	out := c.output
+	c.output = &output{line: out.line, col: out.col}
+	err := c.rawCode(e)
+	code := c.output.String()
+	c.output = out
+	if err != nil {
+		return err
+	}
+	if code, err = selectors(code, e.line, e.col); err != nil {
+		return err
+	}
+	c.write(code)
+	c.write(close)
+	return nil
+}
+
+// rawCode writes the code of an expression as written, with its YAML blocks compiled in place.
+func (c *compiler) rawCode(e expr) error {
 	if e.code != "" {
 		c.write(e.code)
-		c.write(close)
 		return nil
 	}
 	from := e.from
@@ -1585,7 +1604,6 @@ func (c *compiler) code(e expr, bare bool) error {
 		c.padTo(position(c.src, from))
 	}
 	c.write(c.src[from:e.to])
-	c.write(close)
 	return nil
 }
 
@@ -1599,7 +1617,7 @@ func (c *compiler) checkScope(e expr) error {
 		code = withoutBlocks(c.src, e.from, e.to, e.blocks)
 	}
 	var err error
-	words(code, func(w string) {
+	words(code, func(_ int, w string) {
 		if err == nil && w == "$" {
 			err = fmt.Errorf("line %d: $ in a file local, in a file without names: there is no file object, "+
 				"so Jsonnet would read $ as the local's own outermost object", e.line)
@@ -1608,22 +1626,26 @@ func (c *compiler) checkScope(e expr) error {
 	return err
 }
 
-// words calls f with each identifier and $ in Jsonnet code. Like exprEnd, it skips strings and
-// comments.
-func words(code string, f func(w string)) {
-	isWord := func(c byte) bool {
-		return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
-	}
+// isWordChar reports whether c can be in a Jsonnet identifier.
+func isWordChar(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// words calls f with the offset of each identifier, $ and @ in Jsonnet code. Like exprEnd, it
+// skips strings and comments.
+func words(code string, f func(i int, w string)) {
 	for i := 0; i < len(code); i++ {
 		rest := code[i:]
 		n := 0
 		switch c := rest[0]; {
 		case c == '$':
-			f("$")
+			f(i, "$")
 		case c == '"' || c == '\'':
 			n = strEnd(rest, 1, c, false)
 		case strings.HasPrefix(rest, `@"`) || strings.HasPrefix(rest, `@'`):
 			n = strEnd(rest, 2, rest[1], true)
+		case c == '@':
+			f(i, "@")
 		case strings.HasPrefix(rest, "|||"):
 			n = textBlockEnd(rest)
 		case c == '#' || strings.HasPrefix(rest, "//"):
@@ -1632,11 +1654,11 @@ func words(code string, f func(w string)) {
 			if n = strings.Index(rest[2:], "*/"); n >= 0 {
 				n += 3
 			}
-		case isWord(c):
-			for n < len(rest) && isWord(rest[n]) {
+		case isWordChar(c):
+			for n < len(rest) && isWordChar(rest[n]) {
 				n++
 			}
-			f(rest[:n])
+			f(i, rest[:n])
 			n--
 		}
 		if n < 0 {

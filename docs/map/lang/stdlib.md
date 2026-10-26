@@ -45,6 +45,11 @@ title = "groupBy, toObjectPaths, fromObjectPaths, isNamespaced, layouts.gkNsName
 status = "wip"
 note = "On the worktree-abstract-snuggling-pixel branch, with knit"
 
+[[feature]]
+id = "pick"
+title = "pick: the one element of an array for which a condition is true"
+status = "done"
+
 [[needs]]
 on = "/deps/go-jsonnet"
 why = "The Go functions are registered as native functions on the VM"
