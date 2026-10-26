@@ -836,6 +836,8 @@ func TestPredefineKubecfg(t *testing.T) {
 		{"a file that extends an object", "<<+: ${ {b: 1} }\n---\n^^: x\na: ${kubecfg.answer}\n", `{"b":1,"x":{"a":42}}`},
 		{"a file local", "'&n': ${kubecfg.answer}\n---\na: ${n}\n", `{"a":42}`},
 		{"an inner name hides it", "a: ${kubecfg.answer}\nb:\n  '&kubecfg': {answer: 1}\n  c: ${kubecfg.answer}\n", `{"a":42,"b":{"c":1}}`},
+		// The compiler's own name for it: no name of the file hides it.
+		{"yakl__kubecfg", "'&kubecfg': {answer: 1}\n---\na: ${yakl__kubecfg.answer + kubecfg.answer}\n", `{"a":43}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, err := Compile(tc.src)
@@ -850,7 +852,7 @@ func TestPredefineKubecfg(t *testing.T) {
 				t.Errorf("got  %s\nwant %s", got, tc.want)
 			}
 			// The local goes in front of the first line, without a line of its own.
-			if !strings.HasPrefix(code, "("+KubecfgLocal) {
+			if !strings.HasPrefix(code, "("+yaklKubecfgLocal) {
 				t.Errorf("got:\n%s", code)
 			}
 		})
@@ -865,7 +867,7 @@ func TestPredefineKubecfg(t *testing.T) {
 		"a: &kubecfg 1\nb: ${kubecfg}\n",
 		"a: ${local kubecfg = 1; kubecfg}\n",
 	} {
-		if code, _ := Compile(src); strings.Contains(code, KubecfgLocal) {
+		if code, _ := Compile(src); strings.Contains(code, "internal:///") {
 			t.Errorf("%q: got:\n%s", src, code)
 		}
 	}
@@ -876,7 +878,7 @@ func TestPredefineKubecfg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := Desugar("# A web server.\n\n'&kubecfg': ${import 'internal:///kubecfg.libsonnet'}\n---\n" + src[len("# A web server.\n\n"):])
+	want, err := Desugar("# A web server.\n\n'&kubecfg': ${import 'internal:///kubecfg.libsonnet'}\n'&yakl__kubecfg': ${kubecfg}\n---\n" + src[len("# A web server.\n\n"):])
 	if err != nil {
 		t.Fatal(err)
 	}

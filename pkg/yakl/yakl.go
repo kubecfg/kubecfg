@@ -60,19 +60,30 @@ func Compile(src string) (string, error) {
 // it keeps its line numbers.
 const KubecfgLocal = "local kubecfg = import 'internal:///kubecfg.libsonnet'; "
 
+// kubecfgVar is another name for the predefined kubecfg in a yakl file, for code the compiler
+// writes: the file's own names can hide kubecfg, but not kubecfgVar. yaklKubecfgLocal is
+// KubecfgLocal for a yakl file, declaring both.
+const (
+	kubecfgVar       = "yakl__kubecfg"
+	yaklKubecfgLocal = "local kubecfg = import 'internal:///kubecfg.libsonnet', " + kubecfgVar + " = kubecfg; "
+)
+
 // PredefineKubecfg returns Jsonnet code with KubecfgLocal in front if the code reads kubecfg
 // without declaring it, and otherwise the code as it is. kubecfg calls it on code that isn't in a
 // Jsonnet file, like the code of command-line flags; Compile does the same for a yakl document.
 func PredefineKubecfg(code string) string {
-	return predefineKubecfg(code, 0)
+	return predefineKubecfg(code, 0, KubecfgLocal)
 }
 
-// predefineKubecfg is PredefineKubecfg, with KubecfgLocal written at offset at.
-func predefineKubecfg(code string, at int) string {
-	if !strings.Contains(code, "kubecfg") || !freeVars(code)["kubecfg"] {
-		return code
+// predefineKubecfg is PredefineKubecfg, with local written at offset at. It's added when the code
+// reads kubecfg or kubecfgVar without declaring it.
+func predefineKubecfg(code string, at int, local string) string {
+	if strings.Contains(code, "kubecfg") {
+		if free := freeVars(code); free["kubecfg"] || free[kubecfgVar] {
+			return code[:at] + local + code[at:]
+		}
 	}
-	return code[:at] + KubecfgLocal + code[at:]
+	return code
 }
 
 // Desugar translates a yakl document into equivalent Jsonnet code meant for people to read:
@@ -106,7 +117,11 @@ func compile(src string, readable bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return predefineKubecfg(c.String(), c.localsAt), nil
+	local := yaklKubecfgLocal
+	if readable {
+		local = strings.ReplaceAll(local, ", ", ",\n") + "\n" // a name per line, as the formatter writes it
+	}
+	return predefineKubecfg(c.String(), c.localsAt, local), nil
 }
 
 // compiled returns the compiler that has compiled src.

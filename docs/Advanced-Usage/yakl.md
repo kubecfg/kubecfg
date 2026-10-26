@@ -908,8 +908,10 @@ The compiler adds the file local that this local key would declare:
   an inner local hides an outer one.
 - **Same lines.** The local goes in front of the first line, without a line of its own, so errors
   keep their line numbers.
-- **`eval -o jsonnet` shows it,** as `local kubecfg = import 'internal:///kubecfg.libsonnet';` at
-  the top. Saved as a `.jsonnet` file, that output works in kubecfg as it is. For other Jsonnet
+- **`eval -o jsonnet` shows it,** as
+  `local kubecfg = import 'internal:///kubecfg.libsonnet', yakl__kubecfg = kubecfg;` at the top.
+  `yakl__kubecfg` is the same library, for code the compiler writes: your own `kubecfg` can't
+  hide it. Write `kubecfg` in your files. Saved as a `.jsonnet` file, that output works in kubecfg as it is. For other Jsonnet
   tools, change the import to `'kubecfg.libsonnet'`.
 - **Not in Jsonnet files.** A Jsonnet file still needs the import, so editors, linters and other
   Jsonnet tools can read it. [RFC06](../rfcs/rfc06.md)
