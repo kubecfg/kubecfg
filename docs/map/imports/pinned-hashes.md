@@ -20,3 +20,7 @@ The fragment holds hashes, as `hash=<algo>:<hex>`. Algorithms kubecfg doesn't
 know are skipped, but at least one must be known, and every known one must
 match. A fragment without `hash` isn't kubecfg's and gets a warning. New
 behavior goes in import prefixes, like `yaml:`, not in the fragment.
+
+Beta from the start, and meant to stay beta for a long time, possibly years,
+so that any legitimate fragment that looks like `hash=<algo>:<hex>` but isn't
+the content's hash can surface.

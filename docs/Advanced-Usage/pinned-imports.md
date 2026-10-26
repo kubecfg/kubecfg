@@ -30,7 +30,9 @@ error reading https://example.com/app.jsonnet#hash=sha256:: https://example.com/
 ```
 
 This is the `pinned-imports` [feature](feature-gates.md). It's in beta, so it's on unless you turn
-it off with `--features=pinned-imports=false`. kubecfg v0.41.1 and older don't know about it: they
+it off with `--features=pinned-imports=false`. It will stay in beta for a long time. If you have an
+import whose fragment reads `hash=sha256:<hex>` but isn't meant as the hash of its content, please
+[open an issue](https://github.com/kubecfg/kubecfg/issues): we'd like to know. kubecfg v0.41.1 and older don't know about it: they
 import the content without checking the hash.
 
 ## The fragment
