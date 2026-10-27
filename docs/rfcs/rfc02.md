@@ -1,5 +1,7 @@
 # RFC02: Flags From Files (FFF)
 
+Status: **Accepted** ([#224](https://github.com/kubecfg/kubecfg/pull/224)).
+
 ## Background
 
 (when we're speaking about flags here, we're also talking about flags mapped from env variables)

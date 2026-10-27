@@ -55,4 +55,5 @@ httpd             alpha  off      off      --features  v0.40.0
 | `kustomize-import` | alpha | v0.40.0 | kustomize+https:// imports |
 | `pinned-imports` | beta | v0.42.0 | #hash= on an import URL: the import fails if the content doesn't match the hash |
 | `binary-import` | removed | v0.41.0 | the binary:// import prefix; use importbin |
+| `knit` | alpha | v0.43.0 | the knit library: (import 'kubecfg.libsonnet').knit, 'knit/knit.libsonnet', knit import |
 <!-- END features -->

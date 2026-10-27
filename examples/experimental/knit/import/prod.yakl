@@ -1,0 +1,30 @@
+<<+: ${import 'yakl:base.yakl'}
+---
+# Production changes, as kustomize patches: each document names an object of
+# base.yaml by apiVersion, kind and name, and gives only what changes.
+^^+: web.Deployment
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        # Matched by name: only the web container changes.
+        - name: web
+          image: nginx:1.29
+          resources:
+            requests: {cpu: 500m, memory: 256Mi}
+---
+^^+: web.ConfigMap
+data:
+  LOG_LEVEL: warn
+---
+# New in prod.
+^^: web.PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: web}

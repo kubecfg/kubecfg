@@ -1,0 +1,26 @@
+# Production, with the label app: shop on every pod and a locked-down
+# securityContext on every container.
+#
+#   kubecfg show prod-advanced.yakl
+
+# prod.yakl, then this file's documents on top of it.
+<<+: ${import 'yakl:prod.yakl'}
+---
+# Each document below patches one path in registry: the dots are its fields,
+# so this one is registry+: {types+: {PodTemplateSpec+: {metadata+: {labels+:
+# {app: shop}}}}}. Another template is another document, and a diff that adds
+# one doesn't touch the others.
+#
+# PodTemplateSpec is the template under every pod template, at any depth: the
+# Deployments, the CronJob's job template, and Redis's StatefulSet. It merges
+# with the labels the pods already have, and a label a pod sets itself wins.
+# The objects' own labels don't change.
+^^+: registry.types.PodTemplateSpec.metadata.labels
+app: shop
+---
+# Every container, in every pod. The templates have no securityContext yet, so
+# this document adds one, with ^^:. ^^+: extends only what the base has: here
+# it would be an error, as a misspelled name is.
+^^: registry.types.Container.securityContext
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true

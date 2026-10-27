@@ -1,0 +1,13 @@
+---
+apiVersion: "policy/v1"
+kind: "PodDisruptionBudget"
+metadata:
+  labels:
+    tier: "critical"
+  name: "web"
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: "web"
+...

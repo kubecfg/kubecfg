@@ -1,5 +1,7 @@
 # RFC05: Feature gates
 
+Status: **Accepted** ([#538](https://github.com/kubecfg/kubecfg/pull/538)).
+
 ## Background
 
 kubecfg has a single switch for everything that isn't stable yet: `--alpha` (or `KUBECFG_ALPHA=true`).

@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: web
+        image: web:1.4
+        env:
+        - name: DB_HOST
+          value: db.prod
+      - name: debug
+        $patch: delete

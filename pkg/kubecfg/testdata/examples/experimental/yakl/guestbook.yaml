@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: guestbook
+    tier: frontend
+  name: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: guestbook
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: guestbook
+        tier: frontend
+    spec:
+      containers:
+      - env:
+        - name: GET_HOSTS_FROM
+          value: dns
+        - name: REDIS_HOST
+          value: redis-leader
+        - name: PORT
+          value: "80"
+        image: gcr.io/google-samples/gb-frontend:v3
+        name: php-redis
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /etc/guestbook
+          name: config
+      volumes:
+      - configMap:
+          name: frontend-config
+        name: config
+---
+apiVersion: v1
+data:
+  ha.conf: |
+    sessions = redis
+    replicas = 3
+  start.sh: |
+    #!/bin/sh
+    echo "starting on ${HOSTNAME}"
+    exec apache2-foreground
+  version: v3
+kind: ConfigMap
+metadata:
+  name: frontend-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: guestbook
+    tier: frontend
+  type: LoadBalancer

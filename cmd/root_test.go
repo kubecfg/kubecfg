@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -261,5 +262,27 @@ func TestEnvVarUnderscores(t *testing.T) {
 	initConfig()
 	if got := viper.GetString(flagResolvFail); got != "error" {
 		t.Errorf("got %q, want %q", got, "error")
+	}
+}
+
+// The experimental examples run without flags: their .kubecfgrc.jsonnet turns on the features they need.
+func TestExperimentalExamples(t *testing.T) {
+	t.Setenv("KUBECFG_ALPHA", "")
+	t.Setenv("KUBECFG_FEATURES", "")
+	var files []string
+	err := filepath.WalkDir("../examples/experimental", func(path string, d fs.DirEntry, err error) error {
+		if ext := filepath.Ext(path); (ext == ".yakl" || ext == ".jsonnet") && !strings.HasPrefix(d.Name(), ".") {
+			files = append(files, path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no examples found")
+	}
+	for _, f := range files {
+		cmdOutput(t, []string{"show", f})
 	}
 }

@@ -124,6 +124,10 @@ func printJsonnet(cmd *cobra.Command, vm *jsonnet.VM, file string) error {
 		fmt.Fprint(cmd.OutOrStdout(), src)
 		return nil
 	}
+	// Evaluating would check this in the importer, which this reads around.
+	if err := gates.Require(features.YAKL); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
 	code, err := yakl.Desugar(src)
 	if err != nil && code == "" {
 		return fmt.Errorf("%s: %w", file, err)

@@ -20,3 +20,14 @@ Ask before tagging. Then:
 1. `git tag -s -m vX.Y.Z vX.Y.Z origin/main` and `git push origin tag vX.Y.Z`.
 2. The tag starts the `go.yml` workflow. It builds, pushes the images to ghcr, and creates a **draft** release with the binaries.
 3. When the run passes: `gh release edit vX.Y.Z --title vX.Y.Z --notes-file <notes> --draft=false --latest`.
+
+## RFCs
+
+RFCs live in `docs/rfcs/`. A new one starts as **Draft**, and stays a draft when merged. Never mark one Accepted; see `docs/rfcs/README.md`.
+
+## The map
+
+`docs/map` is kubecfg's [todography](docs/map/README.md) map. A feature is `done` when it's on
+main. A PR that fully implements a feature marks it `done` in the same commit, so the map is
+right the moment the PR merges. A PR that only starts one marks it `wip`, with a note naming
+the PR. Run `todography lint` after changing the map.

@@ -37,6 +37,13 @@ func TestEvalJsonnet(t *testing.T) {
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
+
+	// Like evaluating it, printing a yakl file's code needs the yakl feature.
+	defer resetFlags()
+	RootCmd.SetArgs([]string{"--features=eval", "eval", "-o", "jsonnet", file})
+	if err := RootCmd.Execute(); err == nil || !strings.Contains(err.Error(), "yakl is an alpha feature; turn it on with --features=yakl") {
+		t.Errorf("without --features=yakl: got %v", err)
+	}
 }
 
 // eval reads its inputs as show does: files, -e, overlays, -x and top-level arguments. It prints

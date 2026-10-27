@@ -209,7 +209,76 @@ local result =
   std.assertEqual(kubecfg.objectHasPath(nested_obj, 'foo.hidden.qux'), false) &&
   std.assertEqual(kubecfg.objectHasPathAll(nested_obj, 'foo.hidden.qux'), true) &&
 
+  std.assertEqual(kubecfg.groupBy([], function(x) x), {}) &&
+  std.assertEqual(
+    kubecfg.groupBy(['b1', 'a1', 'b2', 'a2', 'c1'], function(x) x[0]),
+    { a: ['a1', 'a2'], b: ['b1', 'b2'], c: ['c1'] },
+  ) &&
+
   std.assertEqual(kubecfg.pick([{ n: 1 }, { n: 2 }], function(x) x.n == 2), { n: 2 }) &&
+
+  local cm(n) = { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: n } };
+  local tree = { web: { deploy: cm('d'), svc: cm('s') }, extra: [cm('x'), null, cm('y')] };
+  std.assertEqual(kubecfg.toObjectPaths(tree), [
+    { path: ['extra', 0], obj: cm('x') },
+    { path: ['extra', 2], obj: cm('y') },
+    { path: ['web', 'deploy'], obj: cm('d') },
+    { path: ['web', 'svc'], obj: cm('s') },
+  ]) &&
+  std.assertEqual(
+    kubecfg.toObjectPaths({ apiVersion: 'v1', kind: 'List', items: [cm('a'), cm('b')] }),
+    [{ path: [0], obj: cm('a') }, { path: [1], obj: cm('b') }],
+  ) &&
+  std.assertEqual(kubecfg.toObjectPaths(cm('a')), [{ path: [], obj: cm('a') }]) &&
+  // The null is dropped and the gap closed.
+  std.assertEqual(
+    kubecfg.fromObjectPaths(kubecfg.toObjectPaths(tree)),
+    { web: { deploy: cm('d'), svc: cm('s') }, extra: [cm('x'), cm('y')] },
+  ) &&
+  std.assertEqual(
+    kubecfg.fromObjectPaths([e for e in kubecfg.toObjectPaths(tree) if e.obj.metadata.name != 'x']),
+    { web: { deploy: cm('d'), svc: cm('s') }, extra: [cm('y')] },
+  ) &&
+  // Array entries go in index order, 10 after 9.
+  std.assertEqual(
+    kubecfg.fromObjectPaths([{ path: [10], obj: cm('b') }, { path: [9], obj: cm('a') }]),
+    [cm('a'), cm('b')],
+  ) &&
+  std.assertEqual(kubecfg.fromObjectPaths([]), []) &&
+
+  std.assertEqual(kubecfg.isNamespaced(cm('a')), true) &&
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'v1', kind: 'Namespace' }), false) &&
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'ClusterRole' }), false) &&
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'example.com/v1', kind: 'Namespace' }), true) &&
+  local crd(scope) = {
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    spec: { group: 'example.com', names: { kind: 'Thing' }, scope: scope },
+  };
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'example.com/v1', kind: 'Thing' }), true) &&
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'example.com/v1', kind: 'Thing' }, [crd('Cluster')]), false) &&
+  std.assertEqual(kubecfg.isNamespaced({ apiVersion: 'example.com/v1', kind: 'Thing' }, [crd('Namespaced')]), true) &&
+
+  local deploy(v, ns) = { apiVersion: v, kind: 'Deployment', metadata: { name: 'web', [if ns != null then 'namespace']: ns } };
+  std.assertEqual(
+    kubecfg.fold(kubecfg.layouts.gkNsName, [cm('a'), deploy('apps/v1', 'prod'), deploy('apps/v1', null)], {}),
+    {
+      ConfigMap: { _: { a: cm('a') } },
+      'apps/Deployment': { prod: { web: deploy('apps/v1', 'prod') }, _: { web: deploy('apps/v1', null) } },
+    },
+  ) &&
+  // A null or '' namespace is none.
+  local cmNs(n, ns) = cm(n) { metadata+: { namespace: ns } };
+  std.assertEqual(
+    kubecfg.fold(kubecfg.layouts.gkNsName, [cmNs('a', null), cmNs('b', '')], {}),
+    { ConfigMap: { _: { a: cmNs('a', null), b: cmNs('b', '') } } },
+  ) &&
+  // Two versions of one object are one object, so gkNsName rejects them;
+  // gvkNsName keeps both.
+  std.assertEqual(
+    std.objectFields(kubecfg.fold(kubecfg.layouts.gvkNsName, [deploy('apps/v1', null), deploy('apps/v1beta1', null)], {})),
+    ['apps/v1.Deployment', 'apps/v1beta1.Deployment'],
+  ) &&
 
   true;
 
