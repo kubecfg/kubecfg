@@ -67,6 +67,7 @@ as this becomes invalid against our schema:
 
 ```sh
 kubecfg eval --features=eval example.jsonnet -o json
-ERROR RUNTIME ERROR: object is invalid against the schema: jsonschema: '/age' does not validate with file:///properties/age/minimum: must be >= 0 but found -1
+ERROR RUNTIME ERROR: object is invalid against the schema: jsonschema validation failed with 'file:///schema.json#'
+- at '/age': minimum: got -1, want 0
 ```
 
