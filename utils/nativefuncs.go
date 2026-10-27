@@ -28,7 +28,7 @@ import (
 	goyaml "github.com/ghodss/yaml"
 	jsonnet "github.com/google/go-jsonnet"
 	jsonnetAst "github.com/google/go-jsonnet/ast"
-	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 	log "github.com/sirupsen/logrus"
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
 	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
