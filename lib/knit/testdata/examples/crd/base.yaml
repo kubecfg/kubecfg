@@ -1,0 +1,9 @@
+apiVersion: example.com/v1
+kind: Gateway
+metadata: { name: edge }
+spec:
+  listeners:
+  - name: http
+    port: 80
+  - name: https
+    port: 443

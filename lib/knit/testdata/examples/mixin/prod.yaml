@@ -1,0 +1,4 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: web }
+data: { DB_HOST: db.prod }

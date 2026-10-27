@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata: { name: seed-test-data }
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: seed
+        image: seed:1.0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: web }
+data: { MODE: dev }

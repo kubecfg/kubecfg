@@ -891,8 +891,22 @@ const (
 	fieldDoc              // with a name key (^^: web): a field of the file
 )
 
+// In a file that extends an object, the documents of a name are a chain of merges, which the
+// object can manage: the ^^: document, merged into nothing, then each ^^+: document in file
+// order, merged into what comes before, with kubecfg.merge(a, b, $). Without the object's own
+// $merge, that's Jsonnet's +; knit merges Kubernetes objects this way.
+const mergeHook = "merge"
+
 // nameKey matches a document's name key: ^^, and the + and colons of the field it gives.
 var nameKey = regexp.MustCompile(`^\^\^\+?:{0,2}$`)
+
+// LiteralKey reports whether yakl reads the mapping key k as the field k, as YAML does. It doesn't
+// for <<+, a name key, a local like &x, a key ending in + or :, or an expression.
+func LiteralKey(k string) bool {
+	t := strings.TrimLeft(k, " \t\n")
+	return k != "<<+" && !nameKey.MatchString(k) && !strings.HasPrefix(k, "&") && !strings.HasSuffix(k, "+") &&
+		!strings.HasSuffix(k, ":") && !strings.HasPrefix(t, "${") && !strings.HasPrefix(t, "$${")
+}
 
 // classify finds the kind and name of a document.
 func (c *compiler) classify(d *yaml.Node) (doc, error) {
@@ -1009,7 +1023,7 @@ func writeNameKey(f string) string {
 func (c *compiler) localKey(k, v *yaml.Node) error {
 	name := k.Value[1:]
 	switch {
-	case !isIdentifier(name):
+	case !IsIdentifier(name):
 		msg := fmt.Sprintf("the key %q declares a local, so %q must be a Jsonnet variable name, not a keyword or std", k.Value, name)
 		if trimmed := strings.TrimRight(name, "+:"); !strings.HasPrefix(name, "-") && trimmed != "" {
 			msg += fmt.Sprintf("; to name a document, write ^^%s: %s among its top-level keys", name[len(trimmed):], trimmed)
@@ -1063,7 +1077,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node) error {
 		}
 		switch d := docs[i]; d.kind {
 		case fileLocalsDoc:
-			if isIdentifier(d.root.Anchor) {
+			if IsIdentifier(d.root.Anchor) {
 				return c.errorf(d.root, "&%s in a document of local keys%s, so its anchor can't declare a local", d.root.Anchor, noPlace)
 			}
 			for j := 0; j < len(d.root.Content); j += 2 {
@@ -1082,16 +1096,27 @@ func (c *compiler) file(yamlDocs []*yaml.Node) error {
 			fields[d.name] = append(fields[d.name], i)
 		}
 	}
-	// One name may be given by two documents: a plain one and one extending it (^^+: name).
+	// A name can have one document without + and any number with it, which extend it in file
+	// order. The field has the colons of the one without +; the others must have one colon. Without
+	// it, they must all have the same colons.
 	for name, idx := range fields {
-		if len(idx) == 1 {
-			continue
+		def, first := -1, docs[idx[0]]
+		for _, i := range idx {
+			switch d := docs[i]; {
+			case !d.plus && def >= 0:
+				return c.errorf(d.at, "the name %q is already given on line %d: a name has one document without +, "+
+					"which documents with ^^+: %[1]s extend", name, c.srcLine(docs[def].at))
+			case !d.plus:
+				def = i
+			}
 		}
-		a, b := docs[idx[0]], docs[idx[1]]
-		if len(idx) > 2 || a.plus == b.plus || a.plus && a.colons != 1 || b.plus && b.colons != 1 {
-			last := docs[idx[len(idx)-1]]
-			return c.errorf(last.at, "the name %q is already given on line %d: a name can be given twice only "+
-				"by a key without + and a plain ^^+, as in ^^: %[1]s and ^^+: %[1]s", name, c.srcLine(docs[idx[0]].at))
+		for _, i := range idx {
+			d := docs[i]
+			if d.plus && (def >= 0 && d.colons != 1 || def < 0 && d.colons != first.colons) {
+				return c.errorf(d.at, "^^+%s %s and line %d give the field %q other colons; one document of a name "+
+					"sets them: the one without +, or else all have the same", strings.Repeat(":", d.colons), name,
+					c.srcLine(first.at), name)
+			}
 		}
 	}
 
@@ -1196,8 +1221,11 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 	}
 	c.write("{")
 	c.br(nil)
-	pending := map[string]string{} // the local holding the first of two documents giving a name
-	var tree levels                // the documents whose name has a dot
+	if ext != nil && len(fields) > 0 {
+		c.write("local yakl__merge(a, b) = " + kubecfgVar + "." + mergeHook + "(a, b, $), ")
+		c.br(nil)
+	}
+	var tree levels // the documents whose name has a dot, or a chain of documents, or all with ext
 	for i, d := range docs {
 		switch d.kind {
 		case fileLocalsDoc:
@@ -1223,64 +1251,57 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 		}
 		c.align(d.at)
 		idx := fields[d.name]
-		if strings.Contains(d.name, ".") {
-			if d.plus && len(idx) == 1 {
-				c.extendsAssert(d)
-			}
-			local := fmt.Sprintf("yakl__doc%d", i)
-			c.write("local " + local + " = ")
-			if err := c.document(d); err != nil {
-				return err
-			}
-			c.end(nil, ", ")
-			c.comment(d.foot...)
-			switch {
-			case len(idx) == 1:
-				tree.add(d.name, map[bool]string{true: "+"}[d.plus]+strings.Repeat(":", d.colons)+" "+local)
-			case idx[1] == i:
-				// As below: the plain document's visibility, extended by the other.
-				first, plain, ext := docs[idx[0]], pending[d.name], local
-				if first.plus {
-					plain, ext = ext, plain
-				}
-				tree.add(d.name, strings.Repeat(":", plainColons(first, d))+" "+plain+" + "+ext)
-			default:
-				pending[d.name] = local
-			}
-			continue
+		def := slices.IndexFunc(idx, func(j int) bool { return !docs[j].plus })
+		if d.plus && def < 0 && idx[0] == i {
+			c.extendsAssert(d)
 		}
-		switch {
-		case len(idx) == 2 && idx[0] == i:
-			pending[d.name] = fmt.Sprintf("yakl__doc%d", i)
-			c.write("local " + pending[d.name] + " = ")
-		case len(idx) == 2:
-			// The field takes the visibility of the plain document, and extends it with the other.
-			c.write(quote(d.name) + strings.Repeat(":", plainColons(docs[idx[0]], d)) + " ")
-			if d.plus {
-				c.write(pending[d.name] + " + ")
-			}
-			c.write("(")
-			if err := c.document(d); err != nil {
-				return err
-			}
-			c.write(")")
-			if !d.plus {
-				c.write(" + " + pending[d.name])
-			}
-			c.end(nil, ", ")
-			c.comment(d.foot...)
-			continue
-		default:
-			if d.plus {
-				c.extendsAssert(d)
-			}
+		if ext == nil && len(idx) == 1 && !strings.Contains(d.name, ".") {
 			c.write(quote(d.name) + map[bool]string{true: "+"}[d.plus] + strings.Repeat(":", d.colons) + " ")
+			if err := c.document(d); err != nil {
+				return err
+			}
+			c.end(nil, ", ")
+			c.comment(d.foot...)
+			continue
 		}
+		c.write(fmt.Sprintf("local yakl__doc%d = ", i))
 		if err := c.document(d); err != nil {
 			return err
 		}
 		c.end(nil, ", ")
 		c.comment(d.foot...)
+		if idx[len(idx)-1] != i {
+			continue
+		}
+		// The last document of the name gives its field: the chain of all of them, the one
+		// without + first.
+		chain := slices.Clone(idx)
+		if def > 0 {
+			chain = append([]int{idx[def]}, slices.Delete(chain, def, def+1)...)
+		}
+		colons := docs[chain[0]].colons
+		var value, plus string
+		switch {
+		case ext != nil:
+			key := d.name[strings.LastIndex(d.name, ".")+1:]
+			value = "null"
+			if def < 0 {
+				value = fmt.Sprintf("if %s in super then %s else null", quote(key), access("super", key))
+			}
+			for _, j := range chain {
+				value = fmt.Sprintf("yakl__merge(%s, yakl__doc%d)", value, j)
+			}
+		default:
+			var parts []string
+			for _, j := range chain {
+				parts = append(parts, fmt.Sprintf("yakl__doc%d", j))
+			}
+			value = strings.Join(parts, " + ")
+			if def < 0 {
+				plus = "+"
+			}
+		}
+		tree.add(d.name, plus+strings.Repeat(":", colons)+" "+value)
 	}
 	tree.write(c)
 	c.write("}")
@@ -1299,14 +1320,6 @@ func (c *compiler) extendsAssert(d doc) {
 	}
 	c.write("), ")
 	c.br(nil)
-}
-
-// plainColons returns the colons of the plain one of two documents a and b giving a name.
-func plainColons(a, b doc) int {
-	if a.plus {
-		return b.colons
-	}
-	return a.colons
 }
 
 // levels are the fields that hold the documents whose name has a dot, in file order: ^^: web.conf
@@ -1352,7 +1365,7 @@ func (l *levels) write(c *compiler) {
 
 // access returns the code that reads the field name of the object that code o gives.
 func access(o, name string) string {
-	if isIdentifier(name) {
+	if IsIdentifier(name) {
 		return o + "." + name
 	}
 	return o + "[" + quote(name) + "]"
@@ -1423,7 +1436,7 @@ func (c *compiler) anchored(n *yaml.Node, path, where string, before, after bool
 	if n.Kind == yaml.MappingNode || n.Kind == yaml.SequenceNode {
 		holders = append(holders, n)
 	}
-	if isIdentifier(n.Anchor) {
+	if IsIdentifier(n.Anchor) {
 		if where != "" {
 			return c.errorf(n, "&%s %s, so its anchor can't declare a local", n.Anchor, where)
 		}
@@ -1568,7 +1581,7 @@ func (c *compiler) anchors(n *yaml.Node, path, where string, before, after bool,
 			if k.Anchor != "" && k.Kind == yaml.ScalarNode && k.Tag == "!!null" && k.Value == "" && k.Style == 0 {
 				return c.errorf(k, "&%s: anchors an empty key: write '&%[1]s': for a local key, or ^^: %[1]s to name the document", k.Anchor)
 			}
-			if isIdentifier(k.Anchor) {
+			if IsIdentifier(k.Anchor) {
 				return c.errorf(k, "&%s anchors the key %q, which has no place of its own in the output; an anchor for the whole document goes on its own line", k.Anchor, c.keyText(k))
 			}
 			w, p, plus, ext := where, "", false, false
@@ -2402,8 +2415,9 @@ var keywords = map[string]bool{
 
 var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// isIdentifier reports whether s can name a local. Not std, which generated code calls.
-func isIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] && s != "std" }
+// IsIdentifier reports whether s can name a local, or follow a dot: not a keyword. Not std, which
+// generated code calls.
+func IsIdentifier(s string) bool { return identifier.MatchString(s) && !keywords[s] && s != "std" }
 
 // Scalars.
 

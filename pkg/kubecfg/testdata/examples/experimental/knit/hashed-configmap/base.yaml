@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+data:
+  LOG_LEVEL: info
+kind: ConfigMap
+metadata:
+  name: web-hf678c7m2b
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: web-hf678c7m2b
+        image: nginx:1.29
+        name: web

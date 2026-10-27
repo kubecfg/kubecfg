@@ -1,0 +1,31 @@
+# base.yakl, then this file's documents as layers on top of it.
+#
+#   kubecfg --features=yakl,knit show prod.yakl
+<<+: ${import 'yakl:base.yakl'}
+---
+^^+: registry
+objects+:
+  metadata+: {namespace: prod}
+---
+^^+: config
+replicas: 5
+---
+^^+: web.deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: web
+          image: web:1.4
+          env:
+            - {name: DB_HOST, value: db.prod}
+        - {name: debug, $patch: delete}
+---
+^^: web.service
+apiVersion: v1
+kind: Service
+metadata: {name: web}
+spec:
+  selector: {app: web}
+  ports:
+    - port: 80

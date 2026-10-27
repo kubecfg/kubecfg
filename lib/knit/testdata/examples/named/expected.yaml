@@ -1,0 +1,75 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - env:
+        - name: A
+          value: "1"
+        - name: B
+          value: "2"
+        image: api:2
+        name: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: shop
+spec:
+  ports:
+  - port: 80
+---
+apiVersion: v1
+data:
+  from: prod
+kind: ConfigMap
+metadata:
+  name: replaced
+  namespace: shop
+---
+apiVersion: v1
+data:
+  draft: draft
+  settings: a,b
+kind: ConfigMap
+metadata:
+  name: seen
+  namespace: shop
+---
+apiVersion: v1
+data:
+  a: "1"
+  b: "2"
+kind: ConfigMap
+metadata:
+  name: settings
+  namespace: shop
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: worker
+  namespace: shop
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - env:
+            - name: A
+              value: "1"
+            - name: B
+              value: "2"
+            - name: C
+              value: "3"
+            image: api:2
+            name: worker
+  schedule: '@daily'

@@ -1,0 +1,17 @@
+# Production runs three replicas of a newer web, and no debug container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        # Containers are matched by name: only web changes.
+        - name: web
+          image: nginx:1.29
+          resources:
+            requests: {cpu: 500m, memory: 256Mi}
+        - name: debug
+          $patch: delete

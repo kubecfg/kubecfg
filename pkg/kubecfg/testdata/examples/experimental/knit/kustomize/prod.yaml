@@ -1,0 +1,99 @@
+---
+apiVersion: v1
+data:
+  endpoint: http://otel-collector:4317
+kind: ConfigMap
+metadata:
+  name: tracing
+---
+apiVersion: v1
+data:
+  LOG_LEVEL: warn
+  nginx.conf: |
+    server {
+      listen 8080;
+      location / {
+        root /usr/share/nginx/html;
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: web-9dbg8bm6b8
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - env:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: endpoint
+              name: tracing
+        envFrom:
+        - configMapRef:
+            name: web-9dbg8bm6b8
+        image: nginx:1.29
+        name: web
+        resources:
+          requests:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /etc/nginx/conf.d
+          name: conf
+      volumes:
+      - configMap:
+          items:
+          - key: nginx.conf
+            path: default.conf
+          name: web-9dbg8bm6b8
+        name: conf
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.example.com/internal: "true"
+  name: web
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  selector:
+    app: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.example.com/internal: "true"
+  name: web-metrics
+spec:
+  ports:
+  - name: metrics
+    port: 9113
+  selector:
+    app: web

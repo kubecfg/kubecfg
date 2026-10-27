@@ -1,0 +1,7 @@
+# A component adds its resources and patches to the kustomization that lists it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - tracing.yaml
+patches:
+  - path: deployment.yaml

@@ -709,6 +709,11 @@ spec:
   file is an error. No name gives a field whose own name has a dot.
 - **Hiding a field doesn't rename it.** Add or remove the colon, and `config` and `$.config` keep
   working.
+- **One name, several documents: a chain.** A file can give a name with one document without `+`
+  and any number with it. Each `^^+:` extends what comes before it, in file order, with the
+  document without `+` first, wherever it is: `^^: web`, `^^+: web` and `^^+: web` are
+  `web: d1 + d2 + d3`. The documents with `+` keep the colons of the one without it; with none,
+  they all have the same.
 - **Overlays keep the base's visibility.** In Jsonnet, `:` and `+:` keep the visibility the
   base gave a field: `{config:: {r: 1}} + {config+: {r: 2}}` outputs `{}`. An overlay writes
   `^^+: config`, without colons, and `^^+::: config` makes a hidden base field visible.
@@ -760,8 +765,9 @@ deployment:
 The node stays where it's written, and the local reads it there.
 
 - **Scope: the whole document,** above or below the anchor. Another document can't use it:
-  Jsonnet reports "Unknown variable". Something several documents share belongs in a file local
-  or a field.
+  Jsonnet reports "Unknown variable", as a YAML parser rejects an alias to another document's
+  anchor. Anchors are for reusing a node inside one object; something several documents share
+  belongs in a field, like `^^: config`, or a file local.
 - **Value: the node as the document writes it,** after the document's own `<<+` and `x+` keys
   are applied, but before any overlay. Overlays change fields, never locals: an overlay that
   adds a label to `deployment.metadata.labels` changes only that field. The selector and the
@@ -1024,6 +1030,13 @@ that first document gives the same output as `--overlay-code-file`.
   file's locals. The file's documents reach the base through `$`, and the base sees their
   changes through its names and `$`, as with an overlay.
 - **A file of only that first document** is what it extends.
+- **The base can decide how documents merge.** In a file that extends something, the documents
+  of a name are a chain of `kubecfg.merge(a, b, $)` calls: the one without `+` merged into
+  `null`, then each `^^+:` merged into what comes before. Without one, the chain starts from the
+  base's field, if it has one. `kubecfg.merge` is Jsonnet's `+`, unless the file has a method
+  `$merge`: then it's `$['$merge'](a, b)`. [knit](knit.md#objects-have-names) has one, and merges
+  Kubernetes objects by their keys. The Jsonnet above leaves the calls out. To merge another
+  way in one file, shadow `kubecfg` with an object whose `merge` differs.
 
 ## Worked example
 
@@ -1252,9 +1265,9 @@ It means:
   Deployment's selector.
 - **`^^+: web.conf` with a plain `data:`** replaces all of `data`; `data+:` would merge it.
 
-A larger example, a shop built on [k8s-libsonnet](https://github.com/kubecfg/k8s-libsonnet)
+A larger example, a shop in plain Kubernetes YAML merged by [knit](knit.md)
 with dev and prod overlays that change every object, every pod, or one container, is in
-[`examples/k8s-libsonnet`](https://github.com/kubecfg/kubecfg/tree/main/examples/k8s-libsonnet).
+[`examples/experimental/knit/shop`](https://github.com/kubecfg/kubecfg/tree/main/examples/experimental/knit/shop).
 
 ## Semantics
 
@@ -1350,7 +1363,7 @@ line:
 | a `+` key with colons (`x+::`) next to a key without `+` | the field's visibility comes from the other key |
 | `<<` that isn't the very first key, or a second `<<` | kubectl and kustomize give different results |
 | `<<+` with an expression that isn't an object or `null`, including a list | `+` would silently join strings, arrays or numbers |
-| two documents with the same name, unless one is plain and the other `+` (`^^: web` and `^^+: web`) | ambiguous |
+| two documents of one name without `+`, or one name's `+` documents with other colons | ambiguous |
 | one local name declared twice in one scope: two anchors in a document, two local keys in a mapping, or two file locals | a local can't have two values |
 | an anchor on a key, on the value of `<<` or `<<+`, inside a merge source, or under a key expression | the node has no place of its own in the output |
 | a key expression, `${for}` or `${if}` that uses the local of an anchor in the same mapping or list, or below it | Jsonnet needs it to build the mapping or list that the local reads |
@@ -1361,7 +1374,7 @@ line:
 | a `^^` key whose value is empty, a number, an expression, or a name ending in `+` or `:` | the name is text, and the `+` and colons go on the key |
 | a tag like `!web` | names are keys; yakl says which one to write: `^^: web` |
 | a document without a name, or that isn't a mapping, in a file of several documents or one that extends another | files extend and override each other's documents by name |
-| `^^+: web` in an overlay, or in a file that extends another, when the base has no `web` | it would add a fragment of a document, most likely a misspelled name; `^^: web` adds one |
+| `^^+: web` in an overlay, or in a file that extends another, when the base has no `web`; `^^+: web.conf` when it has no `conf` in `web` | it would add a fragment of a document, most likely a misspelled name; `^^: web` adds one |
 | `$` in a file local of a file of one document | there is no file object; Jsonnet would read it as the local's own object |
 | a document of only `<<+` and local keys that isn't the first, in a file of several documents | it says what the file extends, so it comes first |
 | `&labels: value`, a local key without quotes | YAML reads an empty key carrying the anchor `labels`; yakl says to quote it |

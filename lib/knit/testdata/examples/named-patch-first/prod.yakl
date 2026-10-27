@@ -1,0 +1,12 @@
+# prod defines cache again, and patches it before: the patch applies to prod's
+# cache, not to the base's, which prod's replaces.
+<<+: ${import 'yakl:base.yakl'}
+---
+^^+: cache
+data: {ttl: '60'}
+---
+^^: cache
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cache}
+data: {size: '2'}

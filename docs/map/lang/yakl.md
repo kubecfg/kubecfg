@@ -1,11 +1,11 @@
 +++
 title = "YAKL"
 summary = "YAML with Jsonnet expressions: plain YAML is valid YAKL, ${...} adds the logic"
-aka = ["jamlet", "yannet", ".yakl", "yet another konfig language"]
+aka = ["RFC09", "jamlet", "yannet", ".yakl", "yet another konfig language"]
 kind = "lang"
 intent = "goal"
 research = "done"
-refs = ["pkg/yakl/yakl.go", "docs/Advanced-Usage/yakl.md", "examples/guestbook.yakl"]
+refs = ["docs/rfcs/rfc09.md", "pkg/yakl/yakl.go", "docs/Advanced-Usage/yakl.md", "examples/experimental/yakl/guestbook.yakl"]
 
 [[feature]]
 id = "expressions"
@@ -54,6 +54,19 @@ status = "done"
 needs = ["/lang/stdlib#pick"]
 
 [[feature]]
+id = "library-hook"
+title = "The hook for libraries: the documents of a name are a chain of kubecfg.merge(a, b, $), which the object a file extends takes over with its $merge"
+status = "done"
+note = "For knit. The file decides where each document goes, with its ^^ key; the hook only decides how its documents merge. Without $merge, it's Jsonnet's +; shadowing the local kubecfg changes it for one file. It replaced a hidden list of every document and a $named method, which made the library merge every document at once"
+
+[[feature]]
+id = "merge-chain"
+title = "A file can give a name with one document without + and any number with it: each extends what comes before, in file order"
+status = "done"
+needs = ["/lang/yakl#library-hook"]
+note = "A YAML stream with overlapping documents is a chain of merges. The documents with + keep the colons of the one without; with none, they must agree"
+
+[[feature]]
 id = "file-extends"
 title = "A file extends another with <<+"
 status = "done"
@@ -73,6 +86,12 @@ note = "Uncommitted in the structured-stargazing-beacon worktree; still written 
 id = "missing-document-error"
 title = "A clear error when an overlay names a document that doesn't exist"
 status = "done"
+
+[[feature]]
+id = "entry-names"
+title = "Names below a document's root: a ^^ key on a list entry, - {^^: api.container}, names it"
+status = "todo"
+note = "An open question in RFC09; t8y:/lang/typed-jsonnet may make it unnecessary"
 
 [[feature]]
 id = "interpolation"

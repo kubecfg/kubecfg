@@ -1,0 +1,5 @@
+<<+: ${import 'yakl:v2.yakl'}
+---
+^^+: web
+spec:
+  maxReplicas: 10
