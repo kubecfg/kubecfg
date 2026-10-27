@@ -16,6 +16,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ import (
 	goyaml "github.com/ghodss/yaml"
 	jsonnet "github.com/google/go-jsonnet"
 	jsonnetAst "github.com/google/go-jsonnet/ast"
-	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 	log "github.com/sirupsen/logrus"
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
 	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
@@ -280,8 +281,15 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 				return nil, fmt.Errorf("unable to json marshal schema: %w", err)
 			}
 
-			// No URL defaults to draft 7 of JSONSchema
-			sch, err := jsonschema.CompileString("", string(jSchema))
+			doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(jSchema))
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse schema: %w", err)
+			}
+			c := jsonschema.NewCompiler()
+			if err := c.AddResource("file:///schema.json", doc); err != nil {
+				return false, fmt.Errorf("unable to compile jsonschema: %w", err)
+			}
+			sch, err := c.Compile("file:///schema.json")
 			if err != nil {
 				return false, fmt.Errorf("unable to compile jsonschema: %w", err)
 			}
