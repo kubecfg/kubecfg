@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	jsonnet "github.com/google/go-jsonnet"
+	libsonnet "github.com/kubecfg/kubecfg/lib"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -42,11 +43,27 @@ func evalWith(t *testing.T, compile func(string) (string, error), src string) (s
 	if err != nil {
 		return "", err
 	}
-	out, err := jsonnet.MakeVM().EvaluateAnonymousSnippet("test.yakl", code)
+	out, err := vm(t, code).EvaluateFile("test.yakl")
 	if err != nil {
 		return "", err
 	}
 	return compact(t, out), nil
+}
+
+// vm returns a VM that imports code as test.yakl, which sets std.thisFile as kubecfg's importer
+// does, and that finds kubecfg.libsonnet, which selectors use.
+func vm(t *testing.T, code string) *jsonnet.VM {
+	t.Helper()
+	lib, err := libsonnet.Assets.ReadFile("kubecfg.libsonnet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := jsonnet.MakeVM()
+	vm.Importer(&jsonnet.MemoryImporter{Data: map[string]jsonnet.Contents{
+		"test.yakl":                     jsonnet.MakeContents(code),
+		"internal:///kubecfg.libsonnet": jsonnet.MakeContents(string(lib)),
+	}})
+	return vm
 }
 
 func compact(t *testing.T, s string) string {
@@ -342,6 +359,20 @@ env: ${[
 		{"a file extends several sources", "<<+: [${ {a: 1} }, {a: 2, b: 2}]\n---\nc: 3\n", `{"a":1,"b":2,"unnamed":[{"c":3}]}`},
 		{"a file extends null", "<<+: ${null}\n---\nc: 3\n", `{"unnamed":[{"c":3}]}`},
 		{"<<+ alone is the document", "<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n", `{"apiVersion":"v1","kind":"ConfigMap"}`},
+		{"selectors and a local named kubecfg", "'&kubecfg': 1\n---\na: ${[1, 2][@ == kubecfg]}\n", `{"a":1}`},
+		{"selectors and the predefined kubecfg", "a: ${[1, 2][@ == 2] + (if kubecfg.isK8sObject({}) then 0 else 1)}\n", `{"a":3}`},
+		{"selectors", "'&cs': [{name: a, image: x, ports: [{name: http, port: 80}]}, {name: b, image: z, ports: []}]\n" +
+			"---\nimage: ${cs[@.name == 'b'].image}\n" +
+			"sum: ${cs[@.name == 'a'].ports[@.name == 'http'].port + std.length(cs[@.image == 'z'].ports)}\n" +
+			"nested: ${cs[std.length(@.ports) == 0 && cs[@.name == 'a'].image == 'x'].name}\n" +
+			"call: ${ local first(c) = c.name == 'a'; cs[first(@)].name }\n" +
+			"strings: ${['x', 'y'][@ == 'y']}\n" +
+			"verbatim: ${@'@' + @\"@\"}\n" +
+			"multi: ${cs[\n  @.name == 'a'\n].image}\n" +
+			"block: |-\n  ${cs[@.name == 'a'].ports[\n    @.port == 80\n  ].name}\n" +
+			"yaml: ${[\\{\n    k: ${cs[@.image == 'x'].name}\n  }][@.k == 'a'].k}\n" +
+			"loop:\n  - ${for p in cs[@.name == 'a'].ports}: ${p.port}\n  - ${if cs[@.name == 'b'].ports == []}: none\n",
+			`{"block":"http","call":"a","image":"z","loop":[80,"none"],"multi":"x","nested":"b","strings":"y","sum":80,"verbatim":"@@","yaml":"a"}`},
 		{"<<+ with fields is a document", "<<+: ${ {a: 1} }\nb: 2\n---\nc: 3\n", `[{"a":1,"b":2},{"c":3}]`},
 	}
 	for _, tc := range cases {
@@ -532,6 +563,14 @@ func TestErrors(t *testing.T) {
 		{"- ${for x in xs}:\n    a: 1\n", "Unknown variable: xs"},
 		{"- ${for x in [1]}:\n    a: 1\n    b: ${y}\n", "test.yakl:3:"},
 		{"- ${for x in [1] if}: 1\n", "test.yakl:1:"},
+		{"a: ${[1][@ == 2]}\n", "test.yakl:1:9 want one matching entry, found 0"},
+		{"a: ${[1, 1][@ == 1]}\n", "test.yakl:1:12 want one matching entry, found 2"},
+		{"a: ${[1][@ == 1] + [2][@ == 1]}\n", "test.yakl:1:23 want one matching entry, found 0"},
+		{"a: 1\nb: ${[1][@ == 1] +\n  [2][@ == 1]}\n", "test.yakl:3:6 want one matching entry, found 0"},
+		{"a: 1\nb: ${[1] +\n  @}\n", "line 3: @ is the entry of a list that a selector tests"},
+		{"a: ${[1][@:]}\n", "line 1: @ is the entry of a list"},
+		{"a: ${[1][@ == 1].x}\n", "test.yakl:1:"},
+		{"a: ${[1][@ == y]}\n", "Unknown variable: y"},
 	}
 	for _, tc := range cases {
 		_, err := eval(t, tc.src)
@@ -569,7 +608,7 @@ func laughs(levels int) string {
 }
 
 func FuzzCompile(f *testing.F) {
-	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "'&x': 1\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "---\n^^: a\nb: &z ${1}\n---\n^^+: c\n<<+: [${a}]\nd+: 1\ne: {'&l': '${z}'}\n", "a: ['${1}', \"${'}'}\"]\n'${k}': !!str '${v}'\n", "a: |-\n  ${[\\{\n    b: 1\n  }]}\nc: $${d}\n", "- ${for x in [1]}:\n    a: &a ${x}\n- &b 2\nm:\n  c: 1\n  <<+: ${if true then {d: 2}}\n", "# a\n\n---\n^^: b # c\n# d\nx: 1 # e\n<<: {f: 1} # g\n# h\nl:\n  # i\n  - ${for y in [1]}: 2 # j\n  # k\n"} {
+	for _, s := range []string{"a: ${1}\n", "- |\n  ${x}\n- ${y}\n", "'&x': 1\n---\n[${x}, '${']\n", "a: 'b\n  c' # ${\n", "[a [", "- k: |\n    x\n  e: ${1}\n", "a: ${[\\{\n    b: ${[\\{\n        c: 1\n      }]}\n  }]}\n", "a: &a [*a]\n", "---\n^^: a\nb: &z ${1}\n---\n^^+: c\n<<+: [${a}]\nd+: 1\ne: {'&l': '${z}'}\n", "a: ['${1}', \"${'}'}\"]\n'${k}': !!str '${v}'\n", "a: |-\n  ${[\\{\n    b: 1\n  }]}\nc: $${d}\n", "- ${for x in [1]}:\n    a: &a ${x}\n- &b 2\nm:\n  c: 1\n  <<+: ${if true then {d: 2}}\n", "# a\n\n---\n^^: b # c\n# d\nx: 1 # e\n<<: {f: 1} # g\n# h\nl:\n  # i\n  - ${for y in [1]}: 2 # j\n  # k\n", "a: ${l[@.k == [\\{\n    b: ${m[@ == 1]}\n  }][@.b == 1]]}\n- ${for x in l[\n  @ == 1].y}: 1\n"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, src string) {
@@ -670,6 +709,8 @@ func TestFormat(t *testing.T) {
 		{"l:\n  - ${for x in  [1,2]}: ${x*2}\n", "l:\n  - ${for x in  [1,2]}: ${x * 2}\n"},
 		{"a: ${ [\\{\n    b:  1\n  }] }\n", "a: ${ [\\{\n    b:  1\n  }] }\n"},
 		{"# ${1+1}\na: echo ${b+1}\n", "# ${1+1}\na: echo ${b+1}\n"},
+		{"a: ${l[@.name=='x'].v}\n", "a: ${l[@.name == 'x'].v}\n"},
+		{"a: ${l[$ :]}\n", "a: ${l[$ :]}\n"},
 	}
 	for _, tc := range cases {
 		got, err := Format(tc.src)

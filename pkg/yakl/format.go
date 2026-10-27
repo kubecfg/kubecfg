@@ -104,18 +104,23 @@ func formatCode(code, raw string) (string, bool) {
 	if code == "" {
 		code = raw
 	}
+	code = withIt(code)
 	opts := formatter.DefaultOptions()
 	opts.StringStyle = formatter.StringStyleLeave // a string's quotes may be chosen to fit the YAML quotes
 	f, err := formatter.Format("", code, opts)
 	// A pass removes one level of redundant parentheses, ((0)) giving (0); the next would go on.
 	for i := 0; err == nil && i < len(code); i++ {
 		g, gerr := formatter.Format("", f, opts)
-		if gerr != nil || g == f {
+		if gerr != nil { // the formatter wrote code that doesn't parse: [$ :] as [$:]
+			err = gerr
+			break
+		}
+		if g == f {
 			break
 		}
 		f = g
 	}
-	f = strings.TrimSuffix(f, "\n")
+	f = strings.ReplaceAll(strings.TrimSuffix(f, "\n"), itVar, "@")
 	// A line comment at the end keeps its line break, or it would take the closing }.
 	if end, _, err := exprEnd("${"+f+"}", 2); err != nil || end != len(f)+2 {
 		f += "\n"

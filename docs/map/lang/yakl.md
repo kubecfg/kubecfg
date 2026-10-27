@@ -38,6 +38,12 @@ title = "Anchors are locals; local keys and file locals"
 status = "done"
 
 [[feature]]
+id = "selectors"
+title = "list[@.name == 'api'] reads the one entry of a list for which the condition is true"
+status = "done"
+needs = ["/lang/stdlib#pick"]
+
+[[feature]]
 id = "file-extends"
 title = "A file extends another with <<+"
 status = "done"

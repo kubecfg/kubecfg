@@ -339,6 +339,45 @@ Rules:
 - Blank and comment lines don't count for indentation.
 - A block holds a single YAML document. An empty block is `null`.
 
+### Picking a list entry by a condition
+
+Many lists are really found by a field: a container by its `name`, a port by its
+`containerPort`. Jsonnet reads a list only by position, and the position of an entry can change
+when an overlay adds one before it. A selector reads an entry by a condition instead:
+
+```yaml
+image: ${$.api.spec.template.spec.containers[@.name == 'api'].image}
+metrics: ${ports[@.name == 'metrics'].containerPort}
+```
+
+`@` is the entry being tested. The condition is any Jsonnet expression that gives a boolean, so
+it can read nested fields, call functions and combine tests:
+
+```yaml
+a: ${containers[@.resources.limits.cpu == '1'].name}
+b: ${containers[std.get(@, 'sidecar', false)].name}
+c: ${containers[isSidecar(@)].name}
+d: ${ports[@.containerPort == 8080 && @.protocol == 'TCP'].name}
+tag: ${['v1', 'v2'][std.startsWith(@, 'v2')]}
+```
+
+- **Exactly one entry must match.** None, or more than one, is an error that gives the file, line
+  and column of the selector's `[`: `yakl:file:///src/app.yakl:12:30 want one matching entry, found 0`.
+- **The condition runs on every entry, so it must work on each one.** If some containers have
+  no `resources`, `@.resources.limits.cpu` is an error on those; `std.get(@, 'sidecar', false)`
+  reads a field that may be missing.
+- **A selector works anywhere in an expression,** and several can be in one:
+  `${a[@.name == 'x'].value + a[@.name == 'y'].value}`.
+- **`@` belongs to the nearest brackets around it.** In
+  `containers[@.env[@.name == 'MODE'].value == 'worker']`, the inner `@` is an env var and the
+  outer one a container. An `@` outside brackets, or in a slice like `list[@.a:]`, is an error.
+- **`@` is never a variable,** so no local can hide it. In Jsonnet, `@` only starts a verbatim
+  string (`@'...'`), which stays a string.
+- **Selectors read; they don't patch.** A `+:` field can't point at a list entry this way.
+- **In the generated Jsonnet** (`eval -o jsonnet`), a selector is a call to `kubecfg.pick`, with
+  `yakl__it` for `@`: `yakl__kubecfg.pick(containers, function(yakl__it) (yakl__it.name == 'api'), std.thisFile + ':12:30')`.
+  `yakl__kubecfg` is the built-in kubecfg library, under a name no local of the file can hide.
+
 ## Loops and conditions
 
 A list item can be a Jsonnet comprehension clause, `${for ...}` or `${if ...}`, with a body
@@ -1358,6 +1397,7 @@ line:
 | an anchor in the body of a `${for}` or `${if}`, or on a list item whose index depends on them, as after one in an `args:` that `args+:` extends, or on items that `+` keys add both before and after | there's no single node to name |
 | `${for ...}+:` | a string that starts with `${` is one whole expression |
 | `${local x = ...}` | removed: see [Migrating](#migrating-from-jamlet) |
+| `@` outside the brackets of a selector, or in a slice | `@` is the entry a selector tests; see [Picking a list entry](#picking-a-list-entry-by-a-condition) |
 
 The `&a &b` error needs a warning of its own: on a document's first line, kubectl's decoder
 silently reads it as a `null` document and skips the rest. Every other tool reports the error.
