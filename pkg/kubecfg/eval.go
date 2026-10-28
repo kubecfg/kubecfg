@@ -100,7 +100,7 @@ func evalSnippet(pathURL, expr string, tla []string) string {
 }
 
 func traceback(w io.Writer, vm *jsonnet.VM, pathURL string, expr string, showAll bool) error {
-	// The tracer extends the root with an object, so an array (a yakl stream) is traced as {docs: [...]}.
+	// The tracer extends the root with an object, so an array is traced as {docs: [...]}.
 	isArray, err := vm.EvaluateAnonymousSnippet("", fmt.Sprintf("std.isArray(import %q)", pathURL))
 	if err != nil {
 		return err

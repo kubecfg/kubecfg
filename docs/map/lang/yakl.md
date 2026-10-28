@@ -33,6 +33,11 @@ title = "Documents named with a key (^^: web), read as $.name"
 status = "done"
 
 [[feature]]
+id = "named-streams"
+title = "One document is any value; several are named mappings, and the file is an object of them"
+status = "done"
+
+[[feature]]
 id = "locals"
 title = "Anchors are locals; local keys and file locals"
 status = "done"
@@ -62,8 +67,7 @@ note = "Uncommitted in the structured-stargazing-beacon worktree; still written 
 [[feature]]
 id = "missing-document-error"
 title = "A clear error when an overlay names a document that doesn't exist"
-status = "todo"
-note = "Today it shows up as a fragment without a kind"
+status = "done"
 
 [[feature]]
 id = "interpolation"

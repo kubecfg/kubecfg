@@ -132,8 +132,12 @@ func TestTracebackYAKL(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
-	// A stream evaluates to an array; provenance paths index it.
-	if err := os.WriteFile(file, []byte("---\na: 1\n---\nb: ${2}\n"), 0600); err != nil {
+	// A file that evaluates to an array: provenance paths index it.
+	file = filepath.Join(t.TempDir(), "t.jsonnet")
+	if err := os.WriteFile(file, []byte("[\n  {a: 1},\n  {b: 1 + 1},\n]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if fileURL, err = utils.PathToURL(file); err != nil {
 		t.Fatal(err)
 	}
 	vm, err = JsonnetVM(WithAlpha(true))
@@ -144,8 +148,8 @@ func TestTracebackYAKL(t *testing.T) {
 	if err := traceback(&buf, vm, utils.ImportPath(fileURL), "$[1].b", false); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.TrimSpace(buf.String()), file+":4"; got != want {
-		t.Errorf("stream: got %q, want %q", got, want)
+	if got, want := strings.TrimSpace(buf.String()), file+":3"; got != want {
+		t.Errorf("array: got %q, want %q", got, want)
 	}
 }
 
@@ -195,7 +199,7 @@ func TestEvalTLANamedLikeInternals(t *testing.T) {
 
 func TestEvalYAKLStream(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "s.yakl")
-	if err := os.WriteFile(file, []byte("---\na: ${1}\n---\nb: 2\n"), 0600); err != nil {
+	if err := os.WriteFile(file, []byte("---\n^^: a\nv: ${1}\n---\n^^: b\nv: 2\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	vm, err := JsonnetVM(WithAlpha(true))
@@ -210,12 +214,15 @@ func TestEvalYAKLStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got = strings.Join(strings.Fields(got), ""); got != `[{"a":1},{"b":2}]` {
+	if got = strings.Join(strings.Fields(got), ""); got != `{"a":{"v":1},"b":{"v":2}}` {
 		t.Errorf("got %s", got)
 	}
-	_, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "$.a", nil))
-	if err == nil || !strings.Contains(err.Error(), "-e needs the file to evaluate to an object, not array") {
-		t.Errorf("got error %v", err)
+	got, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "$.b.v", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(got) != "2" {
+		t.Errorf("got %s", got)
 	}
 }
 

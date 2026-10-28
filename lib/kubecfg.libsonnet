@@ -198,6 +198,25 @@
     else error std.lstripChars('%s want one matching entry, found %d' % [where, std.length(found)], ' ')
   ),
 
+  // yaklSource(s): s as a source of YAKL's <<+, which the file or mapping
+  // extends: an object as it is, and null as {}. Anything else is an error,
+  // since + would silently join strings and arrays, or add numbers.
+  yaklSource(s):: (
+    if s == null then {}
+    else if std.isObject(s) then s
+    else error '<<+ needs an object or null, not ' + std.type(s)
+  ),
+
+  // yaklExtends(o, inSuper, name, colons=':'): true when the YAKL document
+  // ^^+: name has something to extend: the base has a field name, or there is
+  // no base, as for a file alone. Otherwise an error. o is the file (self) and
+  // inSuper is function(f) f in super, since Jsonnet can't pass super itself.
+  // YAKL's ^^+: documents call it in an assert.
+  yaklExtends(o, inSuper, name, colons=':'):: (
+    inSuper(name) || !std.any(std.map(inSuper, std.objectFieldsAll(o)))
+    || error "^^+%s %s extends a document that the base doesn't have; to add one, write ^^%s %s" % [colons, name, colons, name]
+  ),
+
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
     // two-level collection of objects by 'apiVersion.kind'
