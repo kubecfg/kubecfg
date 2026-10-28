@@ -335,11 +335,15 @@ env: ${[
 			`{"a":{"metadata":{"name":"p-a"}},"b":{"metadata":{"name":"p-a-copy"}}}`},
 		{"hidden name", "---\n^^:: config\nnum: 1\n---\n^^: a\nv: ${$.config.num}\n", `{"a":{"v":1}}`},
 		{"forced visible name", "---\n^^::: a\nnum: 1\n", `{"a":{"num":1}}`},
-		{"a name with a dot", "---\n^^: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"},"web.conf":{"kind":"ConfigMap"}}`},
-		{"a hidden name with a dot", "---\n^^:: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"}}`},
+		{"a dot starts a level", "---\n^^: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$.web.conf.kind}\n", `{"b":{"v":"ConfigMap"},"web":{"conf":{"kind":"ConfigMap"}}}`},
+		{"a hidden name with a dot", "---\n^^:: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$.web.conf.kind}\n", `{"b":{"v":"ConfigMap"},"web":{}}`},
+		{"names share a level", "---\n^^: web.cm\nkind: ConfigMap\n---\n^^: x\nv: ${$.web.svc.kind}\n---\n^^: web.svc\nkind: Service\n---\n^^: web.db.sts\nkind: StatefulSet\n",
+			`{"web":{"cm":{"kind":"ConfigMap"},"db":{"sts":{"kind":"StatefulSet"}},"svc":{"kind":"Service"}},"x":{"v":"Service"}}`},
+		{"plain and + documents with a dot combine", "---\n^^+: web.cm\nb+: {d: 2}\n---\n^^: web.cm\na: 1\nb: {c: 1}\n", `{"web":{"cm":{"a":1,"b":{"c":1,"d":2}}}}`},
+		{"+ document with a dot alone", "---\n^^+: web.cm\nb: 1\n", `{"web":{"cm":{"b":1}}}`},
 		{"a single named document", "^^: cm\nkind: ConfigMap\n", `{"cm":{"kind":"ConfigMap"}}`},
 		{"a name for an expression's object", "---\n^^:: lib\n<<+: ${ {f: 2} }\n---\n^^: v\nx: ${$.lib.f}\n", `{"v":{"x":2}}`},
-		{"an anchor on a named document", "---\n&wc\n^^: web.conf\nkind: ConfigMap\nv: ${wc.kind}\n", `{"web.conf":{"kind":"ConfigMap","v":"ConfigMap"}}`},
+		{"an anchor on a named document", "---\n&wc\n^^: web.conf\nkind: ConfigMap\nv: ${wc.kind}\n", `{"web":{"conf":{"kind":"ConfigMap","v":"ConfigMap"}}}`},
 		{"a number as a name", "---\n^^: '123'\na: 1\n", `{"123":{"a":1}}`},
 		{"name with dashes", "---\n^^: my-svc\na: 1\n", `{"my-svc":{"a":1}}`},
 		{"plain and + documents combine", "---\n^^: web\na: 1\nb: {c: 1}\n---\n^^+: web\nb+: {d: 2}\n", `{"web":{"a":1,"b":{"c":1,"d":2}}}`},
@@ -516,6 +520,8 @@ func TestErrors(t *testing.T) {
 		{"^^: ${'a'}\n", `line 1: the key "^^" takes the document's name as text, not as an expression`},
 		{"^^: 123\n", `line 1: the key "^^" takes the document's name, as a string (quote a number: '123')`},
 		{"^^: web+\n", `line 1: the name "web+" can't end in + or :; they go on the key, as in ^^+: web`},
+		{"^^: web..conf\n", `line 1: the name "web..conf" has an empty part: a dot starts a level`},
+		{"---\n^^: web\nx: 1\n---\n^^: web.conf.x\ny: 2\n", `line 5: the name "web.conf.x" puts a document in the document "web" of line 2`},
 		{"!web\na: 1\n", "line 1: unsupported tag !web; to name a document, write ^^: web among its top-level keys"},
 		{"!config+::\na: 1\n", "write ^^+:: config among its top-level keys"},
 		{"^^: ''\na: 1\n", `line 1: the key "^^" takes the document's name, as a string`},
@@ -852,7 +858,7 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 		return compact(t, out)
 	}
 	for _, tc := range []struct{ query, base, prod string }{
-		{"std.objectFields(f)", `["deployment","netpol","service","web.conf"]`, `["account","deployment","netpol","pdb","service","web.conf"]`},
+		{"std.objectFields(f)", `["deployment","netpol","service","web"]`, `["account","deployment","netpol","pdb","service","web"]`},
 		{"f.deployment.spec.replicas", `2`, `5`},
 		{"f.deployment.spec.template.spec.containers[0]",
 			`{"image":"nginx:1.27","name":"web","ports":[{"containerPort":8080}],"readinessProbe":{"httpGet":{"path":"/healthz","port":8080}},"volumeMounts":[{"mountPath":"/etc/nginx/conf.d","name":"conf"}]}`,
@@ -861,7 +867,7 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 		{"f.service.spec", `{"ports":[{"name":"web","port":80,"targetPort":8080}],"selector":{"app":"web"}}`, `{"ports":[{"name":"web","port":80,"targetPort":8080}],"selector":{"app":"web"},"type":"LoadBalancer"}`},
 		{"f.netpol.metadata.name", `"web-ingress"`, `"web-ingress"`},
 		{"if std.objectHas(f, 'account') then f.account.metadata.name", `null`, `"web"`},
-		{"f['web.conf'].data", `{"default.conf":"server { listen 8080; }\n"}`, `{"default.conf":"server { listen 8080; gzip on; }\n"}`},
+		{"f.web.conf.data", `{"default.conf":"server { listen 8080; }\n"}`, `{"default.conf":"server { listen 8080; gzip on; }\n"}`},
 		{"if std.objectHas(f, 'pdb') then f.pdb.spec", `null`, `{"minAvailable":2,"selector":{"matchLabels":{"app":"web"}}}`},
 		{"std.objectHasAll(f, 'config') && !std.objectHas(f, 'config')", `true`, `true`},
 	} {
@@ -877,16 +883,31 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 // An overlay that extends a document the base doesn't have fails, rather than adding a fragment
 // of one. A file alone, as "+ document alone" in TestExpressions, still gets the document.
 func TestOverlayMissingDocument(t *testing.T) {
-	for _, compile := range []func(string) (string, error){Compile, Desugar} {
-		code, err := compile("---\n^^+: config\nreplicas: 5\n---\n^^+:: wbe\nport: 8080\n")
-		if err != nil {
-			t.Fatal(err)
+	for _, tc := range []struct{ overlay, want string }{
+		{"---\n^^+: config\nreplicas: 5\n---\n^^+:: wbe\nport: 8080\n", "^^+:: wbe extends a document that the base doesn't have; to add one, write ^^:: wbe"},
+		{"---\n^^+: config\nreplicas: 5\n---\n^^+: web.cm\nport: 8080\n", "^^+: web.cm extends a document that the base doesn't have"},
+		{"---\n^^+: config\nreplicas: 5\n---\n^^+: web.port.x\nport: 8080\n", "^^+: web.port.x extends a document that the base doesn't have"},
+	} {
+		for _, compile := range []func(string) (string, error){Compile, Desugar} {
+			code, err := compile(tc.overlay)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = vm(t, code).EvaluateAnonymousSnippet("test", "{config:: {}, web: {port: 80}} + import 'test.yakl'")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("got error %v, want %q", err, tc.want)
+			}
 		}
-		_, err = vm(t, code).EvaluateAnonymousSnippet("test", "{config:: {}, web: {port: 80}} + import 'test.yakl'")
-		const want = "^^+:: wbe extends a document that the base doesn't have; to add one, write ^^:: wbe"
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("got error %v, want %q", err, want)
-		}
+	}
+	// A document with a dot that the base has is extended.
+	code, err := Compile("---\n^^+: web.cm\nb: 2\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := vm(t, code).EvaluateAnonymousSnippet("test", "{web: {cm: {a: 1}, svc: {}}} + import 'test.yakl'"); err != nil {
+		t.Error(err)
+	} else if got, want := compact(t, out), `{"web":{"cm":{"a":1,"b":2},"svc":{}}}`; got != want {
+		t.Errorf("got %s, want %s", got, want)
 	}
 }
 

@@ -33,6 +33,11 @@ title = "Documents named with a key (^^: web), read as $.name"
 status = "done"
 
 [[feature]]
+id = "dotted-names"
+title = "A dot in a name starts a level: ^^: web.conf is $.web.conf"
+status = "done"
+
+[[feature]]
 id = "named-streams"
 title = "One document is any value; several are named mappings, and the file is an object of them"
 status = "done"
