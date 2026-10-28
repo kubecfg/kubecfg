@@ -150,6 +150,38 @@ func TestParseHelmChart(t *testing.T) {
 `)
 }
 
+func TestParseHelmChartDependencies(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+
+	// umbrella has two copies of the "sub" subchart: one with a
+	// condition, and one renamed with an alias and guarded by a tag.
+	x, err := vm.EvaluateSnippet("test", `
+    local render(values) = std.objectFields(std.native("parseHelmChart")(importbin "../testdata/umbrella-0.1.0.tgz", "rls", "myns", values, {}));
+    {
+      defaults: render({}),
+      conditionOff: render({sub: {enabled: false}}),
+      tagOff: render({tags: {extras: false}}),
+    }
+`)
+	check(t, err, x, `{
+   "conditionOff": [
+      "umbrella/charts/tagged/templates/configmap.yaml",
+      "umbrella/templates/configmap.yaml"
+   ],
+   "defaults": [
+      "umbrella/charts/sub/templates/configmap.yaml",
+      "umbrella/charts/tagged/templates/configmap.yaml",
+      "umbrella/templates/configmap.yaml"
+   ],
+   "tagOff": [
+      "umbrella/charts/sub/templates/configmap.yaml",
+      "umbrella/templates/configmap.yaml"
+   ]
+}
+`)
+}
+
 func TestValidateJSONSchema(t *testing.T) {
 	vm := jsonnet.MakeVM()
 	RegisterNativeFuncs(vm, NewIdentityResolver())

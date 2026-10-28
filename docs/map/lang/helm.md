@@ -20,8 +20,8 @@ status = "done"
 [[feature]]
 id = "dependency-conditions"
 title = "Honour dependencies.condition, so alertmanager.enabled: false drops the subchart"
-status = "todo"
-note = "Contributor PR #446, unanswered since October 2024"
+status = "done"
+note = "Also tags, alias and import-values: the same step helm install runs. Started as contributor PR #446"
 refs = ["https://github.com/kubecfg/kubecfg/pull/446"]
 
 [[needs]]

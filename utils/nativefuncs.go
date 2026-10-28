@@ -34,6 +34,7 @@ import (
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
 	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
 	helmLoader "helm.sh/helm/v4/pkg/chart/v2/loader"
+	chartv2util "helm.sh/helm/v4/pkg/chart/v2/util"
 	helmEngine "helm.sh/helm/v4/pkg/engine"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -208,6 +209,10 @@ func RegisterNativeFuncs(vm *jsonnet.VM, resolver Resolver) {
 				Revision:  1,
 				IsInstall: true,
 			}
+			if err := chartv2util.ProcessDependencies(chrt, vals); err != nil {
+				return nil, err
+			}
+
 			values, err := chartutil.ToRenderValues(chrt, vals, options, capabilities)
 			if err != nil {
 				return nil, err
