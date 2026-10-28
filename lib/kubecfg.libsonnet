@@ -207,13 +207,19 @@
     else error '<<+ needs an object or null, not ' + std.type(s)
   ),
 
-  // yaklExtends(o, inSuper, name, colons=':'): true when the YAKL document
-  // ^^+: name has something to extend: the base has a field name, or there is
-  // no base, as for a file alone. Otherwise an error. o is the file (self) and
-  // inSuper is function(f) f in super, since Jsonnet can't pass super itself.
-  // YAKL's ^^+: documents call it in an assert.
-  yaklExtends(o, inSuper, name, colons=':'):: (
-    inSuper(name) || !std.any(std.map(inSuper, std.objectFieldsAll(o)))
+  // yaklExtends(o, fromSuper, name, colons=':'): true when the YAKL document
+  // ^^+: name has something to extend: the base has the field name, a dot
+  // starting a level (web.conf is the field conf of web), or there is no base,
+  // as for a file alone. Otherwise an error. o is the file (self) and fromSuper
+  // is function(f) if f in super then [super[f]] else [], since Jsonnet can't
+  // pass super itself. YAKL's ^^+: documents call it in an assert.
+  yaklExtends(o, fromSuper, name, colons=':'):: (
+    local has(v, path) = std.length(path) == 0
+                         || std.isObject(v) && std.objectHasAll(v, path[0]) && has(v[path[0]], path[1:]);
+    local path = std.split(name, '.');
+    local base = fromSuper(path[0]);
+    std.length(base) > 0 && has(base[0], path[1:])
+    || !std.any([std.length(fromSuper(f)) > 0 for f in std.objectFieldsAll(o)])
     || error "^^+%s %s extends a document that the base doesn't have; to add one, write ^^%s %s" % [colons, name, colons, name]
   ),
 

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -968,7 +969,8 @@ func extension(d *yaml.Node) *entry {
 
 // name reads a document's name key k, like ^^: web. The value is the field's name, as text, so
 // that the file's shape is known without evaluating it; the key adds the field's + and colons, as
-// any key does: ^^:: config is hidden.
+// any key does: ^^:: config is hidden. A dot starts a level: ^^: web.conf is the field conf of
+// the field web.
 func (c *compiler) name(d *doc, k, v *yaml.Node) error {
 	if v.Kind == yaml.ScalarNode && (strings.Contains(v.Value, c.sentinel) || strings.HasPrefix(v.Value, "${")) {
 		return c.errorf(v, "the key %q takes the document's name as text, not as an expression: the file's shape is known before evaluating it", k.Value)
@@ -985,6 +987,8 @@ func (c *compiler) name(d *doc, k, v *yaml.Node) error {
 		return c.errorf(v, "the key %q takes the document's name, as a string (quote a number: '123')", k.Value)
 	case trimmed != name:
 		return c.errorf(v, "the name %q can't end in + or :; they go on the key, as in %s", name, writeNameKey(name))
+	case slices.Contains(strings.Split(name, "."), ""):
+		return c.errorf(v, "the name %q has an empty part: a dot starts a level, as in ^^: web.conf, which is $.web.conf", name)
 	}
 	d.kind, d.name = fieldDoc, name
 	d.plus = strings.Contains(k.Value, "+")
@@ -1091,6 +1095,17 @@ func (c *compiler) file(yamlDocs []*yaml.Node) error {
 		}
 	}
 
+	// A document can't have documents in it: ^^: web and ^^: web.conf would both give web.
+	for _, d := range docs {
+		for p := d.name; d.kind == fieldDoc && strings.Contains(p, "."); {
+			p = p[:strings.LastIndex(p, ".")]
+			if idx := fields[p]; len(idx) > 0 {
+				return c.errorf(d.at, "the name %q puts a document in the document %q of line %d; "+
+					"rename one of them", d.name, p, c.srcLine(docs[idx[0]].at))
+			}
+		}
+	}
+
 	// The comments at the top of the file stay there.
 	if len(docs) > 0 {
 		if c.comment(docs[0].head[0]) {
@@ -1168,7 +1183,9 @@ func (c *compiler) valueFile(docs []doc, body []int) error {
 
 // objectFile writes a file of named documents, which may extend something (ext), as an object: a
 // field per name, and object locals for file locals.
-// Everything stays in file order, so that the code keeps its source lines.
+// Everything stays in file order, so that the code keeps its source lines. A document whose name
+// has a dot is a local where it is, since two of them can share a field (web.conf and web.svc
+// are both in web); the nested fields that hold them come last.
 func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) error {
 	if ext != nil {
 		c.comment(ext.k.HeadComment, ext.k.LineComment, ext.v.LineComment, ext.k.FootComment, ext.v.FootComment)
@@ -1180,6 +1197,7 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 	c.write("{")
 	c.br(nil)
 	pending := map[string]string{} // the local holding the first of two documents giving a name
+	var tree levels                // the documents whose name has a dot
 	for i, d := range docs {
 		switch d.kind {
 		case fileLocalsDoc:
@@ -1205,18 +1223,39 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 		}
 		c.align(d.at)
 		idx := fields[d.name]
+		if strings.Contains(d.name, ".") {
+			if d.plus && len(idx) == 1 {
+				c.extendsAssert(d)
+			}
+			local := fmt.Sprintf("yakl__doc%d", i)
+			c.write("local " + local + " = ")
+			if err := c.document(d); err != nil {
+				return err
+			}
+			c.end(nil, ", ")
+			c.comment(d.foot...)
+			switch {
+			case len(idx) == 1:
+				tree.add(d.name, map[bool]string{true: "+"}[d.plus]+strings.Repeat(":", d.colons)+" "+local)
+			case idx[1] == i:
+				// As below: the plain document's visibility, extended by the other.
+				first, plain, ext := docs[idx[0]], pending[d.name], local
+				if first.plus {
+					plain, ext = ext, plain
+				}
+				tree.add(d.name, strings.Repeat(":", plainColons(first, d))+" "+plain+" + "+ext)
+			default:
+				pending[d.name] = local
+			}
+			continue
+		}
 		switch {
 		case len(idx) == 2 && idx[0] == i:
 			pending[d.name] = fmt.Sprintf("yakl__doc%d", i)
 			c.write("local " + pending[d.name] + " = ")
 		case len(idx) == 2:
 			// The field takes the visibility of the plain document, and extends it with the other.
-			first := docs[idx[0]]
-			colons := first.colons
-			if first.plus {
-				colons = d.colons
-			}
-			c.write(quote(d.name) + strings.Repeat(":", colons) + " ")
+			c.write(quote(d.name) + strings.Repeat(":", plainColons(docs[idx[0]], d)) + " ")
 			if d.plus {
 				c.write(pending[d.name] + " + ")
 			}
@@ -1233,14 +1272,7 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 			continue
 		default:
 			if d.plus {
-				// Extending a name that a base doesn't have would add a fragment of a document. A
-				// file alone, with nothing in super, gets the document.
-				c.write("assert " + kubecfgVar + ".yaklExtends(self, function(f) f in super, " + quote(d.name))
-				if d.colons > 1 {
-					c.write(", " + quote(strings.Repeat(":", d.colons)))
-				}
-				c.write("), ")
-				c.br(nil)
+				c.extendsAssert(d)
 			}
 			c.write(quote(d.name) + map[bool]string{true: "+"}[d.plus] + strings.Repeat(":", d.colons) + " ")
 		}
@@ -1250,11 +1282,72 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 		c.end(nil, ", ")
 		c.comment(d.foot...)
 	}
+	tree.write(c)
 	c.write("}")
 	if ext != nil {
 		c.write(")")
 	}
 	return nil
+}
+
+// extendsAssert writes the assert of a ^^+: document. Extending a name that a base doesn't have
+// would add a fragment of a document. A file alone, with nothing in super, gets the document.
+func (c *compiler) extendsAssert(d doc) {
+	c.write("assert " + kubecfgVar + ".yaklExtends(self, function(f) if f in super then [super[f]] else [], " + quote(d.name))
+	if d.colons > 1 {
+		c.write(", " + quote(strings.Repeat(":", d.colons)))
+	}
+	c.write("), ")
+	c.br(nil)
+}
+
+// plainColons returns the colons of the plain one of two documents a and b giving a name.
+func plainColons(a, b doc) int {
+	if a.plus {
+		return b.colons
+	}
+	return a.colons
+}
+
+// levels are the fields that hold the documents whose name has a dot, in file order: ^^: web.conf
+// is web+: {conf: ...}. A level extends what the base has (+:), so that a file adds to it.
+type levels struct {
+	keys []string
+	sub  map[string]*levels
+	leaf map[string]string // the field's + and colons, and its value
+}
+
+// add adds the field that the dotted name gives.
+func (l *levels) add(name, field string) {
+	k, rest, nested := strings.Cut(name, ".")
+	if l.sub == nil {
+		l.sub, l.leaf = map[string]*levels{}, map[string]string{}
+	}
+	if l.sub[k] == nil && l.leaf[k] == "" {
+		l.keys = append(l.keys, k)
+	}
+	if !nested {
+		l.leaf[k] = field
+		return
+	}
+	if l.sub[k] == nil {
+		l.sub[k] = &levels{}
+	}
+	l.sub[k].add(rest, field)
+}
+
+func (l *levels) write(c *compiler) {
+	for _, k := range l.keys {
+		if f, ok := l.leaf[k]; ok {
+			c.write(quote(k) + f + ", ")
+		} else {
+			c.write(quote(k) + "+: {")
+			c.br(nil)
+			l.sub[k].write(c)
+			c.write("}, ")
+		}
+		c.br(nil)
+	}
 }
 
 // access returns the code that reads the field name of the object that code o gives.

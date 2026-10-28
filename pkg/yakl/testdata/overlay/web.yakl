@@ -33,7 +33,7 @@ spec:
       volumes:
         - name: conf
           configMap:
-            name: ${$['web.conf'].metadata.name}
+            name: ${$.web.conf.metadata.name}
 ---
 ^^: service
 apiVersion: v1

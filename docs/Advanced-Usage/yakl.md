@@ -48,6 +48,7 @@ in plain YAML:
 | `&labels` on a node | `local labels = <the node>` for the whole document; the node stays where it is |
 | `^^: web` among the top-level keys of a document | field `web:` of the file, read as `$.web` |
 | `^^:: config`, `^^+: service` | hidden `config::`, and `service+:` that extends `service` |
+| `^^: web.conf` | field `conf` inside field `web`, read as `$.web.conf` |
 | `'&port': 8080` in a mapping | `local port = 8080` for that mapping; not output |
 | a document made only of `'&name':` keys | locals of the whole file |
 | a `.yakl` overlay | `base + overlay`, as written |
@@ -678,12 +679,12 @@ spec:
 ```
 
 - **Expressions read it through `$`, which is the file:** `${$.config.replicas}`, and
-  `${$['web.conf']}` for a name that isn't a Jsonnet variable name. That's the field itself, so
+  `${$['my-svc']}` for a name that isn't a Jsonnet variable name. That's the field itself, so
   an overlay that changes `config` changes what `${$.config.replicas}` reads, and overlays read
   the base the same way. That's the difference from an anchor, whose local is the node as
   written.
 - **A name isn't a local.** `$` already reaches every document, and a name of any spelling,
-  like `web.conf`, works the same way.
+  like `my-svc`, works the same way.
 - **Scope: the whole file,** in any order.
 - **The key says how the field combines,** with the `+` and colons a mapping key has after its
   name: `^^::` is to `^^:` what `config::` is to `config:`.
@@ -696,14 +697,23 @@ spec:
 | `^^+: service` | `service+:`, extends `service` |
 | `^^+:: config` | `config+::` |
 | `^^: my-svc` | `'my-svc':`, read as `$['my-svc']` |
+| `^^: web.conf` | `web+: {conf: ...}`, read as `$.web.conf` |
+| `^^:: web.conf` | `web+: {conf:: ...}` |
 
+- **A dot starts a level.** `^^: web.conf` and `^^: web.svc` are two documents, `conf` and `svc`,
+  both inside the field `web`, as kubecfg files usually group objects. That's true even when
+  `web` holds only one document. The level is always `web+:`, so it adds to what a base already
+  has in `web`, and the colons go on the last part: `^^:: web.conf` hides `conf`, and `web` stays
+  visible, as `{}` if nothing else is in it. A name can have any number of dots, but no empty
+  part (`web..conf`), and a document can't also be a level: `^^: web` and `^^: web.conf` in one
+  file is an error. No name gives a field whose own name has a dot.
 - **Hiding a field doesn't rename it.** Add or remove the colon, and `config` and `$.config` keep
   working.
 - **Overlays keep the base's visibility.** In Jsonnet, `:` and `+:` keep the visibility the
   base gave a field: `{config:: {r: 1}} + {config+: {r: 2}}` outputs `{}`. An overlay writes
   `^^+: config`, without colons, and `^^+::: config` makes a hidden base field visible.
 - **The name is text, never an expression,** so the file's shape is known without evaluating
-  it. Any string is a name: `web.conf` and `my svc` are names too. A number must be quoted,
+  it. Any string is a name: `my-svc` and `my svc` are names too. A number must be quoted,
   `^^: '123'`. The `+` and colons go on the key: `^^: web+` is an error that suggests
   `^^+: web`.
 - **One per document, among its top-level keys.** It goes first by convention, but any place
@@ -953,7 +963,7 @@ An overlay of several documents says, in each one, what it does to one named doc
 | --- | --- | --- |
 | `^^+: service` with some fields | `service+: {...}` | extends `service` |
 | `^^+: config` with some fields | `config+: {...}` | extends hidden `config`, which stays hidden |
-| `^^+: web.conf` with some fields | `'web.conf'+: {...}` | extends a field whose name has a dot |
+| `^^+: web.conf` with some fields | `web+: {conf+: {...}}` | extends `conf` inside `web` |
 | `^^: pdb` with a whole object | `pdb: {...}` | adds a document, or replaces one with that name |
 
 - **The overlay reaches the base through `$`,** as the base does: `$.config.name`. `$` in the
@@ -1067,7 +1077,7 @@ spec:
       volumes:
         - name: conf
           configMap:
-            name: ${$['web.conf'].metadata.name}
+            name: ${$.web.conf.metadata.name}
 ---
 ^^: service
 apiVersion: v1
@@ -1130,7 +1140,7 @@ It means:
               ports: [{ containerPort: port }],
               volumeMounts: [{ name: 'conf', mountPath: '/etc/nginx/conf.d' }],
             }],
-            volumes: [{ name: 'conf', configMap: { name: $['web.conf'].metadata.name } }],
+            volumes: [{ name: 'conf', configMap: { name: $.web.conf.metadata.name } }],
           },
         },
       },
@@ -1148,11 +1158,13 @@ It means:
     },
   },
 
-  'web.conf': {
-    apiVersion: 'v1',
-    kind: 'ConfigMap',
-    metadata: { name: lib.conf($.config.name) },
-    data: { 'default.conf': 'server { listen 8080; }\n' },
+  web+: {
+    conf: {
+      apiVersion: 'v1',
+      kind: 'ConfigMap',
+      metadata: { name: lib.conf($.config.name) },
+      data: { 'default.conf': 'server { listen 8080; }\n' },
+    },
   },
 
   netpol: {
@@ -1202,7 +1214,7 @@ It means:
 {
   config+: { replicas: 5, image: 'nginx:1.29' },
   service+: { spec+: { type: 'LoadBalancer' } },
-  'web.conf'+: { data: { 'default.conf': 'server { listen 8080; gzip on; }\n' } },
+  web+: { conf+: { data: { 'default.conf': 'server { listen 8080; gzip on; }\n' } } },
   pdb: {
     apiVersion: 'policy/v1',
     kind: 'PodDisruptionBudget',
@@ -1222,7 +1234,7 @@ It means:
 | `$.service` | Service web: selects app=web, port `web` 80 to 8080 | `type: LoadBalancer` |
 | `$.netpol` | NetworkPolicy web-ingress | unchanged |
 | `$.account` | none | ServiceAccount web |
-| `$['web.conf']` | ConfigMap web-conf | `default.conf` with `gzip on` |
+| `$.web.conf` | ConfigMap web-conf | `default.conf` with `gzip on` |
 
 - **The document of local keys** holds the import and the port. Neither is output.
 - **`config` is a hidden document.** The overlay only touches the `config` field, yet the
@@ -1233,8 +1245,8 @@ It means:
   selector. An overlay that added a label to `metadata.labels` would leave the selector as it is.
 - **`'&target'` is a local key** in the Service's `spec`. It names the container once and isn't
   output.
-- **`^^: web.conf`** gives a field with a dot in its name. That isn't a variable name, so the
-  Deployment reads it as `$['web.conf']`.
+- **`^^: web.conf`** puts the ConfigMap in the field `conf` of the field `web`, and the
+  Deployment reads it as `$.web.conf`. More objects can go in `web` with names like `web.svc`.
 - **`<<+` starts the container from the library's probe** and adds its own fields.
 - **The overlay is a separate file,** so it reaches the base through `$`, and its PDB takes the
   Deployment's selector.
