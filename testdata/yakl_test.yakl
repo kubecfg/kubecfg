@@ -2,12 +2,13 @@
 '&name': ${std.extVar('name')}
 '&lib': ${import 'test.libsonnet'}
 ---
+^^: configmap
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ${name}
   labels:
-    app: ${$.metadata.name}
+    app: ${$.configmap.metadata.name}
 data:
   kind: ${lib.kind}
   answer: ${std.toString(lib.number)}
@@ -16,6 +17,7 @@ data:
   source: ${importstr 'yakl_lib.yakl'}
   shell: echo ${HOME}
 ---
+^^: namespace
 apiVersion: v1
 kind: Namespace
 metadata:

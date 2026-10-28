@@ -42,8 +42,6 @@ const Ext = ".yakl"
 const maxCopies = 100_000
 
 var (
-	// Same document start marker detection as std.parseYaml.
-	docStart = regexp.MustCompile(`(?m)^---(\s|$)`)
 	// A line, after the first, that starts a document or ends one.
 	docMarker = regexp.MustCompile(`\n(---|\.\.\.)(\s|$)`)
 	yamlLine  = regexp.MustCompile(`line (\d+)`)
@@ -199,10 +197,9 @@ type lexer struct {
 	parent    int  // column that continuation lines of a block or plain scalar must exceed
 	plainOpen bool // the previous line ended inside a plain scalar
 
-	// Documents are counted like yaml.v3 does, to know which ones start with an explicit "---".
+	// Documents are counted like yaml.v3 does.
 	doc                    int
-	explicit               []bool // explicit[i]: document i starts with "---"
-	docStarted, docContent bool   // the current document has an explicit "---", has content
+	docStarted, docContent bool // the current document has an explicit "---", has content
 
 	spans []span
 }
@@ -531,7 +528,6 @@ func (l *lexer) quoted(start int) {
 func (l *lexer) endDoc() {
 	if l.docStarted || l.docContent {
 		l.doc++
-		l.explicit = append(l.explicit, l.docStarted)
 	}
 	l.docStarted, l.docContent = false, false
 }
@@ -813,7 +809,7 @@ func (c *compiler) unit(l *lexer, from, to int) error {
 	if l.nested {
 		err = c.block(docs)
 	} else {
-		err = c.file(docs, l.explicit, docStart.MatchString(text))
+		err = c.file(docs)
 	}
 	if err != nil {
 		return err
@@ -880,6 +876,12 @@ type doc struct {
 	head, foot []string // comments before and after the document, the YAML document's first
 }
 
+// empty reports whether d has nothing in it, like the document after a "---" that ends a file.
+func (d doc) empty() bool {
+	r := d.root
+	return r == nil || r.Kind == yaml.ScalarNode && r.Tag == "!!null" && r.Value == "" && r.Style == 0 && r.Anchor == ""
+}
+
 type docKind int
 
 const (
@@ -887,9 +889,6 @@ const (
 	fileLocalsDoc         // only local keys ('&x': ...), each a file local
 	fieldDoc              // with a name key (^^: web): a field of the file
 )
-
-// unnamed is the field holding the documents without a name, in a file with names.
-const unnamed = "unnamed"
 
 // nameKey matches a document's name key: ^^, and the + and colons of the field it gives.
 var nameKey = regexp.MustCompile(`^\^\^\+?:{0,2}$`)
@@ -986,8 +985,6 @@ func (c *compiler) name(d *doc, k, v *yaml.Node) error {
 		return c.errorf(v, "the key %q takes the document's name, as a string (quote a number: '123')", k.Value)
 	case trimmed != name:
 		return c.errorf(v, "the name %q can't end in + or :; they go on the key, as in %s", name, writeNameKey(name))
-	case name == unnamed:
-		return c.errorf(v, "the name %q is reserved for the documents without a name", unnamed)
 	}
 	d.kind, d.name = fieldDoc, name
 	d.plus = strings.Contains(k.Value, "+")
@@ -1020,11 +1017,10 @@ func (c *compiler) localKey(k, v *yaml.Node) error {
 	return nil
 }
 
-// file writes the documents of a file. Without names, they are the document, or a list of them,
-// like std.parseYaml, after file locals. With names, they are fields of an object.
-func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) error {
+// file writes the documents of a file. One document is that value, after file locals. Several
+// documents, or a file that extends another, make an object with a field per document's name.
+func (c *compiler) file(yamlDocs []*yaml.Node) error {
 	docs := make([]doc, len(yamlDocs))
-	var fileLocals, objectFile bool
 	fields := map[string][]int{}
 	locals := map[string]*yaml.Node{} // file locals
 	addLocal := func(name string, at *yaml.Node) error {
@@ -1036,7 +1032,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 	}
 	var ext *entry // what the file extends
 	for i, d := range yamlDocs {
-		if e := extension(d); e != nil && len(yamlDocs) > 1 {
+		if e := extension(d); e != nil {
 			if i > 0 {
 				return c.errorf(e.k, "<<+ in a document of its own extends the file, so the document must "+
 					"be the first; for a document that is an expression's object, write the expression")
@@ -1044,7 +1040,7 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 			if err := c.anchored(e.v, "", "in a source of <<+"+noPlace, false, false, nil, nil); err != nil {
 				return err
 			}
-			ext, objectFile = e, true
+			ext = e
 			root := d.Content[0]
 			var rest []*yaml.Node // the local keys
 			for j := 0; j < len(root.Content); j += 2 {
@@ -1063,7 +1059,6 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		}
 		switch d := docs[i]; d.kind {
 		case fileLocalsDoc:
-			fileLocals = true
 			if isIdentifier(d.root.Anchor) {
 				return c.errorf(d.root, "&%s in a document of local keys%s, so its anchor can't declare a local", d.root.Anchor, noPlace)
 			}
@@ -1080,7 +1075,6 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 				}
 			}
 		case fieldDoc:
-			objectFile = true
 			fields[d.name] = append(fields[d.name], i)
 		}
 	}
@@ -1105,86 +1099,75 @@ func (c *compiler) file(yamlDocs []*yaml.Node, explicit []bool, docStart bool) e
 		docs[0].head[0] = ""
 	}
 	c.localsAt = c.Len()
-	if objectFile {
-		return c.objectFile(docs, fields, ext)
-	}
-
-	var body []int // the documents that aren't file locals
+	var body []int // the documents without a name, other than file locals and empty ones
 	for i, d := range docs {
-		if d.kind == unnamedDoc {
+		if d.kind == unnamedDoc && !d.empty() {
 			body = append(body, i)
 		}
 	}
-	list := docStart || len(docs) > 1
-	if fileLocals {
-		// A "---" that only separates file locals from the document doesn't make a list.
-		list = len(body) > 1 || len(body) == 1 && body[0] == 0 && explicit[0]
-	}
-	if fileLocals {
-		c.noDollar = true
-		n := 0
-		for _, d := range docs {
-			if d.kind == fileLocalsDoc {
-				n += len(d.root.Content) / 2
-			}
-		}
-		i := 0
-		for _, d := range docs {
-			if d.kind != fileLocalsDoc {
-				continue
-			}
-			c.comment(d.head...)
-			for j := 0; j < len(d.root.Content); j += 2 {
-				k, v := d.root.Content[j], d.root.Content[j+1]
-				c.comment(k.HeadComment, k.LineComment)
-				c.align(k)
-				if i == 0 {
-					c.write("local ")
-				}
-				c.write(k.Value[1:] + " = ")
-				if err := c.value(v); err != nil {
-					return err
-				}
-				if i++; i < n {
-					c.end(nil, ", ", v.LineComment)
-				} else {
-					c.end(nil, "; ", v.LineComment)
-				}
-				c.comment(k.FootComment, v.FootComment)
-			}
-			c.comment(d.foot...)
-		}
-		c.noDollar = false
-	}
 	switch {
-	case list || len(body) == 0 && fileLocals:
-		c.write("[")
-		c.br(nil)
-		for _, i := range body {
-			c.comment(docs[i].head...)
-			if err := c.document(docs[i]); err != nil {
+	case len(fields) == 0 && ext == nil && len(body) <= 1:
+		return c.valueFile(docs, body)
+	case len(body) > 0:
+		return c.errorf(docs[body[0]].at, "a document without a name: in a file of several documents, or one that "+
+			"extends another, each document is a mapping with ^^: name among its top-level keys")
+	}
+	return c.objectFile(docs, fields, ext)
+}
+
+// valueFile writes a file of one document without a name, or none, as that document's value, or
+// null, after file locals.
+func (c *compiler) valueFile(docs []doc, body []int) error {
+	c.noDollar = true
+	n := 0
+	for _, d := range docs {
+		if d.kind == fileLocalsDoc {
+			n += len(d.root.Content) / 2
+		}
+	}
+	i := 0
+	for _, d := range docs {
+		if d.kind != fileLocalsDoc {
+			continue
+		}
+		c.comment(d.head...)
+		for j := 0; j < len(d.root.Content); j += 2 {
+			k, v := d.root.Content[j], d.root.Content[j+1]
+			c.comment(k.HeadComment, k.LineComment)
+			c.align(k)
+			if i == 0 {
+				c.write("local ")
+			}
+			c.write(k.Value[1:] + " = ")
+			if err := c.value(v); err != nil {
 				return err
 			}
-			c.end(nil, ", ")
-			c.comment(docs[i].foot...)
+			if i++; i < n {
+				c.end(nil, ", ", v.LineComment)
+			} else {
+				c.end(nil, "; ", v.LineComment)
+			}
+			c.comment(k.FootComment, v.FootComment)
 		}
-		c.write("]")
-		return nil
-	case len(body) == 0:
+		c.comment(d.foot...)
+	}
+	c.noDollar = false
+	if len(body) == 0 {
 		c.write("null")
 		return nil
 	}
-	c.comment(docs[body[0]].head...)
-	if err := c.document(docs[body[0]]); err != nil {
+	d := docs[body[0]]
+	c.comment(d.head...)
+	if err := c.document(d); err != nil {
 		return err
 	}
 	c.br(nil)
-	c.comment(docs[body[0]].foot...)
+	c.comment(d.foot...)
 	return nil
 }
 
-// objectFile writes a file with names, or one that extends something (ext), as an object: a field
-// per name, object locals for file locals, and the documents without a name in the field unnamed.
+// objectFile writes a file of named documents, which may extend something (ext), as an object: a
+// field per name, and object locals for file locals.
 // Everything stays in file order, so that the code keeps its source lines.
 func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) error {
 	if ext != nil {
@@ -1196,14 +1179,6 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 	}
 	c.write("{")
 	c.br(nil)
-	if ext != nil {
-		// Extended with documents, a single object would hide them as fields of its own.
-		c.write("assert !(std.objectHas(self, 'apiVersion') && std.objectHas(self, 'kind')) : " +
-			"'<<+ at the top of a file extends a file, not a single object; to extend one object, " +
-			"give its document <<+ and the fields', ")
-		c.br(nil)
-	}
-	var unnamedDocs []string
 	pending := map[string]string{} // the local holding the first of two documents giving a name
 	for i, d := range docs {
 		switch d.kind {
@@ -1224,54 +1199,56 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 			continue
 		}
 		c.comment(d.head...)
-		switch d.kind {
-		case unnamedDoc:
-			tmp := fmt.Sprintf("yakl__unnamed%d", i)
-			unnamedDocs = append(unnamedDocs, tmp)
-			c.write("local " + tmp + " = ")
-		case fieldDoc:
-			c.align(d.at)
-			idx := fields[d.name]
-			switch {
-			case len(idx) == 2 && idx[0] == i:
-				pending[d.name] = fmt.Sprintf("yakl__doc%d", i)
-				c.write("local " + pending[d.name] + " = ")
-			case len(idx) == 2:
-				// The field takes the visibility of the plain document, and extends it with the other.
-				first := docs[idx[0]]
-				colons := first.colons
-				if first.plus {
-					colons = d.colons
-				}
-				c.write(quote(d.name) + strings.Repeat(":", colons) + " ")
-				if d.plus {
-					c.write(pending[d.name] + " + ")
-				}
-				c.write("(")
-				if err := c.document(d); err != nil {
-					return err
-				}
-				c.write(")")
-				if !d.plus {
-					c.write(" + " + pending[d.name])
-				}
-				c.end(nil, ", ")
-				c.comment(d.foot...)
-				continue
-			default:
-				c.write(quote(d.name) + map[bool]string{true: "+"}[d.plus] + strings.Repeat(":", d.colons) + " ")
+		if d.empty() {
+			c.comment(d.foot...)
+			continue
+		}
+		c.align(d.at)
+		idx := fields[d.name]
+		switch {
+		case len(idx) == 2 && idx[0] == i:
+			pending[d.name] = fmt.Sprintf("yakl__doc%d", i)
+			c.write("local " + pending[d.name] + " = ")
+		case len(idx) == 2:
+			// The field takes the visibility of the plain document, and extends it with the other.
+			first := docs[idx[0]]
+			colons := first.colons
+			if first.plus {
+				colons = d.colons
 			}
+			c.write(quote(d.name) + strings.Repeat(":", colons) + " ")
+			if d.plus {
+				c.write(pending[d.name] + " + ")
+			}
+			c.write("(")
+			if err := c.document(d); err != nil {
+				return err
+			}
+			c.write(")")
+			if !d.plus {
+				c.write(" + " + pending[d.name])
+			}
+			c.end(nil, ", ")
+			c.comment(d.foot...)
+			continue
+		default:
+			if d.plus {
+				// Extending a name that a base doesn't have would add a fragment of a document. A
+				// file alone, with nothing in super, gets the document.
+				c.write("assert " + kubecfgVar + ".yaklExtends(self, function(f) f in super, " + quote(d.name))
+				if d.colons > 1 {
+					c.write(", " + quote(strings.Repeat(":", d.colons)))
+				}
+				c.write("), ")
+				c.br(nil)
+			}
+			c.write(quote(d.name) + map[bool]string{true: "+"}[d.plus] + strings.Repeat(":", d.colons) + " ")
 		}
 		if err := c.document(d); err != nil {
 			return err
 		}
 		c.end(nil, ", ")
 		c.comment(d.foot...)
-	}
-	if len(unnamedDocs) > 0 {
-		// Appended, so that the documents without a name in an overlay add to the base's.
-		c.write(unnamed + "+: [" + strings.Join(unnamedDocs, ", ") + "], ")
-		c.br(nil)
 	}
 	c.write("}")
 	if ext != nil {
@@ -1619,7 +1596,7 @@ func (c *compiler) checkScope(e expr) error {
 	var err error
 	words(code, func(_ int, w string) {
 		if err == nil && w == "$" {
-			err = fmt.Errorf("line %d: $ in a file local, in a file without names: there is no file object, "+
+			err = fmt.Errorf("line %d: $ in a file local, in a file of one document: there is no file object, "+
 				"so Jsonnet would read $ as the local's own outermost object", e.line)
 		}
 	})
@@ -2161,8 +2138,7 @@ func (c *compiler) extends(e entry) error {
 				return c.errorf(s, "<<+ extends an expression, a mapping, or a list of them")
 			}
 			// + would silently join strings and arrays, or add numbers.
-			c.write("(function(s) if s == null then {} else if std.isObject(s) then s " +
-				"else error '<<+ needs an object or null, not ' + std.type(s))(")
+			c.write(kubecfgVar + ".yaklSource(")
 			if err := c.value(s); err != nil {
 				return err
 			}

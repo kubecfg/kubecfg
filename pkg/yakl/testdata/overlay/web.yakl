@@ -57,6 +57,7 @@ data:
   default.conf: |
     server { listen 8080; }
 ---
+^^: netpol
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

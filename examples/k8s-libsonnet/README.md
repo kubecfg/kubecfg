@@ -67,9 +67,8 @@ them sets it.
 - **A `containers:` list instead of `containers_+:` works,** but overlays that change a
   container by name, or all containers, skip it without an error.
 - **A misspelled name in an overlay adds an item:** `containers_+: apii+:` adds a container
-  without an image. A misspelled document name fails, with an unclear error: `^^+: apii` in
-  `prod.yakl` gives "Looking for kubernetes object at
-  "$.apii.spec.template.spec.containers_.api.resources.limits.memory", but instead found string".
+  without an image. A misspelled document name fails: `^^+: apii` in `prod.yakl` gives
+  "^^+: apii extends a document that the base doesn't have".
 - **Lists without a name to key by,** like Redis's `volumeClaimTemplates`, take a loop to
   change, `- ${for t in super.volumeClaimTemplates}:` with `<<+: ${t}` in its body: see
   `prod.yakl`.

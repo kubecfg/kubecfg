@@ -50,7 +50,6 @@ in plain YAML:
 | `^^:: config`, `^^+: service` | hidden `config::`, and `service+:` that extends `service` |
 | `'&port': 8080` in a mapping | `local port = 8080` for that mapping; not output |
 | a document made only of `'&name':` keys | locals of the whole file |
-| documents without a name, next to named ones | `unnamed+: [...]` |
 | a `.yakl` overlay | `base + overlay`, as written |
 | a first document of only `<<+: S` (and local keys) | the file is `S + {its documents}` |
 
@@ -61,8 +60,9 @@ Four ideas carry the design:
 - **The key `^^` names a document.** `^^: web` among the top-level keys of a document makes
   the document the field `web` of the file, which expressions read as `$.web`. Like any key, it
   takes `+` and colons: `^^+: service` extends `service`, and `^^:: config` hides `config`.
-- **A stream is a list until a document gets a name.** From then on the file is one object, as
-  a Jsonnet file usually is.
+- **A file is one value, or named documents.** A file of one document is that document, any YAML
+  value. A file of several documents is an object, and each document is a mapping with a name,
+  so files can extend and override each other by name.
 - **Meaning lives in data and anchors,** never in quoting, key order or tags. Tools like
   kubectl, kustomize and prettier rewrite quoting, reorder keys and drop tags, so none of those
   can carry meaning. No editor needs configuring.
@@ -164,8 +164,7 @@ it prints:
 
 It's the same code kubecfg evaluates, laid out differently: kubecfg keeps each node on its
 source line instead. Internal names, like `yakl__root` for a document whose nodes have
-anchors and `yakl__unnamed3` for a document without a name, and the check that `<<+` extends
-an object, show up as they are. A comment stays next to the field or item it's written on; one
+anchors, and the calls to the `kubecfg` library that check `<<+` and `^^+:`, show up as they are. A comment stays next to the field or item it's written on; one
 above a document's name key goes above the document's field. Copies made by aliases have no
 comments. Like other commands, `eval` reads URLs and `/dev/stdin` too. If the code doesn't
 parse, because of an expression's syntax, it prints the code unformatted, and the error with its
@@ -583,73 +582,44 @@ The merge copies `resources` into the worker, and `resources+` extends that copy
 gets `limits: {memory: 512Mi, cpu: "2"}`, and so does the file kubectl or kustomize writes back.
 The anchor `&app` is also a local, so `${app.image}` works anywhere in the document.
 
-## The file: a list until something has a name
+## The file: one value, or named documents
 
 A YAML file can hold several documents separated by `---`, and Kubernetes users put a
-Deployment, a Service and a ConfigMap in one file all the time. A Jsonnet file is usually one
-object with a field per resource, so resources can use each other (`$.deployment.spec`) and
-overlays can change them (`file + {deployment+: {...}}`). YAKL lets a stream become that
-object one document at a time.
+Deployment, a Service and a ConfigMap in one file all the time. A Jsonnet file for kubecfg is
+usually one object with a field per resource, so resources can use each other
+(`$.deployment.spec`) and overlays can change them (`file + {deployment+: {...}}`). YAKL keeps
+the second shape for streams:
 
-1. **No names: a document, or a list.**
-   [Documents of local keys](#file-locals-a-document-of-local-keys) are set aside first.
-   What's left follows `std.parseYaml`'s rules: one document gives that document; a `---` or
-   several documents give a list; an empty file gives `null`. A `---` that only separates
-   documents of local keys from the rest doesn't count, so a file of imports plus one document
-   still gives that document, and adding imports never changes the shape. A file with only
-   documents of local keys gives an empty list.
-2. **At least one name, or a [parent](#a-file-that-extends-another): an object.** Each named
-   document is a field. Documents without a name
-   go, in file order, into a field called `unnamed`. It compiles as `unnamed+:`, so an
-   overlay's unnamed documents are appended rather than swapped in. When there are none, the
-   field is left out. `unnamed` is reserved as a name.
-3. **`$` follows Jsonnet: it's the outermost object.** In an object file, `$` is the file, in
-   every document, named or not, so `$.config` reads the document named `config`. In a file
-   without names, each document is its own `$`.
-4. **Order doesn't matter.** Names and file locals belong to one object, so a document can use
+1. **One document is that value.** It can be any YAML value: a mapping, a list, a string.
+   [Documents of local keys](#file-locals-a-document-of-local-keys) don't count, so a file of
+   imports plus one document is that document. An empty file, or one with only documents of
+   local keys, is `null`.
+2. **Several documents make an object, a field per document.** Each document is a mapping with
+   a [name](#names), `^^: web`, and becomes the field `web`. A document without a name, or one
+   that isn't a mapping, is an error. Names are what let files extend and override each other:
+   an overlay changes a document by its name, never by its position.
+3. **A file that [extends another](#a-file-that-extends-another) is an object too,** with named
+   documents, even if it has only one.
+4. **`$` follows Jsonnet: it's the outermost object.** In a file of named documents, `$` is the
+   file, in every document, so `$.config` reads the document named `config`. In a file of one
+   document, `$` is that document.
+5. **Order doesn't matter.** Names and file locals belong to one object, so a document can use
    one defined further down.
 
 yakl takes the `^^` key out of the document. Other YAML tools keep it, so to them a named
-document is an object with one more key. kubecfg finds the same Kubernetes objects in an object
-as in a list.
+document is an object with one more key.
 
 ### Step by step from plain YAML
 
-Plain Kubernetes YAML compiles to a list:
+One plain Kubernetes object is a YAKL file as it is:
 
 ```yaml
 apiVersion: v1
 kind: ConfigMap
 metadata: {name: a}
----
-apiVersion: v1
-kind: ConfigMap
-metadata: {name: b}
 ```
 
-An import and expressions keep it a list:
-
-```yaml
-'&names': ${import 'names.libsonnet'}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ${names.prefix + 'a'}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ${names.prefix + 'b'}
-```
-
-```jsonnet
-local names = import 'names.libsonnet';
-[{..., metadata: {name: names.prefix + 'a'}},
- {..., metadata: {name: names.prefix + 'b'}}]
-```
-
-Naming one document makes the file an object, and the other document goes to `unnamed`:
+Several objects need a name each:
 
 ```yaml
 '&names': ${import 'names.libsonnet'}
@@ -660,6 +630,7 @@ kind: ConfigMap
 metadata:
   name: ${names.prefix + 'a'}
 ---
+^^: b
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -670,23 +641,15 @@ metadata:
 {
   local names = import 'names.libsonnet',
   a: {..., metadata: {name: names.prefix + 'a'}},
-  unnamed+: [{..., metadata: {name: $.a.metadata.name + '-copy'}}],
+  b: {..., metadata: {name: $.a.metadata.name + '-copy'}},
 }
 ```
 
 Naming every document, moving settings into a hidden field and adding an overlay is the
 [worked example](#worked-example).
 
-Naming the first document is the only step that changes the file's shape, and it fails loudly
-where it matters: `kubecfg` finds the same objects; importers of the file get an object instead
-of a list, so code that indexed it (`[0]`) fails; and `$` now means the file, so an expression
-that used `$` for its own document fails with "field does not exist".
-
-A document that should have had a name but lacks its `^^` key lands in `unnamed` and is still
-deployed, which is what a YAML user expects. Anything that uses the missing name fails:
-`$.service` gives "field does not exist", and an overlay
-aimed at it leaves a fragment without `kind`, which kubecfg rejects ("Looking for kubernetes
-object at … but instead found …").
+A misspelled name fails loudly: `$.servce` gives "field does not exist", and an overlay's
+`^^+: servce` gives "^^+: servce extends a document that the base doesn't have".
 
 ## Names
 
@@ -899,21 +862,21 @@ metadata:
 }
 ```
 
-In a file without names, the same locals become `local k = ..., names = ...;` in front of the
-document or list.
+In a file of one document, the same locals become `local k = ..., names = ...;` in front of the
+document.
 
 - **What counts:** a document whose root is a non-empty mapping in which every key is a local
   key. A `^^` key makes it a named document instead. An anchor on it is an error, since the
   document isn't output.
-- **Not output, and not a list element.** Adding one never changes the file's shape.
+- **Not output.** Adding one never changes the file's shape.
 - **Not tied to position.** It can go anywhere, and there can be several. The convention is to
   put it first, like Jsonnet imports, but nothing depends on it.
 - **Seen by every document, in any order.** File locals can use each other in any order too.
 - **One name space per file.** File locals must all differ.
 - **Private.** Importers and overlays can't see file locals. A hidden field (`^^:: config`) is the
   overlay-friendly alternative: Jsonnet's `local x = ...` versus `x:: ...`.
-- **`$` inside a file local** is the file in an object file. A file without names has no file
-  object: there Jsonnet would read `$` as the local's own outermost object, so yakl reports it
+- **`$` inside a file local** is the file in a file of named documents. A file of one document
+  has no file object: there Jsonnet would read `$` as the local's own outermost object, so yakl reports it
   instead. `self` outside an object gives Jsonnet's own "Can't use self outside of an object".
 
 ### `kubecfg` without an import
@@ -984,8 +947,7 @@ spec+:
         canary: "true"
 ```
 
-An overlay for a stream is a stream too. Each document says what it does to one named
-document:
+An overlay of several documents says, in each one, what it does to one named document:
 
 | Overlay document | Jsonnet | Effect |
 | --- | --- | --- |
@@ -993,24 +955,23 @@ document:
 | `^^+: config` with some fields | `config+: {...}` | extends hidden `config`, which stays hidden |
 | `^^+: web.conf` with some fields | `'web.conf'+: {...}` | extends a field whose name has a dot |
 | `^^: pdb` with a whole object | `pdb: {...}` | adds a document, or replaces one with that name |
-| a document without a name, in an overlay that has names | `unnamed+: [...]` | appended after the base's unnamed documents |
 
 - **The overlay reaches the base through `$`,** as the base does: `$.config.name`. `$` in the
   overlay is the combined file, so it sees the base's fields and the overlay's changes. The
   base's file locals aren't in scope there.
 - **The base sees the overlay's changes too,** through `$`: a `${$.config.replicas}` in the base
   reads the overlaid value.
-- **`unnamed+:` keeps both lists.** With a plain `unnamed:`, an overlay's ServiceAccount would
-  replace the base's NetworkPolicy, which would silently disappear.
-- **An overlay without names follows the same file rules.** One document is merged into the
-  base's root, which is the single-document overlay above. Several documents make a list, and
-  an object plus a list is an error. To add documents to a named base, the overlay needs at
-  least one name.
+- **`^^+:` needs a document to extend.** `^^+: servce`, misspelled, would add a document with
+  only the overlay's fields, so evaluation stops with "^^+: servce extends a document that the
+  base doesn't have; to add one, write ^^: servce" and the line. A file alone has nothing to
+  extend, so there `^^+: web` gives the document `web`.
+- **An overlay follows the same file rules.** One document without a name is merged into the
+  base's root, which is the single-document overlay above. Several documents each need a name.
 - **A file can name its base itself,** so it needs no flag: see the next section.
 - **A whole object as an unnamed single-document overlay is a mistake:** merged into a named
   base's root, its `apiVersion` and `kind` would turn the whole file into that one object.
   kubecfg reports an overlay with `apiVersion` and `kind` but no name when the base has no
-  `kind` of its own. A flag that names the field, `--overlay-code-file sa=whole.yakl`, adds it
+  `kind` of its own; `^^: sa` adds it as the document `sa`. A flag that names the field, `--overlay-code-file sa=whole.yakl`, adds it
   as the document `sa`.
 
 ### A file that extends another
@@ -1024,6 +985,7 @@ Its first document holds only `<<+` and, if needed, local keys:
 ^^+: config
 replicas: 5
 ---
+^^: account
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1033,7 +995,7 @@ metadata:
 ```jsonnet
 (import 'yakl:web.yakl') + {
   config+: { replicas: 5 },
-  unnamed+: [{ apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: $.config.name } }],
+  account: { apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: $.config.name } },
 }
 ```
 
@@ -1044,20 +1006,18 @@ that first document gives the same output as `--overlay-code-file`.
 - **`<<+` means what it means in a mapping,** with the file as the mapping and its documents as
   the fields: the value is an expression, a mapping, or a list of them, and `null` extends
   nothing.
-- **The file is an object,** even without names. Documents without a name are appended to
-  `unnamed`, and a single one is not merged into the root as it is in an overlay without names.
+- **The file is an object,** and each of its documents needs a name, even if there is only one.
   To extend one object, give its document `<<+` and the fields, as in
   [`<<+`](#-extend-an-object).
 - **It must be the first document,** so a reader finds the base at the top.
 - **The base is evaluated outside the file,** as `S` in `S + {...}` is, so it can't use the
   file's locals. The file's documents reach the base through `$`, and the base sees their
   changes through its names and `$`, as with an overlay.
-- **A single document of only `<<+`** is that document, as before: a file is extended only when
-  more documents follow.
+- **A file of only that first document** is what it extends.
 
 ## Worked example
 
-A base file and a prod overlay, both yakl streams. They are also checked by the tests, in
+A base file and a prod overlay, both files of named documents. They are also checked by the tests, in
 `pkg/yakl/testdata/overlay`.
 
 `lib.libsonnet`:
@@ -1131,6 +1091,7 @@ data:
   default.conf: |
     server { listen 8080; }
 ---
+^^: netpol
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1194,12 +1155,12 @@ It means:
     data: { 'default.conf': 'server { listen 8080; }\n' },
   },
 
-  unnamed+: [{
+  netpol: {
     apiVersion: 'networking.k8s.io/v1',
     kind: 'NetworkPolicy',
     metadata: { name: 'web-ingress' },
     spec: { podSelector: { matchLabels: $.deployment.spec.selector.matchLabels }, ingress: [{}] },
-  }],
+  },
 }
 ```
 
@@ -1228,6 +1189,7 @@ spec:
   minAvailable: 2
   selector: ${$.deployment.spec.selector}
 ---
+^^: account
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1247,7 +1209,7 @@ It means:
     metadata: { name: $.config.name },
     spec: { minAvailable: 2, selector: $.deployment.spec.selector },
   },
-  unnamed+: [{ apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: $.config.name } }],
+  account: { apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: $.config.name } },
 }
 ```
 
@@ -1258,8 +1220,8 @@ It means:
 | `$.deployment` | Deployment web: 2 replicas, nginx:1.27, readiness probe and container port 8080, mounts `web-conf` | 5 replicas, nginx:1.29 |
 | `$.pdb` | none | PodDisruptionBudget web, same selector as the Deployment |
 | `$.service` | Service web: selects app=web, port `web` 80 to 8080 | `type: LoadBalancer` |
-| `$.unnamed[0]` | NetworkPolicy web-ingress | unchanged |
-| `$.unnamed[1]` | none | ServiceAccount web |
+| `$.netpol` | NetworkPolicy web-ingress | unchanged |
+| `$.account` | none | ServiceAccount web |
 | `$['web.conf']` | ConfigMap web-conf | `default.conf` with `gzip on` |
 
 - **The document of local keys** holds the import and the port. Neither is output.
@@ -1309,8 +1271,8 @@ when a computed key collides at runtime.
 
 Expressions are evaluated in the generated Jsonnet, so:
 
-- `$` is the outermost object: the file in a file with names, and otherwise the root mapping
-  of the current YAML document. `self` is the innermost mapping that contains the expression.
+- `$` is the outermost object: the file in a file of named documents, and otherwise the root
+  mapping of the file's one document. `self` is the innermost mapping that contains the expression.
   Both are late-bound as usual in Jsonnet. Inside a YAML block nested in an expression,
   `self` is the block's innermost mapping, while `$` stays the same.
 - File locals, the anchors of the current document, the
@@ -1324,8 +1286,9 @@ Expressions are evaluated in the generated Jsonnet, so:
 
 ### Plain YAML is (almost) unchanged
 
-A `.yakl` file without expressions means what `std.parseYaml` and kubectl make of it, so you
-can rename most `.yaml` manifests to `.yakl` and get the same objects. The exceptions:
+A `.yakl` file of one document without expressions means what `std.parseYaml` and kubectl make
+of it, so you can rename a `.yaml` manifest of one object to `.yakl` and get the same object. A
+manifest of several documents needs a name on each. The other exceptions:
 
 - **YAML 1.1 booleans are errors:** unquoted `y`, `n`, `yes`, `no`, `on`, `off`, in any case,
   as keys or values. kubectl reads them as booleans and kustomize as strings, so the file
@@ -1385,10 +1348,10 @@ line:
 | a `^^` key that isn't among the top-level keys of a document, or a second one in a document | only documents have names, one each |
 | a `^^` key whose value is empty, a number, an expression, or a name ending in `+` or `:` | the name is text, and the `+` and colons go on the key |
 | a tag like `!web` | names are keys; yakl says which one to write: `^^: web` |
-| `$` in a file local of a file without names | there is no file object; Jsonnet would read it as the local's own object |
-| `^^: unnamed` | `unnamed` is reserved for unnamed documents |
+| a document without a name, or that isn't a mapping, in a file of several documents or one that extends another | files extend and override each other's documents by name |
+| `^^+: web` in an overlay, or in a file that extends another, when the base has no `web` | it would add a fragment of a document, most likely a misspelled name; `^^: web` adds one |
+| `$` in a file local of a file of one document | there is no file object; Jsonnet would read it as the local's own object |
 | a document of only `<<+` and local keys that isn't the first, in a file of several documents | it says what the file extends, so it comes first |
-| a file that extends a single object, one with `apiVersion` and `kind` | the file's documents would be hidden inside that object; give the object's own document `<<+` instead |
 | `&labels: value`, a local key without quotes | YAML reads an empty key carrying the anchor `labels`; yakl says to quote it |
 | `&web.conf:` without quotes | a YAML syntax error in kubectl, go-yaml v3, PyYAML and yamllint |
 | `&a &b` on one node | YAML allows one anchor per node |
@@ -1419,8 +1382,7 @@ Allowed, with a note:
 
 A visible document that isn't a Kubernetes object makes kubecfg fail. `^^: settings` with
 `replicas: 3` puts a bare `3` where kubecfg looks for objects, and it stops with "Looking for
-kubernetes object … but instead found float64". The same happens to a plain value without a
-name, which lands in `unnamed`. Settings belong in a hidden document (`^^:: settings`), which
+kubernetes object … but instead found float64". Settings belong in a hidden document (`^^:: settings`), which
 overlays can change, or in a document of local keys, which they can't.
 
 ## Corner cases
@@ -1435,7 +1397,7 @@ overlays can change, or in a document of local keys, which they can't.
   `/* */`.
 - **Source lines.** Jsonnet needs some code in a fixed place, so a few things are compiled out
   of source order, and Jsonnet errors inside them point at another line: file locals placed
-  after a document in a file without names, `<<+` that isn't near the top of its mapping,
+  after the document in a file of one document, `<<+` that isn't near the top of its mapping,
   and the clause of a `${for}`, which Jsonnet writes after its body.
   Anchored nodes stay in place; the code that reads them for their locals comes after the end
   of the document.
@@ -1549,6 +1511,7 @@ old files fail loudly where their meaning changed.
 | keys ending in `+` or `:`, such as `a::` or `c++:` | field modifiers | `${'a:'}` for a literal key |
 | a key starting with `&` | a local key | `${'&x'}` for a literal key |
 | a `.jamlet` overlay, deep-merged by `toOverlay` | `base + overlay`, as written | add `+` to every key that should merge: `spec+:`, `_config+::` |
+| a file of several documents without names: a list | an error | a name on each document, `^^: web` |
 
 Three of these change meaning without an error:
 
@@ -1562,8 +1525,8 @@ Three of these change meaning without an error:
   document. The two differ when an overlay changes that mapping, or when an expression inside
   an alias copy used the name.
 
-`$` keeps its meaning in every file without names: the document root in a single-document
-file, and in each document of a list. It becomes the file only in files with names.
+`$` keeps its meaning in a file of one document: the document's root. It is the file in a file
+of named documents.
 
 ## Comparison with kro
 
@@ -1612,8 +1575,6 @@ a file with `---` gives a list.
 
 ## Open questions
 
-- **A clearer kubecfg error when an overlay names a missing document,** such as "overlay field
-  `service` matches no document". Today it shows as a fragment without `kind`.
 - **Files that go through kustomize.** Should the docs recommend local keys instead of anchors
   there, since kustomize drops anchors? Documents of local keys and hidden settings documents
   can't go through kustomize at all.

@@ -84,7 +84,6 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 		"# just a comment\n",
 		"a: 1\n",
 		"---\na: 1\n",
-		"a: 1\n---\nb: 2\n",
 		"a: 1\n---\n",
 		"- a\n- b\n",
 		"plain\n",
@@ -129,13 +128,20 @@ func TestPlainYAMLMatchesParseYaml(t *testing.T) {
 		// Merge keys, as in YAML.
 		"a: &a {x: 1, w: 1}\nb: &b {w: 2, z: 2}\nc:\n  <<: [*a, *b]\n  z: 3\nd:\n  <<: *a\ne: {<<: {k: v}, l: w}\n",
 	}
+	// A file is one document. std.parseYaml gives a list for a stream that has a "---", which may
+	// end with an empty document.
+	docStart := regexp.MustCompile(`(?m)^---(\s|$)`)
 	for _, src := range cases {
 		got, err := eval(t, src)
 		if err != nil {
 			t.Errorf("%q: %v", src, err)
 			continue
 		}
-		want, err := jsonnet.MakeVM().EvaluateAnonymousSnippet("want", "std.parseYaml("+quote(src)+")")
+		want := "std.parseYaml(" + quote(src) + ")"
+		if docStart.MatchString(src) {
+			want += "[0]"
+		}
+		want, err = jsonnet.MakeVM().EvaluateAnonymousSnippet("want", want)
 		if err != nil {
 			t.Fatalf("%q: %v", src, err)
 		}
@@ -169,7 +175,7 @@ func TestExpressions(t *testing.T) {
 		{"tags on quoted expressions", "!!map\n'${\"a\"}': [!!str , '${1}', !!str 0777]\n", `{"a":["",1,"0777"]}`},
 		{"anchored quoted expression", "a: &x '${1 + 1}'\nb: *x\n", `{"a":2,"b":2}`},
 		{"block expressions", "a: |-\n  ${[\n    x * 2  // a comment\n    for x in [1, 2]\n  ]}\nb: |\n  ${|||\n    text\n  |||}\nc: >+\n\n  ${1 +\n  1}  \n\nd:\n- &e |-\n  ${\"e\"}\n- *e\n? |\n  ${'k'}\n: v\n", `{"a":[2,4],"b":"text\n","c":2,"d":["e","e"],"k":"v"}`},
-		{"tags don't leak into the next document", "--- !!str |\n  $${x}\n--- |\n  ${1 + 1}\n", `["${x}\n",2]`},
+		{"tags don't leak into the next document", "---\n^^: a\nv: !!str |\n  $${x}\n---\n^^: b\nv: |\n  ${1 + 1}\n", `{"a":{"v":"${x}\n"},"b":{"v":2}}`},
 		{"block expression after explicit indentation", "a: |2\n    ${1 + 1}\nb: |2\n  \t${2}\n", `{"a":2,"b":2}`},
 		{"yaml block in a block expression", "env: |-\n  ${[\n    \\{\n      name: ${k}\n    }\n    for k in ['a', 'b']\n  ]}\n", `{"env":[{"name":"a"},{"name":"b"}]}`},
 		{"comments are ignored", "# ${broken\na: ${1} # ${broken\n", `{"a":1}`},
@@ -182,7 +188,6 @@ func TestExpressions(t *testing.T) {
 		{"computed keys", "${'a' + 'b'}: 1\n!!str '$${k}': 2\n", `{"${k}":2,"ab":1}`},
 		{"null key omits field", "${if false then 'x'}: 1\nz: 2\n", `{"z":2}`},
 		{"self and $", "name: foo\nspec:\n  i: 1\n  j: ${self.i + 1}\n  label: ${$.name}\n", `{"name":"foo","spec":{"i":1,"j":2,"label":"foo"}}`},
-		{"$ is per document in a list", "a: 1\nb: ${$.a}\n---\na: 2\nb: ${$.a}\n", `[{"a":1,"b":1},{"a":2,"b":2}]`},
 		{"whole document", "${ {kind: 'List', items: []} }\n", `{"items":[],"kind":"List"}`},
 		{"whole document with locals", "${ local x = 1; {a: x} }\n", `{"a":1}`},
 		{"anchored expression", "a: &x ${1}\nb: *x\n", `{"a":1,"b":1}`},
@@ -193,13 +198,14 @@ func TestExpressions(t *testing.T) {
 		{"file locals use each other in any order", "'&b': ${a + 1}\n'&a': 1\n'&c': 3\n---\nv: ${[a, b, c]}\n", `{"v":[1,2,3]}`},
 		{"local function", "'&f': ${function(x) x * 2}\n---\nv: ${f(3)}\n", `{"v":6}`},
 		{"local holding a mapping", "'&p':\n  num: 1\n---\na: ${p.num}\n", `{"a":1}`},
-		{"locals cover a list", "'&p': {num: 1}\n---\na: ${p.num}\n---\nb: ${p.num + 1}\n", `[{"a":1},{"b":2}]`},
-		{"locals anywhere", "a: ${q}\n---\n'&q': 5\n---\nb: ${q}\n", `[{"a":5},{"b":5}]`},
-		{"an explicit first document is a list", "---\na: 1\n---\n'&x': 1\n", `[{"a":1}]`},
-		{"locals only", "'&x': 1\n", `[]`},
+		{"locals cover every document", "'&p': {num: 1}\n---\n^^: a\nv: ${p.num}\n---\n^^: b\nv: ${p.num + 1}\n", `{"a":{"v":1},"b":{"v":2}}`},
+		{"locals anywhere", "^^: a\nv: ${q}\n---\n'&q': 5\n---\n^^: b\nv: ${q}\n", `{"a":{"v":5},"b":{"v":5}}`},
+		{"an explicit first document is the document", "---\na: 1\n---\n'&x': 1\n", `{"a":1}`},
+		{"a document after a --- that ends the file", "a: 1\n---\n", `{"a":1}`},
+		{"locals only", "'&x': 1\n", `null`},
 		{"an empty mapping is a document", "{}\n---\n'&x': 1\n", `{}`},
 		{"directive", "%YAML 1.1\n---\n'&x': 1\n---\nb: ${x}\n", `{"b":1}`},
-		{"document end marker", "a: 1\n...\n---\n'&x': 1\n---\nb: ${x}\n", `[{"a":1},{"b":1}]`},
+		{"document end marker", "^^: a\nv: 1\n...\n---\n'&x': 1\n---\n^^: b\nv: ${x}\n", `{"a":{"v":1},"b":{"v":1}}`},
 		{"$ is the document in a single-document file", "'&x': 1\n---\na: ${x}\nb: ${$.a}\n", `{"a":1,"b":1}`},
 
 		// Local keys.
@@ -325,8 +331,8 @@ env: ${[
 		{"literal key ending in a colon", "${'a:'}: 1\n${'b+'}: 2\n${'&'}: 3\n", `{"&":3,"a:":1,"b+":2}`},
 
 		// Names.
-		{"a name makes an object", "'&names': {prefix: p-}\n---\n^^: a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\nmetadata:\n  name: ${$.a.metadata.name + '-copy'}\n",
-			`{"a":{"metadata":{"name":"p-a"}},"unnamed":[{"metadata":{"name":"p-a-copy"}}]}`},
+		{"names make an object", "'&names': {prefix: p-}\n---\n^^: a\nmetadata:\n  name: ${names.prefix + 'a'}\n---\n^^: b\nmetadata:\n  name: ${$.a.metadata.name + '-copy'}\n",
+			`{"a":{"metadata":{"name":"p-a"}},"b":{"metadata":{"name":"p-a-copy"}}}`},
 		{"hidden name", "---\n^^:: config\nnum: 1\n---\n^^: a\nv: ${$.config.num}\n", `{"a":{"v":1}}`},
 		{"forced visible name", "---\n^^::: a\nnum: 1\n", `{"a":{"num":1}}`},
 		{"a name with a dot", "---\n^^: web.conf\nkind: ConfigMap\n---\n^^: b\nv: ${$['web.conf'].kind}\n", `{"b":{"v":"ConfigMap"},"web.conf":{"kind":"ConfigMap"}}`},
@@ -340,7 +346,6 @@ env: ${[
 		{"+ document first, hidden plain one", "---\n^^+: web\nb+: {d: 2}\n---\n^^:: web\nb: {c: 1}\n---\n^^: v\nx: ${$.web.b}\n", `{"v":{"x":{"c":1,"d":2}}}`},
 		{"+ document alone", "---\n^^+: web\nb: 1\n", `{"web":{"b":1}}`},
 		{"hidden + document", "---\n^^+:: c\nx: 1\n---\n^^: v\nw: ${$.c.x}\n", `{"v":{"w":1}}`},
-		{"unnamed documents", "---\n^^: a\nx: 1\n---\nw: ${$.a.x}\n---\nz: 3\n", `{"a":{"x":1},"unnamed":[{"w":1},{"z":3}]}`},
 		{"file locals see the file", "'&num': ${$.a.x}\n---\n^^: a\nx: 1\n---\n^^: b\nv: ${num}\n", `{"a":{"x":1},"b":{"v":1}}`},
 		{"a document with only a name", "---\n^^: a\n", `{"a":{}}`},
 		{"the name key anywhere among the keys", "a: 1\n^^: d\nb: 2\n", `{"d":{"a":1,"b":2}}`},
@@ -351,14 +356,12 @@ env: ${[
 		{"a file local named like a document", "'&x': 1\n---\n^^: x\nv: ${[x, $.x.w]}\nw: 2\n", `{"x":{"v":[1,2],"w":2}}`},
 
 		// A first document of <<+ and local keys says what the file extends.
-		{"a file extends an object", "<<+: ${ {a: 1, unnamed: ['x']} }\n---\n^^: b\nv: 2\n---\nc: 3\n", `{"a":1,"b":{"v":2},"unnamed":["x",{"c":3}]}`},
-		{"one document without a name is appended", "<<+: ${ {unnamed: ['x']} }\n---\nc: 3\n", `{"unnamed":["x",{"c":3}]}`},
-		{"the file's documents see the parent through $", "<<+: ${ {x:: 3} }\n---\nv: ${$.x}\n", `{"unnamed":[{"v":3}]}`},
-		{"a hidden unnamed stays hidden", "<<+: ${ {unnamed:: []} }\n---\nc: 3\n", `{}`},
+		{"a file extends an object", "<<+: ${ {a: 1} }\n---\n^^: b\nv: 2\n", `{"a":1,"b":{"v":2}}`},
+		{"the file's documents see the parent through $", "<<+: ${ {x:: 3} }\n---\n^^: d\nv: ${$.x}\n", `{"d":{"v":3}}`},
 		{"local keys next to <<+ are file locals", "'&n': 2\n<<+: ${ {a: 1} }\n---\n^^: b\nv: ${n}\n", `{"a":1,"b":{"v":2}}`},
-		{"a file extends several sources", "<<+: [${ {a: 1} }, {a: 2, b: 2}]\n---\nc: 3\n", `{"a":1,"b":2,"unnamed":[{"c":3}]}`},
-		{"a file extends null", "<<+: ${null}\n---\nc: 3\n", `{"unnamed":[{"c":3}]}`},
-		{"<<+ alone is the document", "<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n", `{"apiVersion":"v1","kind":"ConfigMap"}`},
+		{"a file extends several sources", "<<+: [${ {a: 1} }, {a: 2, b: 2}]\n---\n^^: c\nv: 3\n", `{"a":1,"b":2,"c":{"v":3}}`},
+		{"a file extends null", "<<+: ${null}\n---\n^^: c\nv: 3\n", `{"c":{"v":3}}`},
+		{"a file of only <<+ is what it extends", "<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n", `{"apiVersion":"v1","kind":"ConfigMap"}`},
 		{"selectors and a local named kubecfg", "'&kubecfg': 1\n---\na: ${[1, 2][@ == kubecfg]}\n", `{"a":1}`},
 		{"selectors and the predefined kubecfg", "a: ${[1, 2][@ == 2] + (if kubecfg.isK8sObject({}) then 0 else 1)}\n", `{"a":3}`},
 		{"selectors", "'&cs': [{name: a, image: x, ports: [{name: http, port: 80}]}, {name: b, image: z, ports: []}]\n" +
@@ -373,7 +376,7 @@ env: ${[
 			"yaml: ${[\\{\n    k: ${cs[@.image == 'x'].name}\n  }][@.k == 'a'].k}\n" +
 			"loop:\n  - ${for p in cs[@.name == 'a'].ports}: ${p.port}\n  - ${if cs[@.name == 'b'].ports == []}: none\n",
 			`{"block":"http","call":"a","image":"z","loop":[80,"none"],"multi":"x","nested":"b","strings":"y","sum":80,"verbatim":"@@","yaml":"a"}`},
-		{"<<+ with fields is a document", "<<+: ${ {a: 1} }\nb: 2\n---\nc: 3\n", `[{"a":1,"b":2},{"c":3}]`},
+		{"<<+ with fields is a document", "<<+: ${ {a: 1} }\nb: 2\n", `{"a":1,"b":2}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -463,7 +466,7 @@ func TestErrors(t *testing.T) {
 		{"a: ${\n  1 +\n  error 'deep'\n}\n", "test.yakl:3:"},
 		{"'&x': 1\n'&z': ${error 'decl'}\n---\nv: ${z}\n", "test.yakl:2:"},
 		{"'&x': 1\n---\n^^: a\nv: ${x}\nw: ${error 'boom'}\n", "test.yakl:5:"},
-		{"&a\nx: 1\n---\nv: ${a.x}\n", "test.yakl:4:"},
+		{"&a\n^^: d\nx: 1\n---\n^^: e\nv: ${a.x}\n", "test.yakl:6:"},
 		{"a:\n  b: &l\n    c: 1\n  d: ${l.e}\n", "test.yakl:4:"},
 		{"${1}: x\n", "Field name must be string"},
 		{"a: &k name\nname: 1\n*k : 2\n", `line 3: duplicate key "name"`},
@@ -523,8 +526,10 @@ func TestErrors(t *testing.T) {
 		{"'&web':\nkind: ConfigMap\n", `line 1: the local key "&web" has no value; to name the document, write ^^: web`},
 		{"'&if': 1\n", `"if" must be a Jsonnet variable name, not a keyword`},
 		{"'&-x': 1\n", `"-x" must be a Jsonnet variable name, not a keyword`},
-		{"---\n^^: unnamed\nx: 1\n", `the name "unnamed" is reserved`},
-		{"---\n^^+: unnamed\n", `the name "unnamed" is reserved`},
+		{"a: 1\n---\nb: 2\n", "line 1: a document without a name: in a file of several documents, or one that extends another, each document is a mapping with ^^: name"},
+		{"---\n^^: a\nx: 1\n---\nz: 3\n", "line 5: a document without a name"},
+		{"^^: a\nx: 1\n---\n- 1\n", "line 4: a document without a name"},
+		{"<<+: ${ {} }\n---\nc: 3\n", "line 3: a document without a name"},
 		{"'&x': {a: &y 1}\n", "line 1: &y in a document of local keys: the node has no place of its own in the output"},
 		{"&f\n'&x': 1\n", "line 1: &f in a document of local keys: the node has no place of its own in the output, so its anchor can't declare a local"},
 		{"m:\n  '&x': {a: &y 1}\n", "line 2: &y in the value of a local key"},
@@ -538,12 +543,11 @@ func TestErrors(t *testing.T) {
 		{"a:\n  &port: 8080\n", "line 2: &port: anchors an empty key"},
 		{"&web.conf:\nx: 1\n", "did not find expected alphabetic or numeric character"},
 		{"&config- &config\nx: 1\n", "did not find expected <document start>"},
-		{"'&x': ${$.a}\n---\nb: 1\n", "line 1: $ in a file local, in a file without names"},
+		{"'&x': ${$.a}\n---\nb: 1\n", "line 1: $ in a file local, in a file of one document"},
 		{"'&x': {w: '${[$]}'}\n---\nb: 1\n", "$ in a file local"},
 		{"a: 1\n---\n<<+: ${ {} }\n", "line 3: <<+ in a document of its own extends the file, so the document must be the first"},
 		{"<<+: &p ${ {} }\n---\nb: 1\n", "line 1: &p in a source of <<+"},
-		{"<<+: ${ {apiVersion: 'v1', kind: 'ConfigMap'} }\n---\nb: 1\n", "<<+ at the top of a file extends a file, not a single object"},
-		{"<<+: ${[1]}\n---\nb: 1\n", "<<+ needs an object or null, not array"},
+		{"<<+: ${[1]}\n---\n^^: b\nv: 1\n", "<<+ needs an object or null, not array"},
 		{"a: ${\\{\n    !Ref\n    b: 1\n  }}\n", "line 2: unsupported tag !Ref"},
 		{"&k\n'${x}': 1\n", "test.yakl:2:"},
 		{"a: '${0)(}'\n", "line 1: unmatched ) in an expression"},
@@ -700,8 +704,9 @@ func TestFormat(t *testing.T) {
 		{"a: |-\n  ${1+2 # c\n  }\n", "a: |-\n  ${1 + 2  // c\n  }\n"},
 		{"a: |-\n  ${[1,'x\n  y']}\n", "a: |-\n  ${[1,'x\n  y']}\n"}, // the string would change
 		// What follows --- goes on the next line, which is all that kubectl's reader allows.
-		{"---\n^^: web\na: ${1+2}\n---\n^^: b # c\nx: 1\n---  # d\n--- |\n  ${3}\n--- ${ {a:1} }\n",
-			"---\n^^: web\na: ${1 + 2}\n---\n^^: b # c\nx: 1\n---  # d\n---\n|\n  ${3}\n---\n'${ { a: 1 } }'\n"},
+		{"---\n^^: web\na: ${1+2}\n---\n^^: b # c\nx: 1\n---  # d\n", "---\n^^: web\na: ${1 + 2}\n---\n^^: b # c\nx: 1\n---  # d\n"},
+		{"--- |\n  ${3}\n", "---\n|\n  ${3}\n"},
+		{"--- ${ {a:1} }\n", "---\n'${ { a: 1 } }'\n"},
 		{"a: |\n  --- !x\n", "a: |\n  --- !x\n"},
 		// An overridden merge key, which isn't written, still matches the key formatted.
 		{"a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\"+\"y\"}': 2\n", "a:\n  <<: {'${\"x\"+\"y\"}': 1}\n  '${\"x\" + \"y\"}': 2\n"},
@@ -828,8 +833,12 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 			}
 		}
 	}
+	lib, err := libsonnet.Assets.ReadFile("kubecfg.libsonnet")
+	if err != nil {
+		t.Fatal(err)
+	}
 	vm := jsonnet.MakeVM()
-	data := map[string]jsonnet.Contents{}
+	data := map[string]jsonnet.Contents{"internal:///kubecfg.libsonnet": jsonnet.MakeContents(string(lib))}
 	for name, code := range files {
 		data[name] = jsonnet.MakeContents(code)
 	}
@@ -843,14 +852,15 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 		return compact(t, out)
 	}
 	for _, tc := range []struct{ query, base, prod string }{
-		{"std.objectFields(f)", `["deployment","service","unnamed","web.conf"]`, `["deployment","pdb","service","unnamed","web.conf"]`},
+		{"std.objectFields(f)", `["deployment","netpol","service","web.conf"]`, `["account","deployment","netpol","pdb","service","web.conf"]`},
 		{"f.deployment.spec.replicas", `2`, `5`},
 		{"f.deployment.spec.template.spec.containers[0]",
 			`{"image":"nginx:1.27","name":"web","ports":[{"containerPort":8080}],"readinessProbe":{"httpGet":{"path":"/healthz","port":8080}},"volumeMounts":[{"mountPath":"/etc/nginx/conf.d","name":"conf"}]}`,
 			`{"image":"nginx:1.29","name":"web","ports":[{"containerPort":8080}],"readinessProbe":{"httpGet":{"path":"/healthz","port":8080}},"volumeMounts":[{"mountPath":"/etc/nginx/conf.d","name":"conf"}]}`},
 		{"f.deployment.spec.template.spec.volumes[0].configMap.name", `"web-conf"`, `"web-conf"`},
 		{"f.service.spec", `{"ports":[{"name":"web","port":80,"targetPort":8080}],"selector":{"app":"web"}}`, `{"ports":[{"name":"web","port":80,"targetPort":8080}],"selector":{"app":"web"},"type":"LoadBalancer"}`},
-		{"[o.kind + '/' + o.metadata.name for o in f.unnamed]", `["NetworkPolicy/web-ingress"]`, `["NetworkPolicy/web-ingress","ServiceAccount/web"]`},
+		{"f.netpol.metadata.name", `"web-ingress"`, `"web-ingress"`},
+		{"if std.objectHas(f, 'account') then f.account.metadata.name", `null`, `"web"`},
 		{"f['web.conf'].data", `{"default.conf":"server { listen 8080; }\n"}`, `{"default.conf":"server { listen 8080; gzip on; }\n"}`},
 		{"if std.objectHas(f, 'pdb') then f.pdb.spec", `null`, `{"minAvailable":2,"selector":{"matchLabels":{"app":"web"}}}`},
 		{"std.objectHasAll(f, 'config') && !std.objectHas(f, 'config')", `true`, `true`},
@@ -864,14 +874,35 @@ func testOverlay(t *testing.T, compile func(string) (string, error)) {
 	}
 }
 
+// An overlay that extends a document the base doesn't have fails, rather than adding a fragment
+// of one. A file alone, as "+ document alone" in TestExpressions, still gets the document.
+func TestOverlayMissingDocument(t *testing.T) {
+	for _, compile := range []func(string) (string, error){Compile, Desugar} {
+		code, err := compile("---\n^^+: config\nreplicas: 5\n---\n^^+:: wbe\nport: 8080\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = vm(t, code).EvaluateAnonymousSnippet("test", "{config:: {}, web: {port: 80}} + import 'test.yakl'")
+		const want = "^^+:: wbe extends a document that the base doesn't have; to add one, write ^^:: wbe"
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("got error %v, want %q", err, want)
+		}
+	}
+}
+
 func TestPredefineKubecfg(t *testing.T) {
+	lib, err := libsonnet.Assets.ReadFile("kubecfg.libsonnet")
+	if err != nil {
+		t.Fatal(err)
+	}
 	vm := jsonnet.MakeVM()
 	vm.Importer(&jsonnet.MemoryImporter{Data: map[string]jsonnet.Contents{
-		"internal:///kubecfg.libsonnet": jsonnet.MakeContents("{answer: 42}"),
+		// The real library, which the code of <<+ calls, with a field of the test's own.
+		"internal:///kubecfg.libsonnet": jsonnet.MakeContents(string(lib) + " + {answer: 42}"),
 	}})
 	for _, tc := range []struct{ name, src, want string }{
 		{"a document", "a: ${kubecfg.answer}\n", `{"a":42}`},
-		{"a list", "---\na: 1\n---\nb: ${kubecfg.answer}\n", `[{"a":1},{"b":42}]`},
+		{"several documents", "---\n^^: a\nv: 1\n---\n^^: b\nv: ${kubecfg.answer}\n", `{"a":{"v":1},"b":{"v":42}}`},
 		{"a key", "${'k' + kubecfg.answer}: 1\n", `{"k42":1}`},
 		{"a file with names", "^^: x\na: ${kubecfg.answer}\n", `{"x":{"a":42}}`},
 		{"a file that extends an object", "<<+: ${ {b: 1} }\n---\n^^: x\na: ${kubecfg.answer}\n", `{"b":1,"x":{"a":42}}`},
