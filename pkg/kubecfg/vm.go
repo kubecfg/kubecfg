@@ -383,43 +383,93 @@ func buildOverlayObject(format overlayFormat, flag string) string {
 // ReadObjects evaluates all jsonnet files in paths and return all the k8s objects found in it.
 // Unlike utils.Read this checks for duplicates and flattens the v1 Lists.
 func ReadObjects(vm *jsonnet.VM, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
-	opt := acquire.MakeReadOptions(opts)
-
-	overlayExpression := func(url string) (string, string) { return url, url }
-
-	if opt.OverlayURL != "" && opt.OverlayCode != "" {
-		return nil, fmt.Errorf("--overlay-code and --overlay-file are mutually exclusive")
-	}
-
-	if overlay := opt.OverlayURL; overlay != "" {
-		add := buildOverlayObject(jsonnetFile, overlay)
-		overlayExpression = func(url string) (string, string) {
-			expr := fmt.Sprintf(`(import %q) + (%s)`, utils.ImportPath(url), add)
-			return utils.ToDataURL(expr), expr
-		}
-	}
-	if overlay := opt.OverlayCode; overlay != "" {
-		add := buildOverlayObject(jsonnetCode, overlay)
-		overlayExpression = func(src string) (string, string) {
-			expr := fmt.Sprintf(`(import %q) + (%s)`, utils.ImportPath(src), add)
-			// The file is imported, so only the overlay's code sees kubecfg.
-			return utils.ToDataURL(yakl.PredefineKubecfg(expr)), expr
-		}
-	}
-
 	res := []*unstructured.Unstructured{}
-	for _, path := range paths {
-		effectiveURL, diagnostic := overlayExpression(path)
-		objs, err := utils.Read(vm, effectiveURL, opts...)
-		if err != nil {
-			return nil, fmt.Errorf("error reading %s: %v", diagnostic, err)
-		}
-
+	err := readInputs(paths, opts, func(in string) error {
+		objs, err := utils.Read(vm, in, opts...)
 		res = append(res, utils.FlattenToV1(objs)...)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	deduped, err := utils.RemoveDuplicates(res)
 	if err != nil {
 		return nil, err
 	}
 	return deduped, nil
+}
+
+// readInputs calls read with what to evaluate for each of paths. show and eval read their inputs
+// through it, so they only differ in what they do with the values.
+func readInputs(paths []string, opts []utils.ReadOption, read func(in string) error) error {
+	opt := acquire.MakeReadOptions(opts)
+	for _, path := range paths {
+		in, err := input(path, opt)
+		if err != nil {
+			return err
+		}
+		if err := read(in); err != nil {
+			return fmt.Errorf("error reading %s: %v", path, err)
+		}
+	}
+	return nil
+}
+
+// input returns what to evaluate for the input at path: path itself, or, when opt adds an overlay or
+// an expression, a data: URL with the code that does it.
+func input(path string, opt acquire.ReadOptions) (string, error) {
+	if opt.OverlayURL != "" && opt.OverlayCode != "" {
+		return "", fmt.Errorf("--overlay-code and --overlay-file are mutually exclusive")
+	}
+	var overlay string
+	if opt.OverlayURL != "" {
+		overlay = buildOverlayObject(jsonnetFile, opt.OverlayURL)
+	}
+	if opt.OverlayCode != "" {
+		overlay = buildOverlayObject(jsonnetCode, opt.OverlayCode)
+	}
+	if overlay == "" && opt.Expr == "" {
+		return path, nil
+	}
+
+	root := fmt.Sprintf("(import %q)", utils.ImportPath(path))
+	if code, ok := strings.CutPrefix(path, "data:,"); ok { // the code of -e, which can't be imported
+		code, err := url.PathUnescape(code)
+		if err != nil {
+			return "", err
+		}
+		// A newline, so that a // comment at the end of the code doesn't hide the parenthesis.
+		root = "(" + code + "\n)"
+	}
+	return utils.ToDataURL(inputCode(root, overlay, opt.Expr, opt.TLA)), nil
+}
+
+// inputCode returns Jsonnet evaluating expr, with `$` being the result of the code root, called with
+// the top-level arguments tla, plus overlay. Without expr, it evaluates to that result. Like all
+// code from the command line, it imports relative to the current directory.
+func inputCode(root, overlay, expr string, tla []string) string {
+	pairs := make([]string, len(tla))
+	for i := range tla {
+		pairs[i] = fmt.Sprintf("%s=%s", tla[i], tla[i])
+	}
+	// A function is called with the top-level arguments, as jsonnet does with a file, e.g.
+	// `function(foo,bar) ... (import %q)(foo=foo,bar=bar)`. The actuals are keyworded so that the
+	// order of TLA flags doesn't matter.
+	root = fmt.Sprintf("(local Z____in__Z_ = %s; if Z____std__Z_.isFunction(Z____in__Z_) then Z____in__Z_(%s) else Z____in__Z_)",
+		root, strings.Join(pairs, ","))
+	if overlay != "" {
+		root = fmt.Sprintf("%s + (%s)", root, overlay)
+	}
+	body := root
+	if expr != "" {
+		body = fmt.Sprintf("local Z____root__Z_ = %s; if Z____std__Z_.isObject(Z____root__Z_) then (Z____root__Z_ { Z____expr__Z_:: %s }).Z____expr__Z_ "+
+			"else error '-x and -k need the input to evaluate to an object, not ' + Z____std__Z_.type(Z____root__Z_)", root, expr)
+	}
+	if len(tla) > 0 {
+		body = fmt.Sprintf("function(%s) %s", strings.Join(tla, ","), body)
+	}
+	// std is bound before a top-level argument can shadow it. Kubecfg is predefined in the whole
+	// code, so that a top-level argument named kubecfg declares it; files are imported, so they
+	// don't see it.
+	return yakl.PredefineKubecfg("local Z____std__Z_ = std; " + body)
 }

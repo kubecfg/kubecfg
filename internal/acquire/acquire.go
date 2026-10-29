@@ -21,6 +21,7 @@ type ReadOptions struct {
 	Expr           string
 	OverlayURL     string
 	OverlayCode    string
+	TLA            []string // names of the top-level arguments, which Expr and the overlay pass on to the file
 }
 
 type ReadOption func(*ReadOptions)

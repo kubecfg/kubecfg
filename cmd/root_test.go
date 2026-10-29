@@ -205,24 +205,25 @@ func TestPredefinedKubecfg(t *testing.T) {
 		defer resetFlags()
 		RootCmd.SetOutput(io.Discard)
 		defer RootCmd.SetOutput(nil)
-		RootCmd.SetArgs(append([]string{"--features=eval,overlay,yakl"}, args...))
+		RootCmd.SetArgs(append([]string{"--features=eval,overlay,yakl,traceback"}, args...))
 		return RootCmd.Execute()
 	}
 
 	const imp = "(import 'kubecfg.libsonnet').parseYaml('x')[0]"
 	for name, args := range map[string][]string{
-		"eval -e":         {"eval", "-o", "json", "app.jsonnet", "-e", "kubecfg.parseYaml('x')[0]"},
-		"eval --trace":    {"eval", "-o", "json", "cm.jsonnet", "--trace", "-e", "kubecfg.toOverlay({}) + $.metadata"},
+		"eval -x":         {"eval", "-o", "json", "app.jsonnet", "-x", "kubecfg.parseYaml('x')[0]"},
+		"eval --trace":    {"eval", "-o", "json", "cm.jsonnet", "--trace", "-x", "kubecfg.toOverlay({}) + $.metadata"},
+		"eval -e":         {"eval", "-o", "json", "-e", "kubecfg.parseYaml('x')[0]"},
 		"--exec":          {"show", "-e", "{apiVersion: 'v1', kind: 'ConfigMap', metadata: {name: kubecfg.parseYaml('x')[0]}}"},
 		"--overlay-code":  {"show", "cm.jsonnet", "--overlay-code", "{metadata+: {name: kubecfg.parseYaml('y')[0]}}"},
-		"--ext-code":      {"eval", "-o", "json", "app.jsonnet", "-e", "std.extVar('v')", "--ext-code", "v=kubecfg.parseYaml('x')[0]"},
+		"--ext-code":      {"eval", "-o", "json", "app.jsonnet", "-x", "std.extVar('v')", "--ext-code", "v=kubecfg.parseYaml('x')[0]"},
 		"--tla-code":      {"eval", "-o", "json", "f.jsonnet", "--tla-code", "v=kubecfg.parseYaml('x')[0]"},
 		"a .yakl file":    {"show", "cm.yakl"},
-		"a TLA named so":  {"eval", "-o", "json", "g.jsonnet", "--tla-code", "kubecfg=2", "-e", "kubecfg + 1"},
-		"an object local": {"eval", "-o", "json", "app.jsonnet", "-e", "{local kubecfg = 1, v: kubecfg + 1}"},
+		"a TLA named so":  {"eval", "-o", "json", "g.jsonnet", "--tla-code", "kubecfg=2", "-x", "kubecfg + 1"},
+		"an object local": {"eval", "-o", "json", "app.jsonnet", "-x", "{local kubecfg = 1, v: kubecfg + 1}"},
 		// Imports from code whose name isn't a URL.
-		"an import in eval -e":    {"eval", "-o", "json", "app.jsonnet", "-e", imp},
-		"an import in --ext-code": {"eval", "-o", "json", "app.jsonnet", "-e", "std.extVar('v')", "--ext-code", "v=" + imp},
+		"an import in eval -x":    {"eval", "-o", "json", "app.jsonnet", "-x", imp},
+		"an import in --ext-code": {"eval", "-o", "json", "app.jsonnet", "-x", "std.extVar('v')", "--ext-code", "v=" + imp},
 		"an import in --tla-code": {"eval", "-o", "json", "f.jsonnet", "--tla-code", "v=" + imp},
 	} {
 		if err := run(args...); err != nil {

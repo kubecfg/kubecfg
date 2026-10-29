@@ -9,12 +9,12 @@ refs = ["https://github.com/kubecfg/kubecfg/pull/554", "docs/rfcs/rfc06.md", "pk
 
 [[feature]]
 id = "import-fix"
-title = "Imports work in eval -e, --ext-code and --tla-code"
+title = "Imports work in eval -x, --ext-code and --tla-code"
 status = "done"
 
 [[feature]]
 id = "cli"
-title = "kubecfg predefined in eval -e, --exec, --overlay-code, --ext-code, --tla-code"
+title = "kubecfg predefined in eval -x, --exec, --overlay-code, --ext-code, --tla-code"
 status = "done"
 
 [[feature]]

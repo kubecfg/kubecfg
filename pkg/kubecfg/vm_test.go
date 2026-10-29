@@ -2,6 +2,7 @@ package kubecfg
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kubecfg/kubecfg/internal/acquire"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg/vars"
 	"github.com/kubecfg/kubecfg/utils"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -188,12 +190,16 @@ func TestEvalTLANamedLikeInternals(t *testing.T) {
 	}
 	vm.TLAVar("r", "hello")
 	vm.TLAVar("std", "!")
-	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(fileURL, "$.value", []string{"r", "std"}))
+	in, err := input(fileURL, acquire.ReadOptions{Expr: "$.value", TLA: []string{"r", "std"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(got) != `"hello!"` {
-		t.Errorf("got %s", got)
+	got, err := utils.Evaluate(vm, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "hello!" {
+		t.Errorf("got %v", got)
 	}
 }
 
@@ -210,19 +216,22 @@ func TestEvalYAKLStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "", nil))
+	got, err := utils.Evaluate(vm, fileURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got = strings.Join(strings.Fields(got), ""); got != `{"a":{"v":1},"b":{"v":2}}` {
-		t.Errorf("got %s", got)
+	if b, _ := json.Marshal(got); string(b) != `{"a":{"v":1},"b":{"v":2}}` {
+		t.Errorf("got %s", b)
 	}
-	got, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "$.b.v", nil))
+	in, err := input(fileURL, acquire.ReadOptions{Expr: "$.b.v"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(got) != "2" {
-		t.Errorf("got %s", got)
+	if got, err = utils.Evaluate(vm, in); err != nil {
+		t.Fatal(err)
+	}
+	if got != 2.0 {
+		t.Errorf("got %v", got)
 	}
 }
 

@@ -69,8 +69,8 @@ func register(f Feature) *Feature {
 }
 
 var (
-	Eval            = register(Feature{Name: "eval", Stage: Alpha, Since: "v0.40.0", Doc: "the eval command"})
-	Traceback       = register(Feature{Name: "traceback", Stage: Alpha, Since: "v0.40.0", Doc: "the traceback command"})
+	Eval            = register(Feature{Name: "eval", Stage: Alpha, Since: "v0.40.0", Doc: "the eval command, and -x (--expr) on the other commands"})
+	Traceback       = register(Feature{Name: "traceback", Stage: Alpha, Since: "v0.40.0", Doc: "the traceback command, and eval --trace"})
 	Pack            = register(Feature{Name: "pack", Stage: Alpha, Since: "v0.40.0", Doc: "the pack command"})
 	Httpd           = register(Feature{Name: "httpd", Stage: Alpha, Since: "v0.40.0", Doc: "the httpd command"})
 	Overlay         = register(Feature{Name: "overlay", Stage: Alpha, Since: "v0.40.0", Doc: "--overlay-code, --overlay-code-file (and the deprecated --overlay)"})

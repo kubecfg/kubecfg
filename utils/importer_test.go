@@ -68,7 +68,7 @@ func TestExpandImportToCandidateURLs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// "" is the directory of --ext-code and --tla-code; "dir/" that of eval -e on dir/app.jsonnet.
+		// "" is the directory of --ext-code and --tla-code.
 		for dir, want := range map[string]string{"": "/file.libsonnet", "dir/": "/dir/file.libsonnet"} {
 			urls, err := importer.expandImportToCandidateURLs(dir, "file.libsonnet")
 			if err != nil {

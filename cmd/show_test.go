@@ -389,3 +389,31 @@ kind: Namespace
 metadata:
   name: demo-ns
 `
+
+// Files, -e, overlays and top-level arguments work together.
+func TestShowInputs(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for name, src := range map[string]string{
+		"f.jsonnet":  "function(name='dflt') { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: name } }",
+		"ns.jsonnet": "{ metadata+: { namespace: 'ns' } }",
+	} {
+		if err := os.WriteFile(name, []byte(src), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const secret = "{apiVersion: 'v1', kind: 'Secret', metadata: {name: 's'}}"
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"f.jsonnet", "-A", "name=t"}, "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: t\n"},
+		{[]string{"f.jsonnet", "-e", secret}, "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: dflt\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: s\n"},
+		{[]string{"f.jsonnet", "-A", "name=t", "--overlay-code-file", "ns.jsonnet"}, "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: t\n  namespace: ns\n"},
+		{[]string{"-e", secret, "--overlay-code-file", "ns.jsonnet"}, "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: s\n  namespace: ns\n"},
+	} {
+		got := cmdOutput(t, append([]string{"--features=overlay", "show"}, tc.args...))
+		if got != tc.want {
+			t.Errorf("show %v: got %q, want %q", tc.args, got, tc.want)
+		}
+	}
+}
