@@ -1,0 +1,20 @@
+# A ^^+: extends the ^^: of its name in its file wherever it is, as in any YAKL
+# file: web gets 3 replicas, though its patch comes first.
+<<+: ${import 'knit/knit.libsonnet'}
+---
+^^+: web
+spec: {replicas: 3}
+---
+^^: web
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: web}}
+---
+^^: cache
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cache}
+data: {size: '1'}

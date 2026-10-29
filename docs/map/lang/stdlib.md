@@ -42,8 +42,7 @@ needs = ["/deps/go-containerregistry"]
 [[feature]]
 id = "object-paths"
 title = "groupBy, toObjectPaths, fromObjectPaths, isNamespaced, layouts.gkNsName"
-status = "wip"
-note = "On the worktree-abstract-snuggling-pixel branch, with knit"
+status = "done"
 
 [[feature]]
 id = "pick"

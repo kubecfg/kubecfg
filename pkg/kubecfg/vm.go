@@ -267,6 +267,7 @@ func JsonnetVM(opt ...JsonnetVMOpt) (*jsonnet.VM, error) {
 		return nil, err
 	}
 	utils.RegisterNativeFuncs(vm, resolver)
+	utils.RegisterFeatures(vm, opts.gates)
 
 	return vm, nil
 }

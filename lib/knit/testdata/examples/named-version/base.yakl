@@ -1,0 +1,12 @@
+# An HPA at autoscaling/v1. v2.yakl upgrades it, and prod.yakl, which only changes
+# maxReplicas, keeps the version v2.yakl set.
+<<+: ${import 'knit/knit.libsonnet'}
+---
+^^: web
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata: {name: web}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: web}
+  minReplicas: 1
+  maxReplicas: 3

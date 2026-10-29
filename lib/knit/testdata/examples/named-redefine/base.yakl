@@ -1,0 +1,12 @@
+# A mixin in the base copies the ConfigMap c to c2. prod.yakl defines c again: that
+# replaces c from its own document on, so the mixin still sees, and copies, the base's c.
+<<+: ${import 'knit/knit.libsonnet'}
+---
+^^: c
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: c}
+data: {from: base}
+---
+^^: copy
+<<+: ${$.mixin({[$.id('ConfigMap', 'c2')]: super[$.id('ConfigMap', 'c')] + {metadata+: {name: 'c2'}}})}

@@ -1,0 +1,7 @@
+<<+: ${import 'yakl:base.yakl'}
+---
+^^: c
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: c}
+data: {from: prod}

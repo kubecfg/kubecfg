@@ -1,0 +1,72 @@
+# Objects with names: ^^: api is the field $.api, the object as it ends up after
+# every layer of every file. prod.yakl changes them by name.
+<<+: ${import 'knit/knit.libsonnet'}
+---
+^^+: registry
+objects+:
+  metadata+: {namespace: shop}
+---
+^^:: config
+image: api:1
+---
+^^: api
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api}
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ${$.config.image}
+          env: [{name: A, value: '1'}]
+---
+# Reads the API as it ends up: prod's changes to it reach the worker.
+^^: worker
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: worker}
+spec:
+  schedule: '@daily'
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: worker
+              image: ${$.api.spec.template.spec.containers[@.name == 'api'].image}
+              env: ${$.api.spec.template.spec.containers_.api.env}
+---
+# Two documents give one name: the second one extends the first.
+^^: settings
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: settings}
+data: {a: '1'}
+---
+^^+: settings
+data: {b: '2'}
+---
+# Hidden: other documents can read it, but it isn't output.
+^^:: draft
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: draft}
+---
+^^: old
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: old}
+---
+^^: replaced
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: replaced}
+data: {from: base}
+---
+^^: api-service
+apiVersion: v1
+kind: Service
+metadata: {name: api}
+spec:
+  ports: [{port: 80}]

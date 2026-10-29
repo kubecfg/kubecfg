@@ -13,7 +13,19 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+// The group of an object's apiVersion: 'apps' for apps/v1, '' for v1.
+local groupOf(o) = local p = std.split(o.apiVersion, '/'); if std.length(p) == 1 then '' else p[0];
+// 'apps/Deployment', or 'ConfigMap' in the core group.
+local groupKind(o) = (if groupOf(o) == '' then '' else groupOf(o) + '/') + o.kind;
+local pathString(path) = if path == [] then '(top)' else std.join('.', [std.toString(s) for s in path]);
+
 {
+  // requireFeature(name): true when the named feature is on (kubecfg
+  // --features, see `kubecfg features`), else an error that says how to turn
+  // it on. A library can require a feature, but not read whether it is on:
+  //   assert kubecfg.requireFeature('knit'),
+  requireFeature(name):: std.native('requireFeature')(name),
+
   // parseJson(data): parses the `data` string as a json document, and
   // returns the resulting jsonnet object.
   parseJson:: std.native('parseJson'),
@@ -98,6 +110,12 @@
       if std.type(kv.value) != 'object'
     } else v
   ),
+
+  // knit: kind-aware overlays of plain Kubernetes manifests, keyed by the
+  // Kubernetes OpenAPI schema. See docs/Advanced-Usage/knit.md.
+  // Also importable directly as 'knit/knit.libsonnet'. Alpha: it needs
+  // --features=knit.
+  knit:: import 'knit/knit.libsonnet',
 
   // isK8sObject(o): Return true iff o is a Kubernetes object.
   isK8sObject(o):: (
@@ -187,6 +205,17 @@
   // objectHasPathAll(obj path): Shorthand for objectHasPath(obj, path, inc_hidden=true)
   objectHasPathAll(obj, path):: objectHasDeep(obj, path, inc_hidden=true),
 
+  // groupBy(arr, keyF): splits arr into an object of arrays, one per key.
+  // keyF(x) must return a string. Each array keeps the order of arr. Runs
+  // in O(n log n).
+  //   groupBy(objs, function(o) o.kind) == { ConfigMap: [cm1, cm2], Deployment: [web] }
+  groupBy(arr, keyF):: (
+    local n = std.length(arr), ks = [keyF(x) for x in arr];
+    local s = std.sort(std.range(0, n - 1), function(i) [ks[i], i]);
+    local starts = [j for j in std.range(0, n - 1) if j == 0 || ks[s[j]] != ks[s[j - 1]]] + [n];
+    { [ks[s[starts[g]]]]: [arr[i] for i in s[starts[g]:starts[g + 1]]] for g in std.range(0, std.length(starts) - 2) }
+  ),
+
   // pick(arr, cond, where=''): the one element of arr for which cond(x) is
   // true. None, or more than one, is an error that starts with where, the
   // place of the call. YAKL's selectors, list[@.name == 'api'], pass their
@@ -223,6 +252,72 @@
     || error "^^+%s %s extends a document that the base doesn't have; to add one, write ^^%s %s" % [colons, name, colons, name]
   ),
 
+  // toObjectPaths(o): every Kubernetes object in the nested collection o,
+  // with the path that leads to it: an array of { path, obj }. A path is a
+  // list of object keys (strings) and array indexes (numbers). A v1 List
+  // counts as an array of its items. Objects come in the order fold visits
+  // them. null is skipped, and any other value is an error, as in fold.
+  //   toObjectPaths({ web: { deploy: d, svc: s }, extra: [cm] }) == [
+  //     { path: ['extra', 0], obj: cm },
+  //     { path: ['web', 'deploy'], obj: d },
+  //     { path: ['web', 'svc'], obj: s },
+  //   ]
+  toObjectPaths(o):: (
+    local walk(o, path) =
+      local each(xs) = std.flattenArrays([walk(xs[i], path + [i]) for i in std.range(0, std.length(xs) - 1)]);
+      if isK8sList(o) then each(o.items)
+      else if $.isK8sObject(o) then [{ path: path, obj: o }]
+      else if std.isObject(o) then std.flattenArrays([walk(o[k], path + [k]) for k in std.objectFields(o)])
+      else if std.isArray(o) then each(o)
+      else if o == null then []
+      else error ('o must be an object or array of k8s objects, found ' + std.type(o));
+    walk(o, [])
+  ),
+
+  // fromObjectPaths(entries): the reverse of toObjectPaths. Builds a nested
+  // collection from an array of { path, obj }: a string step makes an
+  // object, a number step an array. Under one array, entries go in index
+  // order and gaps are closed, so entries can be dropped without
+  // renumbering. Two entries at the same path, an entry inside another
+  // one's object, or strings and numbers at one level are an error. No
+  // entries give [].
+  //   fromObjectPaths(toObjectPaths(o)) == o, except a v1 List comes back as an array.
+  //   // Drop every Secret, keeping the shape:
+  //   fromObjectPaths([e for e in toObjectPaths(o) if e.obj.kind != 'Secret'])
+  fromObjectPaths(entries):: (
+    local describe(e) =
+      local what = if $.isK8sObject(e.obj) then '%s %s' % [e.obj.kind, std.get(std.get(e.obj, 'metadata', {}), 'name', '')] else std.type(e.obj);
+      '%s at %s' % [what, pathString(e.path)];
+    local build(es, d) =
+      if std.length([e for e in es if std.length(e.path) == d]) > 0 then
+        assert std.length(es) == 1
+               : 'fromObjectPaths: objects at the same path, or one inside another: ' + std.join(', ', [describe(e) for e in es]);
+        es[0].obj
+      else
+        local types = std.set([std.type(e.path[d]) for e in es]);
+        assert types == ['number'] || types == ['string']
+               : 'fromObjectPaths: a level mixes object keys and array indexes: ' + std.join(', ', [describe(e) for e in es]);
+        local g = $.groupBy(es, function(e) std.toString(e.path[d]));
+        if types == ['number'] then [build(g[k], d + 1) for k in std.sort(std.objectFields(g), std.parseJson)]
+        else { [k]: build(g[k], d + 1) for k in std.objectFields(g) };
+    if entries == [] then [] else build(entries, 0)
+  ),
+
+  // isNamespaced(o, crds=[]): whether objects of o's kind live in a
+  // namespace. Built-in kinds are looked up in the Kubernetes API schema
+  // that comes with kubecfg, which lists the cluster-scoped ones
+  // (Namespace, ClusterRole, ...). For custom resources, pass their CRDs:
+  // each one's spec.scope decides. A kind found in neither counts as
+  // namespaced. The group must match: a Namespace in example.com is not
+  // the core Namespace.
+  //   deepMap(function(o) if isNamespaced(o) then o { metadata+: { namespace: 'prod' } } else o, objs)
+  isNamespaced(o, crds=[]):: (
+    local gk = groupKind(o);
+    local scopes = [c.spec.scope for c in crds if c.spec.group + '/' + c.spec.names.kind == gk];
+    if scopes != [] then scopes[0] != 'Cluster'
+    else !std.get((import 'knit/schema/k8s-1.37.libsonnet').clusterScoped, gk, false)
+  ),
+
   layouts:: {
     // gvkName(accum, o): Helper for 'fold'.  This accumulates a
     // two-level collection of objects by 'apiVersion.kind'
@@ -241,8 +336,25 @@
     // Namespace is '_' for non-namespaced objects.
     gvkNsName(accum, o):: accum {
       [o.apiVersion + '.' + o.kind]+: {
-        [std.get(o.metadata, 'namespace', default='_')]+: {
+        // An unset namespace, null or '' is '_', as with none.
+        [local ns = std.get(o.metadata, 'namespace'); if ns == null || ns == '' then '_' else ns]+: {
           assert !( o.metadata.name in super),
+          [o.metadata.name]: o,
+        },
+      },
+    },
+
+    // gkNsName(accum, o): Helper for 'fold', like gvkNsName, but keyed by
+    // group and kind without the version: 'apps/Deployment' (core kinds
+    // have no group: 'ConfigMap'), then namespace ('_' for none), then
+    // name. This is how Kubernetes tells objects apart, so the apps/v1 and
+    // apps/v1beta1 versions of one Deployment are a duplicate, and fail;
+    // gvkNsName takes them for two objects.
+    gkNsName(accum, o):: accum {
+      [groupKind(o)]+: {
+        // An unset namespace, null or '' is '_', as with none.
+        [local ns = std.get(o.metadata, 'namespace'); if ns == null || ns == '' then '_' else ns]+: {
+          assert !(o.metadata.name in super) : 'duplicate object %s %s' % [groupKind(o), o.metadata.name],
           [o.metadata.name]: o,
         },
       },

@@ -47,11 +47,11 @@ test: gotest jsonnettest wasmtest
 gotest:
 	$(GO) test $(GO_FLAGS) $(GO_BUILDFLAGS) $(GO_TESTFLAGS) $(GO_PACKAGES)
 
-jsonnettest: kubecfg $(JSONNET_FILES) examples/guestbook.yakl
+jsonnettest: kubecfg $(JSONNET_FILES) examples/experimental/yakl/guestbook.yakl
 #	TODO: use `kubecfg validate` once it works offline
 	./kubecfg show $(JSONNET_FILES) >/dev/null
 #	separately, as it redefines the guestbook.jsonnet resources
-	./kubecfg show --features=yakl examples/guestbook.yakl >/dev/null
+	./kubecfg show examples/experimental/yakl/guestbook.yakl >/dev/null
 
 wasmtest:
 	cd wasm/hosttest && $(GO) test $(GO_FLAGS) ./...

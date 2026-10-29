@@ -891,8 +891,26 @@ const (
 	fieldDoc              // with a name key (^^: web): a field of the file
 )
 
+// In a file that extends an object, the hidden field documents lists every document in file
+// order, as {name, plus, doc}, but a ^^+: that comes before the ^^: of its name, which it extends
+// all the same, goes right after it; the object it extends can then manage the file's names: a
+// document's field is o['$named'](name, plain) when the object has that method, where plain gives
+// the field's value as YAKL alone would. knit makes its manifests objects this way.
+const (
+	documentsField = "documents"
+	namedHook      = "$named"
+)
+
 // nameKey matches a document's name key: ^^, and the + and colons of the field it gives.
 var nameKey = regexp.MustCompile(`^\^\^\+?:{0,2}$`)
+
+// LiteralKey reports whether yakl reads the mapping key k as the field k, as YAML does. It doesn't
+// for <<+, a name key, a local like &x, a key ending in + or :, or an expression.
+func LiteralKey(k string) bool {
+	t := strings.TrimLeft(k, " \t\n")
+	return k != "<<+" && !nameKey.MatchString(k) && !strings.HasPrefix(k, "&") && !strings.HasSuffix(k, "+") &&
+		!strings.HasSuffix(k, ":") && !strings.HasPrefix(t, "${") && !strings.HasPrefix(t, "$${")
+}
 
 // classify finds the kind and name of a document.
 func (c *compiler) classify(d *yaml.Node) (doc, error) {
@@ -989,6 +1007,8 @@ func (c *compiler) name(d *doc, k, v *yaml.Node) error {
 		return c.errorf(v, "the name %q can't end in + or :; they go on the key, as in %s", name, writeNameKey(name))
 	case slices.Contains(strings.Split(name, "."), ""):
 		return c.errorf(v, "the name %q has an empty part: a dot starts a level, as in ^^: web.conf, which is $.web.conf", name)
+	case strings.Split(name, ".")[0] == documentsField:
+		return c.errorf(v, "the name %q is reserved for the list of a file's documents", documentsField)
 	}
 	d.kind, d.name = fieldDoc, name
 	d.plus = strings.Contains(k.Value, "+")
@@ -1196,8 +1216,15 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 	}
 	c.write("{")
 	c.br(nil)
+	if ext != nil && len(fields) > 0 {
+		c.write("local yakl__named(o, name, plain) = if std.objectHasAll(o, " + quote(namedHook) + ") then o[" +
+			quote(namedHook) + "](name, plain) else plain(), ")
+		c.br(nil)
+	}
 	pending := map[string]string{} // the local holding the first of two documents giving a name
-	var tree levels                // the documents whose name has a dot
+	var tree levels                // the documents whose name has a dot, or all of them with ext
+	var documents []string
+	early := map[string]string{} // a ^^+: document waiting for the ^^: of its name, further down
 	for i, d := range docs {
 		switch d.kind {
 		case fileLocalsDoc:
@@ -1223,7 +1250,9 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 		}
 		c.align(d.at)
 		idx := fields[d.name]
-		if strings.Contains(d.name, ".") {
+		// In a file that extends an object, every document goes this way, for the object to
+		// manage its field (see documentsField).
+		if hook := ext != nil; hook || strings.Contains(d.name, ".") {
 			if d.plus && len(idx) == 1 {
 				c.extendsAssert(d)
 			}
@@ -1234,7 +1263,25 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 			}
 			c.end(nil, ", ")
 			c.comment(d.foot...)
+			if hook {
+				entry := fmt.Sprintf("{name: %s, plus: %t, doc: %s}", quote(d.name), d.plus, local)
+				if len(idx) == 2 && idx[0] == i && d.plus {
+					early[d.name] = entry
+				} else {
+					documents = append(documents, entry)
+					if e, ok := early[d.name]; ok {
+						documents = append(documents, e)
+					}
+				}
+			}
 			switch {
+			case len(idx) == 1 && hook:
+				plain := local
+				if d.plus {
+					key := d.name[strings.LastIndex(d.name, ".")+1:]
+					plain = fmt.Sprintf("if %s in super then %s + %s else %s", quote(key), access("super", key), local, local)
+				}
+				tree.add(d.name, strings.Repeat(":", d.colons)+" "+named(d.name, plain))
 			case len(idx) == 1:
 				tree.add(d.name, map[bool]string{true: "+"}[d.plus]+strings.Repeat(":", d.colons)+" "+local)
 			case idx[1] == i:
@@ -1243,7 +1290,11 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 				if first.plus {
 					plain, ext = ext, plain
 				}
-				tree.add(d.name, strings.Repeat(":", plainColons(first, d))+" "+plain+" + "+ext)
+				value := plain + " + " + ext
+				if hook {
+					value = named(d.name, value)
+				}
+				tree.add(d.name, strings.Repeat(":", plainColons(first, d))+" "+value)
 			default:
 				pending[d.name] = local
 			}
@@ -1283,6 +1334,10 @@ func (c *compiler) objectFile(docs []doc, fields map[string][]int, ext *entry) e
 		c.comment(d.foot...)
 	}
 	tree.write(c)
+	if len(documents) > 0 {
+		c.write(documentsField + "+:: [" + strings.Join(documents, ", ") + "], ")
+		c.br(nil)
+	}
 	c.write("}")
 	if ext != nil {
 		c.write(")")
@@ -1299,6 +1354,12 @@ func (c *compiler) extendsAssert(d doc) {
 	}
 	c.write("), ")
 	c.br(nil)
+}
+
+// named returns the code of the value of the document named name, which the object the file
+// extends can manage (see documentsField): plain is the value without it.
+func named(name, plain string) string {
+	return "yakl__named($, " + quote(name) + ", function() " + plain + ")"
 }
 
 // plainColons returns the colons of the plain one of two documents a and b giving a name.

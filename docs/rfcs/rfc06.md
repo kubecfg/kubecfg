@@ -1,5 +1,7 @@
 # RFC06: `kubecfg` predefined outside Jsonnet files
 
+Status: **Draft**. Nothing here is decided; see [RFCs](README.md).
+
 ## Summary
 
 To use kubecfg's library, code has to import it first:

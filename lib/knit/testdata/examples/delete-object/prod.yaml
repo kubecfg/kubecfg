@@ -1,0 +1,4 @@
+apiVersion: batch/v1
+kind: Job
+metadata: { name: seed-test-data }
+$patch: delete

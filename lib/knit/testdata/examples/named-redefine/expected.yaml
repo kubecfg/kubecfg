@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+data:
+  from: prod
+kind: ConfigMap
+metadata:
+  name: c
+---
+apiVersion: v1
+data:
+  from: base
+kind: ConfigMap
+metadata:
+  name: c2
