@@ -205,7 +205,7 @@ func TestPredefinedKubecfg(t *testing.T) {
 		defer resetFlags()
 		RootCmd.SetOutput(io.Discard)
 		defer RootCmd.SetOutput(nil)
-		RootCmd.SetArgs(append([]string{"--features=eval,overlay,yakl"}, args...))
+		RootCmd.SetArgs(append([]string{"--features=eval,overlay,yakl,traceback"}, args...))
 		return RootCmd.Execute()
 	}
 

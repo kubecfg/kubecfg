@@ -74,6 +74,12 @@ func WithOverlayCode(overlayCode string) ReadOption {
 	}
 }
 
+func WithTLA(names []string) ReadOption {
+	return func(opts *acquire.ReadOptions) {
+		opts.TLA = names
+	}
+}
+
 // Read fetches and decodes K8s objects by path.
 // TODO: Replace this with something supporting more sophisticated
 // content negotiation.
@@ -303,9 +309,13 @@ func expandDataURL(pathURL string) (string, string, error) {
 	return content, foundAt, nil
 }
 
-func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]runtime.Object, error) {
-	// TODO(mkm): evaluate expressions in opts.expr
+// Evaluate returns the value of the Jsonnet file or URL at path, or of the code of a data: URL.
+// Read looks for Kubernetes objects in it.
+func Evaluate(vm *jsonnet.VM, path string, opts ...ReadOption) (interface{}, error) {
+	return evaluate(vm, path, acquire.MakeReadOptions(opts))
+}
 
+func evaluate(vm *jsonnet.VM, path string, opts acquire.ReadOptions) (interface{}, error) {
 	pathURL, err := PathToURL(path)
 	if err != nil {
 		return nil, err
@@ -342,6 +352,14 @@ func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]run
 
 	var top interface{}
 	if err = json.Unmarshal([]byte(jsonstr), &top); err != nil {
+		return nil, err
+	}
+	return top, nil
+}
+
+func jsonnetReader(vm *jsonnet.VM, path string, opts acquire.ReadOptions) ([]runtime.Object, error) {
+	top, err := evaluate(vm, path, opts)
+	if err != nil {
 		return nil, err
 	}
 

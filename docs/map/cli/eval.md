@@ -1,6 +1,6 @@
 +++
 title = "eval"
-summary = "Evaluate a file or an expression and print any value, not only Kubernetes objects"
+summary = "Read the inputs as show does and print their values, not only Kubernetes objects"
 aka = ["kubecfg eval"]
 kind = "command"
 intent = "goal"
@@ -8,13 +8,18 @@ research = "done"
 refs = ["cmd/eval.go", "pkg/kubecfg/eval.go", "docs/Basic-Usage/Kubecfg-Commands/eval.md"]
 
 [[feature]]
+id = "inputs"
+title = "The same inputs as show: files, -e, overlays, -x and top-level arguments, from the same code"
+status = "done"
+
+[[feature]]
 id = "expr"
-title = "-x: evaluate an expression against the file"
+title = "-x: evaluate an expression against each input"
 status = "done"
 
 [[feature]]
 id = "exec"
-title = "-e: evaluate code without a file, as jsonnet -e and show -e do"
+title = "-e: code as one more input, as jsonnet -e and show -e do"
 status = "done"
 
 [[feature]]
@@ -24,13 +29,13 @@ status = "done"
 
 [[feature]]
 id = "jsonnet-out"
-title = "-o jsonnet: print the Jsonnet a .yakl file compiles to"
+title = "-o jsonnet: print the Jsonnet a .yakl file compiles to; part of the yakl feature"
 status = "done"
 needs = ["/lang/yakl"]
 
 [[feature]]
 id = "trace"
-title = "--trace: show which source lines a value came from"
+title = "--trace: show which source lines a value came from; part of the traceback feature"
 status = "done"
 needs = ["/deps/ursonnet"]
 

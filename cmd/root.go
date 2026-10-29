@@ -502,49 +502,11 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 }
 
 func readObjs(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
-	flags := cmd.Flags()
-
-	exec, err := flags.GetString(flagExec)
+	paths, inputOpts, err := inputs(cmd, paths)
 	if err != nil {
 		return nil, err
 	}
-	if exec != "" {
-		paths = append(paths, utils.ToDataURL(yakl.PredefineKubecfg(exec)))
-	}
-
-	overlayCodeFile, err := flags.GetString(flagOverlayCodeFile)
-	if err != nil {
-		return nil, err
-	}
-
-	overlay, err := flags.GetString(flagOverlay)
-	if err != nil {
-		return nil, err
-	}
-	if overlay != "" {
-		// deprecated. pflag will print a warning
-		overlayCodeFile = overlay
-	}
-
-	if overlayCodeFile != "" {
-		if err := gates.Require(features.Overlay); err != nil {
-			return nil, fmt.Errorf("--%s: %w", flagOverlayCodeFile, err)
-		}
-		opts = append(opts, utils.WithOverlayURL(overlayCodeFile))
-	}
-
-	overlayCode, err := flags.GetString(flagOverlayCode)
-	if err != nil {
-		return nil, err
-	}
-	if overlayCode != "" {
-		if err := gates.Require(features.Overlay); err != nil {
-			return nil, fmt.Errorf("--%s: %w", flagOverlayCode, err)
-		}
-		opts = append(opts, utils.WithOverlayCode(overlayCode))
-	}
-
-	return readObjsInternal(cmd, paths, opts...)
+	return readObjsInternal(cmd, paths, append(inputOpts, opts...)...)
 }
 
 func readObjsInternal(cmd *cobra.Command, paths []string, opts ...utils.ReadOption) ([]*unstructured.Unstructured, error) {
@@ -553,7 +515,85 @@ func readObjsInternal(cmd *cobra.Command, paths []string, opts ...utils.ReadOpti
 		return nil, err
 	}
 	return kubecfg.ReadObjects(vm, paths, opts...)
+}
 
+// inputs returns what a command that evaluates files reads, its arguments and the code of --exec,
+// and the options that say how to read them, from the flags of addCommonEvalFlags.
+func inputs(cmd *cobra.Command, paths []string) ([]string, []utils.ReadOption, error) {
+	flags := cmd.Flags()
+	var opts []utils.ReadOption
+
+	exec, err := flags.GetString(flagExec)
+	if err != nil {
+		return nil, nil, err
+	}
+	if exec != "" {
+		paths = append(paths, utils.ToDataURL(yakl.PredefineKubecfg(exec)))
+	}
+
+	overlayCodeFile, err := flags.GetString(flagOverlayCodeFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	overlay, err := flags.GetString(flagOverlay)
+	if err != nil {
+		return nil, nil, err
+	}
+	if overlay != "" {
+		// deprecated. pflag will print a warning
+		overlayCodeFile = overlay
+	}
+
+	if overlayCodeFile != "" {
+		if err := gates.Require(features.Overlay); err != nil {
+			return nil, nil, fmt.Errorf("--%s: %w", flagOverlayCodeFile, err)
+		}
+		opts = append(opts, utils.WithOverlayURL(overlayCodeFile))
+	}
+
+	overlayCode, err := flags.GetString(flagOverlayCode)
+	if err != nil {
+		return nil, nil, err
+	}
+	if overlayCode != "" {
+		if err := gates.Require(features.Overlay); err != nil {
+			return nil, nil, fmt.Errorf("--%s: %w", flagOverlayCode, err)
+		}
+		opts = append(opts, utils.WithOverlayCode(overlayCode))
+	}
+
+	expr, err := flags.GetString(flagExpr)
+	if err != nil {
+		return nil, nil, err
+	}
+	if expr != "" {
+		if err := gates.Require(features.Eval); err != nil {
+			return nil, nil, fmt.Errorf("--%s: %w", flagExpr, err)
+		}
+		opts = append(opts, utils.WithExpr(expr))
+	}
+
+	tla, err := tlaNames(flags)
+	if err != nil {
+		return nil, nil, err
+	}
+	return paths, append(opts, utils.WithTLA(tla)), nil
+}
+
+func tlaNames(flags *pflag.FlagSet) ([]string, error) {
+	var names []string
+	for _, flagName := range []string{flagTLAVar, flagTLAVarFile, flagTLACode, flagTLACodeFile} {
+		entries, err := flags.GetStringArray(flagName)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			key, _, _ := strings.Cut(entry, "=")
+			names = append(names, key)
+		}
+	}
+	return names, nil
 }
 
 // For debugging
@@ -599,12 +639,16 @@ var unknownKubecfg = regexp.MustCompile(`Unknown variable: kubecfg\b`)
 
 // Hint returns advice to print after err, or "".
 func Hint(err error) string {
-	if !unknownKubecfg.MatchString(err.Error()) {
-		return ""
+	switch {
+	case unknownKubecfg.MatchString(err.Error()):
+		// Elsewhere it's predefined (RFC06), so the code that failed is in a Jsonnet file.
+		return "hint: kubecfg is not predefined in Jsonnet files. Add this line at the top of the file:\n" +
+			"  local kubecfg = import 'kubecfg.libsonnet';"
+	case strings.Contains(err.Error(), "No top-level object found"):
+		// Most likely -e '$.foo', which eval used to take as an expression against the file.
+		return "hint: in -e code, $ is not the input. To evaluate an expression against each input, use -x '$...'"
 	}
-	// Elsewhere it's predefined (RFC06), so the code that failed is in a Jsonnet file.
-	return "hint: kubecfg is not predefined in Jsonnet files. Add this line at the top of the file:\n" +
-		"  local kubecfg = import 'kubecfg.libsonnet';"
+	return ""
 }
 
 func initConfig() {

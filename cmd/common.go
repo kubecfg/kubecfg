@@ -23,6 +23,7 @@ import (
 
 const (
 	flagExec            = "exec"
+	flagExpr            = "expr"
 	flagOverlay         = "overlay" // deprecated
 	flagOverlayCode     = "overlay-code"
 	flagOverlayCodeFile = "overlay-code-file"
@@ -37,6 +38,7 @@ func addCommonEvalFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
 
 	flags.StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
+	flags.StringP(flagExpr, "x", "", "Jsonnet expression to evaluate instead of each whole input; $ is the input's value")
 	flags.String(flagOverlay, "", "Jsonnet file to compose to each of the input files")
 	flags.MarkDeprecated(flagOverlay, fmt.Sprintf("please use %s instead", flagOverlayCodeFile))
 	flags.String(flagOverlayCode, "", "Inline Jsonnet code to compose to each of the input files")

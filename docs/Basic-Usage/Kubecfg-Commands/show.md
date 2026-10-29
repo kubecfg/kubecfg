@@ -17,6 +17,7 @@ Usage:
                                                                                                          
 Flags:                                                                                                   
   -e, --exec string                        Inline code
+  -x, --expr string                        Jsonnet expression to evaluate instead of each whole input; $ is the input's value
       --export-dir string                  Split yaml stream into multiple files and write files into a directory. If the directory exists it must be empty.
       --export-filename-extension string   Override the file extension used when creating filenames when using export-filename-format
       --export-filename-format string      Go template expression used to render path names for resources. (default "{{.apiVersion}}.{{.kind}}-{{default \"default\" .metadata.namespace}}.{{.metadata.name}}")
@@ -181,6 +182,18 @@ spec:
         name: busybox
 ```
 
-Inline code (`-e`, `--overlay-code`, `--ext-code` and `--tla-code`) can use `kubecfg` without
+## Showing part of the output
+
+`-x` (`--expr`) evaluates an expression instead of each whole input, and shows the objects in its
+result. In the expression, `$` is the value of the input. It's part of the `eval` feature:
+
+```console
+$ kubecfg show --features=eval show.jsonnet -x '$.deployment'
+```
+
+When `show` fails because part of the output isn't a Kubernetes object, [`eval`](eval.md) prints
+the same inputs without looking for objects in them.
+
+Inline code (`-e`, `-x`, `--overlay-code`, `--ext-code` and `--tla-code`) can use `kubecfg` without
 importing `kubecfg.libsonnet` first. See
 [Using `kubecfg` without importing it](eval.md#using-kubecfg-without-importing-it).

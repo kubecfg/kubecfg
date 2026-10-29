@@ -13,6 +13,11 @@ title = "YAML or JSON output (-o)"
 status = "done"
 
 [[feature]]
+id = "expr"
+title = "-x: show the objects in an expression against each input; part of the eval feature"
+status = "done"
+
+[[feature]]
 id = "export-dir"
 title = "--export-dir: one file per object, named by a Go template"
 status = "done"

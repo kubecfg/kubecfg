@@ -20,16 +20,15 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
+	"github.com/kubecfg/kubecfg/internal/acquire"
 	"github.com/kubecfg/kubecfg/pkg/features"
 	"github.com/kubecfg/kubecfg/pkg/kubecfg"
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 const (
-	flagExpr     = "expr"
 	flagShowKeys = "show-keys"
 	flagTrace    = "trace"
 )
@@ -37,7 +36,6 @@ const (
 func init() {
 	cmd := evalCmd
 	RootCmd.AddCommand(cmd)
-	cmd.PersistentFlags().StringP(flagExpr, "x", "", "jsonnet expression to evaluate instead of the whole input; $ is the input's value")
 	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list its keys")
 	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml, jsonnet (the unevaluated code of a .yakl file)")
 	cmd.PersistentFlags().Bool(flagTrace, false, "print a causal trace")
@@ -45,24 +43,9 @@ func init() {
 	addCommonEvalFlags(cmd)
 }
 
-func tlaNames(flags *pflag.FlagSet) ([]string, error) {
-	var names []string
-	for _, flagName := range []string{flagTLAVar, flagTLAVarFile, flagTLACode, flagTLACodeFile} {
-		entries, err := flags.GetStringArray(flagName)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			key, _, _ := strings.Cut(entry, "=")
-			names = append(names, key)
-		}
-	}
-	return names, nil
-}
-
 var evalCmd = &cobra.Command{
 	Use:         "eval",
-	Short:       "eval jsonnet expression",
+	Short:       "Show the values of the inputs, which needn't be Kubernetes objects",
 	Args:        cobra.ArbitraryArgs,
 	Annotations: map[string]string{evalCmdAnno: ""},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,11 +56,6 @@ var evalCmd = &cobra.Command{
 		flags := cmd.Flags()
 		var err error
 		c := kubecfg.EvalCmd{}
-
-		c.Expr, err = flags.GetString(flagExpr)
-		if err != nil {
-			return err
-		}
 
 		c.Format, err = flags.GetString(flagFormat)
 		if err != nil {
@@ -93,43 +71,38 @@ var evalCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if c.Trace {
+			if err := gates.Require(features.Traceback); err != nil {
+				return fmt.Errorf("--%s: %w", flagTrace, err)
+			}
+		}
+
+		// The same inputs as show.
+		paths, opts, err := inputs(cmd, args)
+		if err != nil {
+			return err
+		}
+		if len(paths) == 0 {
+			return fmt.Errorf("eval needs a file, or code with -e")
+		}
 
 		vm, err := JsonnetVM(cmd)
 		if err != nil {
 			return err
 		}
 
-		// The input is a file or the code of -e, as in show; the code is evaluated on its own.
-		c.Exec, err = flags.GetString(flagExec)
-		if err != nil {
-			return err
-		}
-		switch {
-		case c.Exec != "" && len(args) > 0:
-			return fmt.Errorf("-e is code on its own, as in jsonnet -e, so it can't be used with a file; to evaluate an expression against the file, use -x")
-		case c.Exec == "" && len(args) != 1:
-			return fmt.Errorf("eval takes one file, or code with -e")
-		case c.Exec != "" && c.Trace:
-			return fmt.Errorf("--trace needs a file, not -e")
-		}
-
 		if c.Format == "jsonnet" {
-			if c.Exec != "" || c.Expr != "" || c.ShowKeys || c.Trace {
-				return fmt.Errorf("-o jsonnet prints the file's code without evaluating it, so it can't be combined with -e, -x, -k or --trace")
+			if err := gates.Require(features.YAKL); err != nil {
+				return fmt.Errorf("-o jsonnet: %w", err)
+			}
+			opt := acquire.MakeReadOptions(opts)
+			if len(args) != 1 || len(paths) != 1 || c.ShowKeys || c.Trace || opt.Expr != "" || opt.OverlayURL != "" || opt.OverlayCode != "" {
+				return fmt.Errorf("-o jsonnet prints the code of one file without evaluating it, so it can't be combined with -e, -x, -k, --trace or an overlay")
 			}
 			return printJsonnet(cmd, vm, args[0])
 		}
 
-		tla, err := tlaNames(flags)
-		if err != nil {
-			return err
-		}
-
-		var file string // "" with -e
-		if len(args) > 0 {
-			file = args[0]
-		}
-		return c.Run(cmd.Context(), vm, file, tla)
+		return c.Run(vm, paths, cmd.OutOrStdout(), opts...)
 	},
 }
 

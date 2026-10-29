@@ -155,14 +155,23 @@ func (c ShowCmd) renderObject(idx int, obj *unstructured.Unstructured, out io.Wr
 		out = f
 	}
 
-	switch c.OutputFormat {
-	case "yaml":
-		fmt.Fprintln(out, "---")
+	var v interface{} = obj
+	if c.OutputFormat == "yaml" {
 		o, err := k8sToJSONObject(obj)
 		if err != nil {
 			return err
 		}
-		buf, err := yaml.Marshal(o)
+		v = o
+	}
+	return writeDoc(out, c.OutputFormat, idx, v)
+}
+
+// writeDoc writes v as document number idx of the output of show or eval.
+func writeDoc(out io.Writer, format string, idx int, v interface{}) error {
+	switch format {
+	case "yaml":
+		fmt.Fprintln(out, "---")
+		buf, err := yaml.Marshal(v)
 		if err != nil {
 			return err
 		}
@@ -176,11 +185,11 @@ func (c ShowCmd) renderObject(idx int, obj *unstructured.Unstructured, out io.Wr
 		if idx > 0 {
 			fmt.Fprintln(out, "---")
 		}
-		if err := enc.Encode(obj); err != nil {
+		if err := enc.Encode(v); err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("Unknown --format: %s", c.OutputFormat)
+		return fmt.Errorf("Unknown --format: %s", format)
 	}
 	return nil
 }
