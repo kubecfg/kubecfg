@@ -9,7 +9,12 @@ refs = ["cmd/eval.go", "pkg/kubecfg/eval.go", "docs/Basic-Usage/Kubecfg-Commands
 
 [[feature]]
 id = "expr"
-title = "-e: evaluate an expression against the file"
+title = "-x: evaluate an expression against the file"
+status = "done"
+
+[[feature]]
+id = "exec"
+title = "-e: evaluate code without a file, as jsonnet -e and show -e do"
 status = "done"
 
 [[feature]]

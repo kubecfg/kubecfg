@@ -30,34 +30,13 @@ const (
 	evalCmdAnno = "evalCmd"
 )
 
-type commonFlagOpts struct {
-	noShortEval bool
-}
-
-type commonEvalFlagOpt func(opts *commonFlagOpts)
-
-func withoutShortEvalFlag() commonEvalFlagOpt {
-	return func(opts *commonFlagOpts) {
-		opts.noShortEval = true
-	}
-}
-
 // Most commands evaluate jsonnet files and expose flags to control
 // how to evaluate them. We cannot put those flags in the root command because
 // we also have commands that wouldn't honour them.
-func addCommonEvalFlags(cmd *cobra.Command, opt ...commonEvalFlagOpt) {
+func addCommonEvalFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
 
-	var opts commonFlagOpts
-	for _, o := range opt {
-		o(&opts)
-	}
-
-	shortEval := "e"
-	if opts.noShortEval {
-		shortEval = ""
-	}
-	flags.StringP(flagExec, shortEval, "", "Inline code") // like `jsonnet -e`
+	flags.StringP(flagExec, "e", "", "Inline code") // like `jsonnet -e`
 	flags.String(flagOverlay, "", "Jsonnet file to compose to each of the input files")
 	flags.MarkDeprecated(flagOverlay, fmt.Sprintf("please use %s instead", flagOverlayCodeFile))
 	flags.String(flagOverlayCode, "", "Inline Jsonnet code to compose to each of the input files")

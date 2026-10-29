@@ -188,7 +188,7 @@ func TestEvalTLANamedLikeInternals(t *testing.T) {
 	}
 	vm.TLAVar("r", "hello")
 	vm.TLAVar("std", "!")
-	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(fileURL, "$.value", []string{"r", "std"}))
+	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(fmt.Sprintf("(import %q)", fileURL), "$.value", []string{"r", "std"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,14 +210,14 @@ func TestEvalYAKLStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "", nil))
+	got, err := vm.EvaluateAnonymousSnippet("eval", evalSnippet(fmt.Sprintf("(import %q)", utils.ImportPath(fileURL)), "", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got = strings.Join(strings.Fields(got), ""); got != `{"a":{"v":1},"b":{"v":2}}` {
 		t.Errorf("got %s", got)
 	}
-	got, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(utils.ImportPath(fileURL), "$.b.v", nil))
+	got, err = vm.EvaluateAnonymousSnippet("eval", evalSnippet(fmt.Sprintf("(import %q)", utils.ImportPath(fileURL)), "$.b.v", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

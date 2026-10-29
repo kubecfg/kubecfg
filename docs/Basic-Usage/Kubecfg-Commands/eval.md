@@ -106,12 +106,22 @@ render to stdout in JSON format
 
 ## Evaluating an expression
 
-`-e` evaluates an expression instead of the whole file. In the expression, `$` is the value of the
-file:
+`-x` (`--expr`) evaluates an expression instead of the whole file. In the expression, `$` is the
+value of the file, even inside an object you write in the expression:
 
 ```console
-$ kubecfg --features=eval eval code.jsonnet -e '$.deployment.spec.replicas'
+$ kubecfg --features=eval eval code.jsonnet -x '$.deployment.spec.replicas'
 3
+```
+
+## Evaluating code without a file
+
+`-e` (`--exec`) evaluates code on its own, as `jsonnet -e` and `kubecfg show -e` do. It can't be
+used with a file; to ask something about a file, use `-x`.
+
+```console
+$ kubecfg --features=eval eval -e '{replicas: 1 + 2}'
+replicas: 3
 ```
 
 ### Using `kubecfg` without importing it
@@ -120,7 +130,7 @@ In the expression, `kubecfg` is already defined, so you can call the functions o
 `kubecfg.libsonnet` without importing it:
 
 ```console
-$ kubecfg --features=eval eval code.jsonnet -e 'kubecfg.fold(kubecfg.layouts.gvkName, $, {})'
+$ kubecfg --features=eval eval code.jsonnet -x 'kubecfg.fold(kubecfg.layouts.gvkName, $, {})'
 extensions/v1beta1.Deployment:
   busybox:
     apiVersion: extensions/v1beta1
@@ -130,7 +140,7 @@ extensions/v1beta1.Deployment:
 It's always the copy of `kubecfg.libsonnet` built into kubecfg. A file with that name on the search
 path (`-J`) or next to the evaluated file doesn't change it. A name you define yourself wins, such
 as a `local kubecfg` or a top-level argument named `kubecfg`. So to use another copy, import it:
-`-e 'local kubecfg = import "kubecfg.libsonnet"; ...'` finds it the usual way.
+`-x 'local kubecfg = import "kubecfg.libsonnet"; ...'` finds it the usual way.
 
 The same goes for the code of `--exec`, `--overlay-code`, `--ext-code` and `--tla-code`, and for
 the expressions in [YAKL](../../Advanced-Usage/yakl.md) files. It doesn't for Jsonnet files: they

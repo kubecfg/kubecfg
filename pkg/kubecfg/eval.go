@@ -17,6 +17,7 @@ import (
 
 // EvalCmd represents the eval subcommand
 type EvalCmd struct {
+	Exec     string // code to evaluate instead of a file, as with show -e
 	Expr     string
 	ShowKeys bool
 	Format   string
@@ -29,13 +30,19 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 		expr = "$"
 	}
 
-	pathURL, err := utils.PathToURL(path)
-	if err != nil {
-		return err
+	// A newline, so that a // comment at the end of the code doesn't hide the parenthesis.
+	root := "(" + c.Exec + "\n)"
+	var pathURL string
+	if c.Exec == "" {
+		var err error
+		if pathURL, err = utils.PathToURL(path); err != nil {
+			return err
+		}
+		pathURL = utils.ImportPath(pathURL)
+		root = fmt.Sprintf("(import %q)", pathURL)
 	}
-	pathURL = utils.ImportPath(pathURL)
 
-	eval := evalSnippet(pathURL, c.Expr, tla)
+	eval := evalSnippet(root, c.Expr, tla)
 	if c.ShowKeys {
 		eval = fmt.Sprintf("std.objectFields(%s)", eval)
 	}
@@ -73,10 +80,9 @@ func (c EvalCmd) Run(ctx context.Context, vm *jsonnet.VM, path string, tla []str
 	return nil
 }
 
-// evalSnippet returns Jsonnet evaluating expr, with `$` being the result of the file at pathURL,
+// evalSnippet returns Jsonnet evaluating expr, with `$` being the result of the code root,
 // called with the top-level arguments tla. Without expr, it evaluates to that result.
-func evalSnippet(pathURL, expr string, tla []string) string {
-	root := fmt.Sprintf("(import %q)", pathURL)
+func evalSnippet(root, expr string, tla []string) string {
 	if len(tla) > 0 {
 		pairs := make([]string, len(tla))
 		for i := range tla {
@@ -84,13 +90,13 @@ func evalSnippet(pathURL, expr string, tla []string) string {
 		}
 		// e.g. `function(foo,bar) (import %q)(foo=foo,bar=bar)`
 		// the actuals are keyworded so that the order of TLA flags doesn't matter.
-		root = fmt.Sprintf("(import %q)(%s)", pathURL, strings.Join(pairs, ","))
+		root = fmt.Sprintf("%s(%s)", root, strings.Join(pairs, ","))
 	}
 	body := root
 	if expr != "" {
 		// `$` must be an object, while a YAML stream in a yakl file evaluates to an array.
 		body = fmt.Sprintf("local Z____root__Z_ = %s; if Z____std__Z_.isObject(Z____root__Z_) then (Z____root__Z_ { Z____expr__Z_:: %s }).Z____expr__Z_ "+
-			"else error '-e needs the file to evaluate to an object, not ' + Z____std__Z_.type(Z____root__Z_)", root, expr)
+			"else error '-x needs the input to evaluate to an object, not ' + Z____std__Z_.type(Z____root__Z_)", root, expr)
 	}
 	if len(tla) > 0 {
 		body = fmt.Sprintf("function(%s) %s", strings.Join(tla, ","), body)

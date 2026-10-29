@@ -37,12 +37,12 @@ const (
 func init() {
 	cmd := evalCmd
 	RootCmd.AddCommand(cmd)
-	cmd.PersistentFlags().StringP(flagExpr, "e", "", "jsonnet expression to evaluate")
-	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list it's keys")
+	cmd.PersistentFlags().StringP(flagExpr, "x", "", "jsonnet expression to evaluate instead of the whole input; $ is the input's value")
+	cmd.PersistentFlags().BoolP(flagShowKeys, "k", false, "instead of rendering an object, list its keys")
 	cmd.PersistentFlags().StringP(flagFormat, "o", "yaml", "Output format.  Supported values are: json, yaml, jsonnet (the unevaluated code of a .yakl file)")
 	cmd.PersistentFlags().Bool(flagTrace, false, "print a causal trace")
 
-	addCommonEvalFlags(cmd, withoutShortEvalFlag())
+	addCommonEvalFlags(cmd)
 }
 
 func tlaNames(flags *pflag.FlagSet) ([]string, error) {
@@ -99,13 +99,23 @@ var evalCmd = &cobra.Command{
 			return err
 		}
 
-		if len(args) < 1 {
-			return fmt.Errorf("jsonnet filename required")
+		// The input is a file or the code of -e, as in show; the code is evaluated on its own.
+		c.Exec, err = flags.GetString(flagExec)
+		if err != nil {
+			return err
+		}
+		switch {
+		case c.Exec != "" && len(args) > 0:
+			return fmt.Errorf("-e is code on its own, as in jsonnet -e, so it can't be used with a file; to evaluate an expression against the file, use -x")
+		case c.Exec == "" && len(args) != 1:
+			return fmt.Errorf("eval takes one file, or code with -e")
+		case c.Exec != "" && c.Trace:
+			return fmt.Errorf("--trace needs a file, not -e")
 		}
 
 		if c.Format == "jsonnet" {
-			if c.Expr != "" || c.ShowKeys || c.Trace {
-				return fmt.Errorf("-o jsonnet prints the file's code without evaluating it, so it can't be combined with -e, -k or --trace")
+			if c.Exec != "" || c.Expr != "" || c.ShowKeys || c.Trace {
+				return fmt.Errorf("-o jsonnet prints the file's code without evaluating it, so it can't be combined with -e, -x, -k or --trace")
 			}
 			return printJsonnet(cmd, vm, args[0])
 		}
@@ -115,7 +125,11 @@ var evalCmd = &cobra.Command{
 			return err
 		}
 
-		return c.Run(cmd.Context(), vm, args[0], tla)
+		var file string // "" with -e
+		if len(args) > 0 {
+			file = args[0]
+		}
+		return c.Run(cmd.Context(), vm, file, tla)
 	},
 }
 

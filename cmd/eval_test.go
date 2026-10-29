@@ -36,3 +36,20 @@ func TestEvalJsonnet(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestEvalInputs(t *testing.T) {
+	run := func(args ...string) error {
+		defer resetFlags()
+		RootCmd.SetArgs(append([]string{"--features=eval", "eval"}, args...))
+		return RootCmd.Execute()
+	}
+	// -e is code on its own, as in show and jsonnet; -x is an expression against the input.
+	if err := run("-e", "{a: 1}", "-x", "$.a"); err != nil {
+		t.Errorf("-e: %v", err)
+	}
+	for _, args := range [][]string{{"app.jsonnet", "-e", "$.a"}, {"a.jsonnet", "b.jsonnet"}, {}} {
+		if err := run(args...); err == nil {
+			t.Errorf("%v: want an error", args)
+		}
+	}
+}
