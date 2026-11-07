@@ -42,13 +42,18 @@ needs = ["/deps/go-containerregistry"]
 [[feature]]
 id = "object-paths"
 title = "groupBy, toObjectPaths, fromObjectPaths, isNamespaced, layouts.gkNsName"
-status = "wip"
-note = "On the worktree-abstract-snuggling-pixel branch, with knit"
+status = "done"
 
 [[feature]]
 id = "pick"
 title = "pick: the one element of an array for which a condition is true"
 status = "done"
+
+[[feature]]
+id = "hashed-name"
+title = "hashedName: a name with kustomize's hash of a ConfigMap's or Secret's data, as its generators make"
+status = "done"
+note = "std.native('kustomizeHash') calls kustomize's own hasher, so names match kustomize build"
 
 [[needs]]
 on = "/deps/go-jsonnet"

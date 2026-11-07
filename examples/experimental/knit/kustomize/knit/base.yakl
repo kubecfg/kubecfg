@@ -1,0 +1,83 @@
+<<+: ${kubecfg.knit}
+---
+# A web app as plain Kubernetes YAML.
+^^: web-debug.ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-debug
+data:
+  DEBUG: "true"
+---
+^^: web.Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27
+          envFrom:
+            - configMapRef: {name: "${$.web.ConfigMap.metadata.name}"}
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+        - name: debug
+          image: busybox:1.37
+          envFrom:
+            - configMapRef: {name: web-debug}
+      volumes:
+        - name: conf
+          configMap:
+            name: ${$.web.ConfigMap.metadata.name}
+            items:
+              - {key: nginx.conf, path: default.conf}
+---
+^^: web.Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector: {app: web}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+^^: web-metrics.Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-metrics
+spec:
+  selector: {app: web}
+  ports:
+    - name: metrics
+      port: 9113
+---
+# Made by configMapGenerator. knit puts a hash of the data after its name.
+^^: web.ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+  annotations:
+    kustomize.config.k8s.io/needs-hash: "true"
+data:
+  LOG_LEVEL: info
+  nginx.conf: |
+    server {
+      listen 8080;
+      location / {
+        root /usr/share/nginx/html;
+      }
+    }

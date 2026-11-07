@@ -1,0 +1,7 @@
+# Where traces go.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracing
+data:
+  endpoint: http://otel-collector:4317

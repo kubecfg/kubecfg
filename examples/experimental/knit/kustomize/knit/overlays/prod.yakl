@@ -1,0 +1,44 @@
+<<+: ${(import 'yakl:../base.yakl') + import 'yakl:../components/tracing.yakl'}
+---
+# New in prod.
+^^: web.PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: web}
+---
+# configMapGenerator web, behavior: merge
+^^+: web.ConfigMap
+data:
+  LOG_LEVEL: warn
+---
+# Production runs three replicas of a newer web, and no debug container.
+^^+: web.Deployment
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        # Containers are matched by name: only web changes.
+        - name: web
+          image: nginx:1.29
+          resources:
+            requests: {cpu: 500m, memory: 256Mi}
+        - name: debug
+          $patch: delete
+---
+^^+: web-metrics.Service
+metadata:
+  annotations:
+    cloud.example.com/internal: "true"
+---
+^^+: web.Service
+metadata:
+  annotations:
+    cloud.example.com/internal: "true"
+---
+^^+:: web-debug.ConfigMap

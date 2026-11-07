@@ -47,7 +47,7 @@ func TestKubecfgShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	yakl, err := os.ReadFile("../../examples/guestbook.yakl")
+	yakl, err := os.ReadFile("../../examples/experimental/yakl/guestbook.yakl")
 	if err != nil {
 		t.Fatal(err)
 	}

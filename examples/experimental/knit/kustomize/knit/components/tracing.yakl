@@ -1,0 +1,23 @@
+# A kustomize component. A file adds it after what it extends: <<+: ${(import 'base') + import 'this'}
+<<+: {}
+---
+# Where traces go.
+^^: tracing.ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracing
+data:
+  endpoint: http://otel-collector:4317
+---
+# The web container sends traces.
+^^+: web.Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: web
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef: {name: tracing, key: endpoint}

@@ -15,8 +15,7 @@ status = "done"
 [[feature]]
 id = "golden"
 title = "Every example checked against golden files"
-status = "wip"
-note = "Only the k8s-libsonnet examples are checked on main; the knit branch checks them all"
+status = "done"
 
 [[feature]]
 id = "kustomize-yakl"

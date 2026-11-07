@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: web }
+spec:
+  template:
+    spec:
+      containers:
+      - name: web
+        args:
+        - $patch: append
+        - --verbose
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker }
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        args:
+        - $patch: append
+        - --verbose

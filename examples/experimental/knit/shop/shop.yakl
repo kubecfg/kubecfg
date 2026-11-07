@@ -1,0 +1,130 @@
+# A fake online shop: a web frontend, an API, a nightly worker and a Redis cache,
+# built with knit. See README.md.
+#
+#   kubecfg show shop.yakl
+#   kubecfg show prod.yakl   # shop.yakl with the prod overlay
+
+# Each object has a name, ^^: web.deployment, which is the field $.web.deployment
+# of the file: what an overlay names to change it, and what other documents read
+# it as. A dot nests, so web's objects are together in $.web. knit merges the
+# documents in order, list entries by their Kubernetes key (containers by name),
+# and $.web.deployment is the object as it ends up.
+#
+# The shop extends redis.yakl, which kubecfg knit import made from Redis's
+# upstream redis.yaml: it extends knit, and names Redis's objects
+# redis.StatefulSet and redis.Service.
+<<+: ${import 'yakl:redis.yakl'}
+---
+# Templates under every object. A value a document sets itself wins.
+^^+: registry
+objects+:
+  metadata+:
+    labels+: {app.kubernetes.io/part-of: shop}
+types+:
+  # Every pod template, at any depth: Deployments, the CronJob, Redis.
+  PodTemplateSpec+:
+    metadata+:
+      labels+: {app.kubernetes.io/part-of: shop}
+---
+^^:: config
+registry: registry.example.com/shop
+version: 1.4.2
+domain: shop.example.com
+replicas: {web: 2, api: 2}
+---
+'&image': ${function(name) $.config.registry + '/' + name + ':' + $.config.version}
+---
+^^: web.deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: ${$.config.replicas.web}
+  selector:
+    matchLabels: &labels {app.kubernetes.io/name: web}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - name: web
+          image: ${image('web')}
+          ports: [{name: http, containerPort: 8080}]
+          env: [{name: API_URL, value: 'http://api'}]
+---
+^^: web.service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector: {app.kubernetes.io/name: web}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+^^: api.deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: ${$.config.replicas.api}
+  selector:
+    matchLabels: &labels {app.kubernetes.io/name: api}
+  template:
+    metadata:
+      labels: ${labels}
+    spec:
+      containers:
+        - name: api
+          image: ${image('api')}
+          ports: [{name: http, containerPort: 8080}]
+          env: [{name: REDIS_URL, value: 'redis://redis:6379'}]
+---
+^^: api.service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector: {app.kubernetes.io/name: api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+^^: worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: worker
+spec:
+  schedule: '0 3 * * *'
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ${image('api')}
+              args: [reindex]
+              # The API container's env as it ends up: what an overlay adds to the API's
+              # env reaches the worker too. [@.name == 'api'] picks the container named api.
+              env: ${$.api.deployment.spec.template.spec.containers[@.name == 'api'].env}
+---
+^^: ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+spec:
+  rules:
+    - host: ${$.config.domain}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: web, port: {name: http}}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: {name: api, port: {name: http}}

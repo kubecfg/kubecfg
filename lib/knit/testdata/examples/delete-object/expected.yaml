@@ -1,0 +1,8 @@
+---
+apiVersion: "v1"
+data:
+  MODE: "dev"
+kind: "ConfigMap"
+metadata:
+  name: "web"
+...

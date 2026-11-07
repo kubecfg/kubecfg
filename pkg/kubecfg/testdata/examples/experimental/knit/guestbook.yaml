@@ -1,0 +1,140 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: frontend
+  name: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: frontend
+  template:
+    metadata:
+      labels:
+        name: frontend
+    spec:
+      containers:
+      - image: gcr.io/google-samples/gb-frontend:v3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+        name: php-redis
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: frontend
+  name: frontend
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    name: frontend
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: redis-master
+  name: redis-master
+spec:
+  selector:
+    matchLabels:
+      name: redis-master
+  template:
+    metadata:
+      labels:
+        name: redis-master
+    spec:
+      containers:
+      - env:
+        - name: REDIS_REPLICATION_MODE
+          value: master
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        image: bitnami/redis:4.0.9
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: redis-master
+  name: redis-master
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    name: redis-master
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: redis-slave
+  name: redis-slave
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      name: redis-slave
+  template:
+    metadata:
+      labels:
+        name: redis-slave
+    spec:
+      containers:
+      - env:
+        - name: REDIS_REPLICATION_MODE
+          value: slave
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        - name: REDIS_MASTER_HOST
+          value: redis-master
+        - name: REDIS_MASTER_PORT_NUMBER
+          value: "6379"
+        image: bitnami/redis:4.0.9
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: redis-slave
+  name: redis-slave
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    name: redis-slave

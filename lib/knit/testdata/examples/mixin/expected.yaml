@@ -1,0 +1,22 @@
+---
+apiVersion: "v1"
+data:
+  DB_HOST: "db.prod"
+kind: "ConfigMap"
+metadata:
+  name: "web"
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "web"
+spec:
+  template:
+    metadata:
+      annotations:
+        checksum/config: "bdee09936eeb36108da1082a6decb773"
+    spec:
+      containers:
+      - image: "web:1.0"
+        name: "web"
+...

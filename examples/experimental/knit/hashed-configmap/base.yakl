@@ -1,0 +1,39 @@
+# A ConfigMap named with a hash of its data, as kustomize's configMapGenerator names one, and a
+# Deployment that refers to it. When the data changes, so does the name, and the Deployment rolls
+# out new pods that read the new data. See README.md.
+#
+#   kubecfg show base.yakl
+<<+: ${kubecfg.knit}
+---
+# With this annotation, knit puts a hash of the data after the name: web-<10 characters>, as
+# kustomize computes it. The annotation isn't output. Overlays still patch the object as
+# web.ConfigMap, and knit matches it by the name written here.
+^^: web.ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+  annotations:
+    kustomize.config.k8s.io/needs-hash: "true"
+data:
+  LOG_LEVEL: info
+---
+^^: web.Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.29
+          envFrom:
+            # The ConfigMap's name as it ends up, hash included.
+            - configMapRef:
+                name: ${$.web.ConfigMap.metadata.name}

@@ -1,0 +1,40 @@
+{
+   "children": [
+      {
+         "apiVersion": "apps/v1",
+         "kind": "Deployment",
+         "metadata": {
+            "name": "useless-demo"
+         },
+         "spec": {
+            "replicas": 1,
+            "selector": {
+               "matchLabels": {
+                  "app": "useless-demo"
+               }
+            },
+            "template": {
+               "metadata": {
+                  "labels": {
+                     "app": "useless-demo"
+                  }
+               },
+               "spec": {
+                  "containers": [
+                     {
+                        "image": "k8s.gcr.io/pause:3.9",
+                        "imagePullPolicy": "Always",
+                        "name": "useless"
+                     }
+                  ]
+               }
+            }
+         }
+      }
+   ],
+   "resyncAfterSeconds": 30,
+   "status": {
+      "observedGeneration": 3,
+      "ready": "false"
+   }
+}

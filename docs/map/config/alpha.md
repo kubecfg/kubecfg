@@ -12,12 +12,6 @@ id = "switch"
 title = "--alpha and KUBECFG_ALPHA"
 status = "done"
 
-[[feature]]
-id = "jsonnet"
-title = "std.native('alpha') and kubecfg.alpha: Jsonnet code can see the switch"
-status = "wip"
-note = "On the worktree-abstract-snuggling-pixel branch, with knit"
-
 [[needs]]
 on = "/config/flags"
 +++

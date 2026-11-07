@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - pdb.yaml
+# Production logs less. behavior: merge changes the base's ConfigMap, so its hash changes too.
+configMapGenerator:
+  - name: web
+    behavior: merge
+    literals:
+      - LOG_LEVEL=warn
+components:
+  - ../../components/tracing
+patches:
+  # A patch file names its object by apiVersion, kind and name.
+  - path: deployment.yaml
+  # A patch with a target patches every object the target selects.
+  - target:
+      kind: Service
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: any
+        annotations:
+          cloud.example.com/internal: "true"
+  # $patch: delete leaves an object out.
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: web-debug
+      $patch: delete

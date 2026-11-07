@@ -1,0 +1,8 @@
+<<+: ${import 'yakl:base.yakl'}
+---
+^^+: web
+apiVersion: autoscaling/v2
+spec:
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 80}}

@@ -1,0 +1,9 @@
+# base.yakl with another log level. The ConfigMap gets another hash, and the Deployment's
+# reference follows it.
+#
+#   kubecfg show prod.yakl
+<<+: ${import 'yakl:base.yakl'}
+---
+^^+: web.ConfigMap
+data:
+  LOG_LEVEL: debug

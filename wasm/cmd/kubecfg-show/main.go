@@ -85,6 +85,7 @@ func run(args []string) error {
 	}
 	vm.Importer(utils.MakeUniversalImporterWithFeatures([]*url.URL{{Scheme: "internal", Path: "/"}}, gates))
 	utils.RegisterNativeFuncs(vm, utils.NewIdentityResolver())
+	utils.RegisterFeatures(vm, gates)
 
 	var objs []*unstructured.Unstructured
 	for _, path := range flags.Args() {

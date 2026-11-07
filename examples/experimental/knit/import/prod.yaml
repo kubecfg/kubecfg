@@ -1,0 +1,33 @@
+# Production changes, as kustomize patches: each document names an object of
+# base.yaml by apiVersion, kind and name, and gives only what changes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        # Matched by name: only the web container changes.
+        - name: web
+          image: nginx:1.29
+          resources:
+            requests: {cpu: 500m, memory: 256Mi}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+data:
+  LOG_LEVEL: warn
+---
+# New in prod.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: web}

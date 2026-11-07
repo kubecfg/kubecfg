@@ -1,0 +1,13 @@
+# c2 is a copy of c: an ordinary document that reads c through $. prod.yakl
+# defines c again, which replaces the base's c, so c2 copies prod's c.
+<<+: ${kubecfg.knit}
+---
+^^: c
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: c}
+data: {from: base, extra: base}
+---
+^^: c2
+<<+: ${$.c}
+metadata: {name: c2}

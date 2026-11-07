@@ -1,0 +1,49 @@
+---
+apiVersion: "apiextensions.k8s.io/v1"
+kind: "CustomResourceDefinition"
+metadata:
+  name: "gateways.example.com"
+spec:
+  group: "example.com"
+  names:
+    kind: "Gateway"
+    plural: "gateways"
+  scope: "Namespaced"
+  versions:
+  - name: "v1"
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              listeners:
+                items:
+                  properties:
+                    name:
+                      type: "string"
+                    port:
+                      type: "integer"
+                    tls:
+                      type: "boolean"
+                  type: "object"
+                type: "array"
+                x-kubernetes-list-map-keys:
+                - "name"
+                x-kubernetes-list-type: "map"
+            type: "object"
+        type: "object"
+    served: true
+    storage: true
+---
+apiVersion: "example.com/v1"
+kind: "Gateway"
+metadata:
+  name: "edge"
+spec:
+  listeners:
+  - name: "http"
+    port: 80
+  - name: "https"
+    port: 443
+    tls: true
+...

@@ -1,0 +1,29 @@
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "web"
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        - "--port=8080"
+        - "--verbose"
+        image: "web:1.0"
+        name: "web"
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "worker"
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        - "--queue=jobs"
+        - "--verbose"
+        image: "worker:1.0"
+        name: "worker"
+...
