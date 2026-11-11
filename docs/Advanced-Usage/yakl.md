@@ -41,6 +41,7 @@ in plain YAML:
 | `$${...}` at the start of a string | the literal text `${...}` |
 | `- ${for x in xs}:`, with a body under it | the body once per `x`, as list items |
 | `- ${if cond}:`, with a body under it | the body as a list item, if `cond` holds |
+| `${assert cond}: message` in a mapping | `assert cond : message` in its object |
 | `spec+:` | `spec+:`, extend the inherited field |
 | `name::` and `name:::` | hidden, and forced visible |
 | `<<+: S` | `S + {the mapping's own fields}` |
@@ -494,6 +495,22 @@ statefulset+:
             resources+:
               requests+: {storage: 20Gi}
 ```
+
+## Asserts
+
+A key `${assert cond}` is a Jsonnet object assert. Its value is the message, or nothing for
+none:
+
+```yaml
+^^:: web
+${assert self.replicas <= 3}: web runs at most 3 replicas
+${assert std.length(self.image) > 0}:
+image: nginx:1.27
+replicas: 2
+```
+
+That's
+`web:: {assert self.replicas <= 3 : 'web runs at most 3 replicas', assert std.length(self.image) > 0, image: 'nginx:1.27', replicas: 2}`.
 
 ## Extending and hiding fields
 
@@ -1287,7 +1304,7 @@ ${if debug then 'debugPort'}: 9229
 ```
 
 `${if debug}:`, without `then`, and `${for ...}:` are [list items](#loops-and-conditions),
-and errors as mapping keys.
+and errors as mapping keys. `${assert cond}:` is an [assert](#asserts).
 
 Keys must be scalars. Complex keys (`? [a, b]`) are rejected. Duplicate keys are errors, also
 when a computed key collides at runtime.
