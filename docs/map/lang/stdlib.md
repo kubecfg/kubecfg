@@ -34,6 +34,12 @@ status = "done"
 needs = ["/deps/jsonschema"]
 
 [[feature]]
+id = "simple-schema"
+title = "validateSimpleSchema: check an object against a kro SimpleSchema, behind --features=simpleschema"
+status = "done"
+needs = ["/deps/kro"]
+
+[[feature]]
 id = "resolve-image"
 title = "resolveImage: turn image tags into digests (--resolve-images)"
 status = "done"

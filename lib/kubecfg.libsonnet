@@ -92,6 +92,16 @@ local pathString(path) = if path == [] then '(top)' else std.join('.', [std.toSt
   // is omitted based on the given schema's rules.
   validateJSONSchema:: std.native('validateJSONSchema'),
 
+  // validateSimpleSchema(obj, schema, types={}): true if obj follows the kro
+  // SimpleSchema schema (https://kro.run/api/specifications/simple-schema), else an
+  // error that lists what's wrong. types holds custom types, as the types: of a
+  // kro schema. Checked as the API server checks a kro instance: unknown fields
+  // are errors, defaults are filled in, validation= markers run their CEL rule.
+  //   assert kubecfg.validateSimpleSchema(self.settings, self.appSchema.spec, self.appSchema.types),
+  // See docs/Advanced-Usage/schema-validation.md.
+  // Alpha: it needs --features=simpleschema.
+  validateSimpleSchema(obj, schema, types={}):: std.native('validateSimpleSchema')(obj, schema, types),
+
   // hashedName(name, o): name, a dash and a hash of the data of the ConfigMap or
   // Secret o, as kustomize's configMapGenerator and secretGenerator name what
   // they make: web-hf678c7m2b. The hash is kustomize's, of o's kind and data

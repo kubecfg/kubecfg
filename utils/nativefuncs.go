@@ -85,7 +85,8 @@ func (r *ArrayReader) Read(p []byte) (int, error) {
 // RegisterFeatures makes std.native('requireFeature')(name) check gates: it returns true when
 // the named feature is on, and fails with the standard error when it is off. Jsonnet can
 // require a feature but not read it, so output never depends on which features are on.
-// RegisterNativeFuncs registers it with every feature at its default.
+// It also registers the natives of features, which fail the same way when their feature is
+// off. RegisterNativeFuncs registers them with every feature at its default.
 func RegisterFeatures(vm *jsonnet.VM, gates *features.Gates) {
 	vm.NativeFunction(&jsonnet.NativeFunction{
 		Name:   "requireFeature",
@@ -97,6 +98,29 @@ func RegisterFeatures(vm *jsonnet.VM, gates *features.Gates) {
 				return nil, fmt.Errorf("unknown feature %q; run \"kubecfg features\" to list them", name)
 			}
 			if err := gates.Require(f); err != nil {
+				return nil, err
+			}
+			return true, nil
+		},
+	})
+
+	vm.NativeFunction(&jsonnet.NativeFunction{
+		Name:   "validateSimpleSchema",
+		Params: []jsonnetAst.Identifier{"obj", "schema", "types"},
+		Func: func(args []interface{}) (interface{}, error) {
+			if err := gates.Require(features.SimpleSchema); err != nil {
+				return nil, err
+			}
+			// kro reads a null schema or types as empty.
+			schema, ok := args[1].(map[string]interface{})
+			if !ok && args[1] != nil {
+				return nil, fmt.Errorf("validateSimpleSchema: the schema must be an object, got %T", args[1])
+			}
+			types, ok := args[2].(map[string]interface{})
+			if !ok && args[2] != nil {
+				return nil, fmt.Errorf("validateSimpleSchema: types must be an object, got %T", args[2])
+			}
+			if err := validateSimpleSchema(args[0], schema, types); err != nil {
 				return nil, err
 			}
 			return true, nil

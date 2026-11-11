@@ -17,6 +17,7 @@ kubecfg show knit/shop/prod.yakl
 | `knit/import/` | knit and YAKL | `kubecfg knit import`: plain YAML and kustomize-style patches turned into YAKL files on knit |
 | `knit/hashed-configmap/` | knit and YAKL | a ConfigMap named with a hash of its data, as kustomize's `configMapGenerator` names one |
 | `knit/kustomize/` | knit and YAKL | `kubecfg knit import -k`: a kustomize base and overlay, with a `configMapGenerator`, turned into YAKL files on knit |
+| `simpleschema/` | [kro SimpleSchema](../../docs/Advanced-Usage/schema-validation.md#kro-simpleschema) and YAKL | two apps whose settings a base checks against a kro SimpleSchema, with a prod overlay, in Jsonnet and in YAKL |
 
 `kubecfg features` run from a directory lists which features are on, and says they came
 from `.kubecfgrc.jsonnet`. See [feature gates](../../docs/Advanced-Usage/feature-gates.md).

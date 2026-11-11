@@ -233,6 +233,99 @@ func TestValidateJSONSchema(t *testing.T) {
 	}
 }
 
+func TestValidateSimpleSchema(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+	if _, err := vm.EvaluateAnonymousSnippet("test", `std.native('validateSimpleSchema')({}, {}, {})`); err == nil || !strings.Contains(err.Error(), "--features=simpleschema") {
+		t.Errorf("want the native to need --features=simpleschema, got %v", err)
+	}
+	RegisterFeatures(vm, features.AllAlpha())
+	vm.ExtCode("schema", `{
+	  name: 'string | required=true pattern="^[a-z]+$"',
+	  replicas: 'integer | default=1 minimum=1',
+	  ratio: 'float',
+	  labels: 'map[string]string',
+	  extra: 'object',
+	  ports: '[]Port | listType=map listMapKey=port',
+	  limits: { cpu: 'string' },
+	  range: 'Range | validation="!has(self.min) || self.min <= self.max"',
+	}`)
+	vm.ExtCode("types", `{
+	  Port: { port: 'integer | required=true', name: 'string' },
+	  Range: { min: 'integer', max: 'integer | default=10' },
+	}`)
+
+	for _, tc := range []struct{ obj, want string }{
+		// Jsonnet numbers are float64, and pass as integers when they're whole.
+		{`{name: 'web', replicas: 3, ratio: 1, labels: {a: 'b'}, extra: {any: [1]}, ports: [{port: 80}], limits: {cpu: '1'}, range: {max: 3}}`, ""},
+		// The API server drops a null where the schema doesn't allow one, or fills in the default.
+		{`{name: 'web', ratio: null, replicas: null}`, ""},
+		{`{name: null}`, "- name: Required value\n"},
+		{`{name: 'web', replicas: 0}`, "\n- replicas: Invalid value: 0: replicas in body should be greater than or equal to 1\n"},
+		{`{replicas: 1.5}`, "- name: Required value\n"},
+		{`{name: 'web', typo: 1, limits: {cpu: '1', mem: '1'}}`, ":\n- limits.mem: unknown field\n- typo: unknown field\n"},
+		// obj is a spec, so these are unknown fields too, not the fields of a resource.
+		{`{name: 'web', apiVersion: 'v1', kind: 'Foo', metadata: {}}`, ":\n- apiVersion: unknown field\n- kind: unknown field\n- metadata: unknown field\n"},
+		{`{name: 'web', labels: {a: 1}}`, "- labels.a: Invalid value: \"integer\": labels.a in body must be of type string"},
+		{`{name: 'web', ports: [{port: 80}, {port: 80, name: 'x'}]}`, "- ports[1]: Duplicate value: {\"port\":80}\n"},
+		// The rule sees the default of max, 10.
+		{`{name: 'web', range: {min: 11}}`, "- range: Invalid value: failed rule: !has(self.min) || self.min <= self.max\n"},
+		// As in the API server, the rules don't run while there are errors like a missing field.
+		{`{range: {min: 11}}`, ":\n- (top): the validation= rules were not checked, because of the other errors\n- name: Required value\n"},
+		{`[]`, "- (top): Invalid value: \"array\":  in body must be of type object"},
+	} {
+		got, err := vm.EvaluateAnonymousSnippet("test", `std.native('validateSimpleSchema')(`+tc.obj+`, std.extVar('schema'), std.extVar('types'))`)
+		if tc.want == "" {
+			check(t, err, got, "true\n")
+		} else if err == nil || !strings.Contains(err.Error(), "RUNTIME ERROR: object is invalid against the SimpleSchema:\n") || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: want an error with %q, got %v", tc.obj, tc.want, err)
+		}
+	}
+
+	// kro reads a null schema or types as empty. A rule can have line breaks.
+	for _, call := range []string{`({}, null, null)`, `({a: 5}, {a: 'integer | validation="self > 0 &&\n self < 10"'}, null)`} {
+		got, err := vm.EvaluateAnonymousSnippet("test", `std.native('validateSimpleSchema')`+call)
+		check(t, err, got, "true\n")
+	}
+
+	// The schema is checked whole, also where the object has nothing.
+	for _, tc := range []struct{ schema, types, want string }{
+		{`{a: 'Nope'}`, `{}`, "invalid SimpleSchema: field a: unknown type: Nope"},
+		{`{ports: '[]Port | listType=map listMapKey=typo'}`, `{Port: {port: 'integer'}}`,
+			"invalid SimpleSchema: the API server would reject the CRD that kro makes of it:\n- properties[ports].x-kubernetes-list-map-keys: Invalid value: [\"typo\"]: entries must all be names of item properties"},
+		{`{a: 'string | validation="self.nope("'}`, `{}`, "- properties[a].x-kubernetes-validations[0].rule: Invalid value"},
+		// kro gives range the default {}, which the API server checks without the defaults inside it.
+		{`{range: 'Range | validation="self.min <= self.max"'}`, `{Range: {min: 'integer | default=0', max: 'integer | default=10'}}`,
+			"- properties[range].default: Invalid value: \"object\": no such key: min evaluating rule: self.min <= self.max"},
+	} {
+		_, err := vm.EvaluateAnonymousSnippet("test", `std.native('validateSimpleSchema')({}, `+tc.schema+`, `+tc.types+`)`)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: want an error with %q, got %v", tc.schema, tc.want, err)
+		}
+	}
+}
+
+// An assert in a base checks the object as an overlay leaves it.
+func TestValidateSimpleSchemaOverlay(t *testing.T) {
+	vm := jsonnet.MakeVM()
+	RegisterNativeFuncs(vm, NewIdentityResolver())
+	RegisterFeatures(vm, features.AllAlpha())
+	vm.ExtCode("base", `{
+	  schema:: { replicas: 'integer | minimum=1' },
+	  settings:: { replicas: 2 },
+	  assert std.native('validateSimpleSchema')(self.settings, self.schema, {}),
+	  replicas: $.settings.replicas,
+	}`)
+	got, err := vm.EvaluateAnonymousSnippet("test", `(std.extVar('base') + {settings+: {replicas: 3}}).replicas`)
+	check(t, err, got, "3\n")
+	if _, err := vm.EvaluateAnonymousSnippet("test", `std.extVar('base') + {settings+: {replicas: 0}}`); err == nil || !strings.Contains(err.Error(), "replicas in body should be greater than or equal to 1") {
+		t.Errorf("want the overlay's replicas: 0 to fail the base's assert, got %v", err)
+	}
+	// The overlay can change the schema too.
+	got, err = vm.EvaluateAnonymousSnippet("test", `(std.extVar('base') + {schema+: {replicas: 'integer'}, settings+: {replicas: 0}}).replicas`)
+	check(t, err, got, "0\n")
+}
+
 func TestArrayReader(t *testing.T) {
 	buf := make([]byte, 2)
 	var r io.Reader

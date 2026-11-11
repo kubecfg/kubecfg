@@ -44,6 +44,11 @@ func TestExamples(t *testing.T) {
 		{file: "experimental/knit/import/prod.yakl", golden: "experimental/knit/import/prod.yaml"},
 		{file: "experimental/knit/kustomize/knit/base.yakl", golden: "experimental/knit/kustomize/base.yaml"},
 		{file: "experimental/knit/kustomize/knit/overlays/prod.yakl", golden: "experimental/knit/kustomize/prod.yaml"},
+		// The YAKL files give what the Jsonnet files give.
+		{file: "experimental/simpleschema/base.jsonnet", golden: "experimental/simpleschema/base.yaml"},
+		{file: "experimental/simpleschema/base.yakl", golden: "experimental/simpleschema/base.yaml"},
+		{file: "experimental/simpleschema/prod.jsonnet", golden: "experimental/simpleschema/prod.yaml"},
+		{file: "experimental/simpleschema/prod.yakl", golden: "experimental/simpleschema/prod.yaml"},
 		{
 			file:    "metacontroller/jsonnet/sync.jsonnet",
 			golden:  "metacontroller/sync.json",
@@ -70,6 +75,29 @@ func TestExamples(t *testing.T) {
 				t.Errorf("output differs from %s; if the change is right, run with -update\ngot:\n%s", golden, got)
 			}
 		})
+	}
+}
+
+// The asserts of the simpleschema examples check what an overlay does to the settings.
+func TestSimpleSchemaExampleOverlay(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "experimental", "simpleschema"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm, err := JsonnetVM(WithAlpha(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm.Importer(utils.MakeUniversalImporter([]*url.URL{{Scheme: "internal", Path: "/"}}, true))
+	dir = filepath.ToSlash(dir)
+	for _, code := range []string{
+		fmt.Sprintf(`(import '%s/prod.jsonnet') + {settings+: {web+: {replicas: 0}}}`, dir),
+		fmt.Sprintf(`(import 'yakl:%s/prod.yakl') + {web+: {replicas: 0}}`, dir),
+	} {
+		_, err := vm.EvaluateAnonymousSnippet("test.jsonnet", code)
+		if err == nil || !strings.Contains(err.Error(), "- replicas: Invalid value: 0: replicas in body should be greater than or equal to 1\n") {
+			t.Errorf("%s: want an error about replicas, got %v", code, err)
+		}
 	}
 }
 
