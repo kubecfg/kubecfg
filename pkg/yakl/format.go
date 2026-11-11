@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet/formatter"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Format formats the Jsonnet code of the expressions in a yakl document, as jsonnetfmt does, and

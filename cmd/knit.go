@@ -36,7 +36,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/yakl"
 	"github.com/kubecfg/kubecfg/utils"
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/kustomize/api/ifc"
 	"sigs.k8s.io/kustomize/api/konfig"
