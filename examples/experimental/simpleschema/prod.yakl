@@ -1,0 +1,10 @@
+# prod.jsonnet in YAKL: base.yakl in production. The base's asserts check these settings too.
+#
+#   kubecfg show prod.yakl
+<<+: ${import 'yakl:base.yakl'}
+---
+^^+: web
+replicas: 5
+---
+^^+: worker
+env: {QUEUE: prod}

@@ -1,0 +1,14 @@
+# What the settings of an app look like, in kro's SimpleSchema:
+# https://kro.run/api/specifications/simple-schema
+# It's laid out as the schema: of a kro ResourceGraphDefinition: spec has the fields, types
+# the custom types.
+spec:
+  image: string | required=true validation="!self.endsWith(':latest')"
+  replicas: integer | required=true minimum=1 maximum=10
+  args: "[]string"
+  env: "map[string]string"
+  ports: "[]Port | listType=map listMapKey=port"
+types:
+  Port:
+    name: string | required=true maxLength=15
+    port: integer | required=true minimum=1 maximum=65535

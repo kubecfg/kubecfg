@@ -1,0 +1,75 @@
+# base.jsonnet in YAKL. Each settings document has an assert, which checks it as the overlays
+# leave it. See prod.yakl.
+#
+#   kubecfg show base.yakl
+^^:: appSchema
+<<+: ${import 'yaml:app-schema.yaml'}
+---
+^^:: web
+${assert kubecfg.validateSimpleSchema(self, $.appSchema.spec, $.appSchema.types)}:
+image: nginx:1.27
+replicas: 2
+ports:
+- {name: http, port: 80}
+---
+^^:: worker
+${assert kubecfg.validateSimpleSchema(self, $.appSchema.spec, $.appSchema.types)}:
+image: busybox:1.36
+replicas: 1
+args: [sleep, infinity]
+env: {QUEUE: dev}
+---
+^^: web-deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: ${$.web.replicas}
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      containers:
+      - name: web
+        image: ${$.web.image}
+        ports:
+        - ${for p in $.web.ports}:
+            name: ${p.name}
+            containerPort: ${p.port}
+---
+^^: web-service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector: {app: web}
+  ports:
+  - ${for p in $.web.ports}:
+      name: ${p.name}
+      port: ${p.port}
+---
+^^: worker-deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  replicas: ${$.worker.replicas}
+  selector:
+    matchLabels: {app: worker}
+  template:
+    metadata:
+      labels: {app: worker}
+    spec:
+      containers:
+      - name: worker
+        image: ${$.worker.image}
+        args: ${$.worker.args}
+        env:
+        - ${for k in std.objectFields($.worker.env)}:
+            name: ${k}
+            value: ${$.worker.env[k]}

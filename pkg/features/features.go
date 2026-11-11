@@ -79,6 +79,7 @@ var (
 	PinnedImports   = register(Feature{Name: "pinned-imports", Stage: Beta, Since: "v0.42.0", Doc: "#hash= on an import URL: the import fails if the content doesn't match the hash"})
 	BinaryImport    = register(Feature{Name: "binary-import", Stage: Removed, Since: "v0.41.0", Doc: "the binary:// import prefix; use importbin"})
 	Knit            = register(Feature{Name: "knit", Stage: Alpha, Since: "v0.43.0", Doc: "the knit library: kubecfg.knit and knit import"})
+	SimpleSchema    = register(Feature{Name: "simpleschema", Stage: Alpha, Since: "v0.43.0", Doc: "kubecfg.validateSimpleSchema: check objects against a kro SimpleSchema"})
 )
 
 // All returns every registered feature, in registration order.
