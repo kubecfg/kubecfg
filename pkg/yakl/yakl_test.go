@@ -244,6 +244,9 @@ func TestExpressions(t *testing.T) {
 		{"a list body is one element", "- ${for x in [1, 2]}: [${x}, ${x}]\n", `[[1,1],[2,2]]`},
 		{"an if then is a computed key", "${if true then 'k'}: 1\n${if false then 'j'}: 2\n", `{"k":1}`},
 		{"loops nest", "- ${for a in ['x', 'y']}:\n    - ${for b in [1, 2]}: ${a + b}\n", `[["x1","x2"],["y1","y2"]]`},
+		{"assert keys", "a:\n  ${assert self.x == 1}: x must be 1\n  x: 1\nb:\n  ${assert self.x > 0}:\n  x: 1\n", `{"a":{"x":1},"b":{"x":1}}`},
+		{"a merge key copies an assert", "base: &b\n  ${assert self.x > 0}: positive\n  x: 1\nc:\n  <<: *b\n  x: 2\n", `{"base":{"x":1},"c":{"x":2}}`},
+		{"an assert that is whole is a computed key", "${assert true; 'k'}: 1\n", `{"k":1}`},
 		{"a body's self is the item", "- ${for x in [1]}:\n    a: ${x}\n    b: ${self.a + 1}\n", `[{"a":1,"b":2}]`},
 		{"local keys in a body", "- ${for x in [1, 2]}:\n    '&y': ${x * 2}\n    v: ${y}\n", `[{"v":2},{"v":4}]`},
 		{"clauses see the locals around them", "'&xs': [1, 2]\n---\nm:\n  '&n': 10\n  l:\n    - ${for x in xs}: ${x + n}\n", `{"m":{"l":[11,12]}}`},
@@ -597,6 +600,11 @@ func TestErrors(t *testing.T) {
 		{"a: ${[1][@:]}\n", "line 1: @ is the entry of a list"},
 		{"a: ${[1][@ == 1].x}\n", "test.yakl:1:"},
 		{"a: ${[1][@ == y]}\n", "Unknown variable: y"},
+		{"a:\n  ${assert self.x > 0}: x must be positive\n  x: 0\n", "x must be positive\n\ttest.yakl:2:4-44"},
+		{"a:\n  ${assert self.x > 0}:\n  x: 0\n", "Object assertion failed"},
+		{"a:\n  ${assert self.x > 0}: ${'x is %d' % self.x}\n  x: -1\n", "x is -1"},
+		{"---\n^^: a\n${assert self.x > 0}: x must be positive\nx: 1\n---\n^^+: a\nx: 0\n", "x must be positive"},
+		{"base: &b\n  ${assert self.x > 0}: positive\n  x: 1\nc:\n  <<: *b\n  x: 0\n", "positive"},
 	}
 	for _, tc := range cases {
 		_, err := eval(t, tc.src)

@@ -1904,6 +1904,7 @@ type field struct {
 	entry
 	name     string // for a literal key, the field name without modifiers
 	computed bool
+	assert   bool // an assert key, ${assert cond}: its value is the message
 	local    bool // a local key, '&name': its name is the local's
 	plus     bool
 	colons   int
@@ -2086,6 +2087,7 @@ func (c *compiler) mapping(n *yaml.Node) error {
 			if c.clause(k) != "" {
 				return c.errorf(k, "%s can only be a list item, as in \"- %[1]s:\"; to add fields to a mapping, use <<+: ${...}", c.keyText(k))
 			}
+			f.assert = c.isAssert(k)
 		case nameKey.MatchString(k.Value):
 			return c.errorf(k, "the key %q names a document, so it goes among the top-level keys of a document; "+
 				"for a literal key, write ${%s}", k.Value, quote(k.Value))
@@ -2171,6 +2173,11 @@ func (c *compiler) mapping(n *yaml.Node) error {
 		if err := c.alias(f.alias, func() error { return c.key(f) }); err != nil {
 			return err
 		}
+		if f.assert && isNull(f.v) { // no message
+			c.end(n, ", ", line...)
+			c.comment(foot...)
+			continue
+		}
 		if ok {
 			c.write("(")
 		}
@@ -2206,6 +2213,20 @@ func (c *compiler) key(f field) error {
 	if f.local {
 		c.align(k)
 		c.write("local " + f.name + " = ")
+		return nil
+	}
+	if f.assert { // assert cond : message, or with no message, assert cond
+		e, _, err := c.expr(k)
+		if err != nil {
+			return err
+		}
+		c.align(k)
+		if err := c.code(e, true); err != nil {
+			return err
+		}
+		if !isNull(f.v) {
+			c.write(" : ")
+		}
 		return nil
 	}
 	if f.computed || f.name == f.text {
@@ -2264,7 +2285,15 @@ func (c *compiler) extends(e entry) error {
 // clause returns "for" or "if" if key k is a comprehension clause, like ${for x in xs} or
 // ${if cond}, and "" otherwise. An expression that is whole on its own, like ${if c then 'k'}, is
 // a computed key instead.
-func (c *compiler) clause(k *yaml.Node) string {
+func (c *compiler) clause(k *yaml.Node) string { return c.keyword(k, "for", "if") }
+
+// isAssert reports whether key k is an object assert, like ${assert cond}. An expression that is
+// whole on its own, like ${assert c; 'k'}, is a computed key instead.
+func (c *compiler) isAssert(k *yaml.Node) bool { return c.keyword(k, "assert") != "" }
+
+// keyword returns the one of kws that the code of key k starts with, when the code isn't an
+// expression on its own, and "" otherwise.
+func (c *compiler) keyword(k *yaml.Node, kws ...string) string {
 	if k.Kind == yaml.AliasNode {
 		k = k.Alias
 	}
@@ -2277,7 +2306,7 @@ func (c *compiler) clause(k *yaml.Node) string {
 	if code == "" {
 		code = withoutBlocks(c.src, e.from, e.to, e.blocks)
 	}
-	for _, kw := range []string{"for", "if"} {
+	for _, kw := range kws {
 		if startsWith(code, kw) && !parses(code) {
 			return kw
 		}
@@ -2404,6 +2433,14 @@ func (c *compiler) comprehension(k, v *yaml.Node) error {
 	}
 	c.write("]")
 	return nil
+}
+
+// isNull reports whether n is a null, like the empty value of "key:".
+func isNull(n *yaml.Node) bool {
+	if n.Kind == yaml.AliasNode {
+		n = n.Alias
+	}
+	return n.Kind == yaml.ScalarNode && n.Tag == "!!null"
 }
 
 // keywords are the Jsonnet keywords, which can't name variables.

@@ -23,6 +23,11 @@ title = "${for} and ${if} clauses as list items and mapping keys"
 status = "done"
 
 [[feature]]
+id = "asserts"
+title = "${assert cond}: message keys are Jsonnet object asserts"
+status = "done"
+
+[[feature]]
 id = "extension"
 title = "+ keys, <<+ and hidden fields"
 status = "done"
