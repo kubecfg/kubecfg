@@ -32,7 +32,7 @@ import (
 
 	jsonnet "github.com/google/go-jsonnet"
 	"github.com/google/go-jsonnet/formatter"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 	k8syaml "sigs.k8s.io/yaml"
 )
 

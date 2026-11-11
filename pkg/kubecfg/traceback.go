@@ -12,7 +12,7 @@ import (
 	"github.com/kubecfg/kubecfg/pkg/yamloc"
 	"github.com/kubecfg/kubecfg/utils"
 	log "github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // TracebackCmd represents the traceback subcommand
