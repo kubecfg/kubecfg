@@ -20,6 +20,14 @@ type HttpdCmd struct {
 
 func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), paths []string) error {
 	log.Info("Staring Kubecfg HTTPD")
+	return http.ListenAndServe(c.ListenAddr, hooks(mkVM, paths))
+}
+
+// hooks serves each hook at its path, without ".jsonnet". It has its own mux, because packages
+// add debug pages to http.DefaultServeMux: expvar's /debug/vars shows the command line, --token
+// included.
+func hooks(mkVM func() (*jsonnet.VM, error), paths []string) *http.ServeMux {
+	mux := http.NewServeMux()
 	for _, path := range paths {
 
 		base := strings.TrimSuffix(path, ".jsonnet")
@@ -36,7 +44,7 @@ func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), pat
 		hookcode := string(filedata)
 
 		log.Infof("HTTPD Registering Hook: /%s - Filename: %s", base, filename)
-		http.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(fmt.Sprint("/", base), func(w http.ResponseWriter, r *http.Request) {
 			log.Infof("HTTPD Executing Hook: /%s - Filename: %s", base, filename)
 
 			if r.Method != http.MethodPost {
@@ -66,5 +74,5 @@ func (c HttpdCmd) Run(ctx context.Context, mkVM func() (*jsonnet.VM, error), pat
 		})
 	}
 
-	return http.ListenAndServe(c.ListenAddr, nil)
+	return mux
 }
