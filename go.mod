@@ -17,7 +17,7 @@ require (
 	github.com/kubecfg/yaml/v2 v2.4.2
 	github.com/kubernetes-sigs/kro v0.10.0-rc.0
 	github.com/mattn/go-isatty v0.0.24
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
